@@ -1,31 +1,12 @@
 ##### Transform.R, Filter transform routine(s) for Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-##### read VPHOT files, construct data frame, invoke mixed-model lmer().
-make_transform_df <- function (files="^NGC 7790") {
-  ##### Argument files can be a vector of file names or a regex to find files.
-  if (!is.character(files)) {
-    cat("ERROR: Argument must be a string (for regex) or a vector of 2 or more filenames.\n")
-    stop()
-  }
-  
-  ##### Get the vector of file names.
-  if (length(files)==1) {
-    cat("Regex = '", files, "'\n")
-    filelist <- trimws(list.files(".", pattern=files, recursive=FALSE))
-  } else {
-    cat("List of",length(files),"files.")
-    filelist <- trimws(files)
-  }
-  cat(length(filelist), "files found and will be included.\n")
-  if (length(filelist)<2) cat("ERROR: at least 2 files of the same field must be included.\n")
-  
-  ##### Read VPHOT files and construct a raw (superset, unedited) data frame.
-  df <- data.frame()
-  for (filename in filelist){
-    df <- rbind(df, get_one_VPHOT_photometry_report(filename)) # get next raw data frame and append it.
-  }
-  
+##### from VPHOT photometry files, construct data frame ready for mixed-model lmer().
+#####    
+make_transform_df <- function (VPHOTfolder="C:\\") {
+  ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
+  df <- make_master_df (VPHOTfolder)
+
   ##### Get V-I colors, make data frame including only stars with catalog V & I mags for color.
   V_rows  <- df[df$Filter=="V",]
   V_stars <- V_rows$star
@@ -41,14 +22,15 @@ make_transform_df <- function (files="^NGC 7790") {
   return(df_with_color)
 }
 
-transform <- function (df, filter="V", color="V-I", minSNR=30, omitStars="") {
-  dft <- df[df$Filter==filter & df$SNR>=minSNR,] # dft holds only bright stars in target filter.
+##### from transform_df (made by make_transform_df()), run transform with options.
+transform <- function (dft, filter="V", color="V-I", minSNR=30, omitStars="") {
   if (color=="B-V") { dft$CI <- dft$BV_color } 
                else { dft$CI <- dft$VI_color }
+
+  dft <- dft[dft$Filter==filter & dft$SNR>=minSNR,] # dft holds only bright stars in target filter.
+  dft <- dft[!(dft$star %in% omitStars),]        # remove stars per user.
   
-  dft <- dft[!(dft$star %in% omitStars),]
-  
-  numFiles = length(unique(dft$VPHOT_file))  # we use mixed-model if more than one file, lm() if only one.
+  numFiles = length(unique(dft$VPHOT_file))  # mixed-model lmer() if > one file, regular lm() if only one.
   if (numFiles == 1) {
     model <- lm (InstMag ~ CatMag + CI, data=dft)  # regular linear model.
   } else {

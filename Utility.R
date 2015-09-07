@@ -1,10 +1,31 @@
 ##### IO.R, Input/output files for Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-##### read_one_VPHOT_photometry_report(): Reads one tab-delimited file from VPHOT Photometry Report,
+##### utility: reads a folder of VPHOT photometry files, aggregates to one master data frame.
+make_master_df <- function (VPHOTfolder="C:\\") {
+  ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
+  filenames <- trimws(list.files(VPHOTfolder, pattern=".txt$", full.names=TRUE, 
+                                 recursive=FALSE, ignore.case=TRUE))
+  
+  df <- data.frame()
+  for (filename in filenames){
+    df <- rbind(df, get_one_VPHOT_photometry_report(filename)) # get next raw data frame and append it.
+  }
+  return(df)
+}
+
+##### utility: returns number of images (VPHOT files) in master data frame, or -1 if df appears invalid.
+count_images_in_master_df <- function(master_df){
+  n_filename <- length(unique(master_df$VPHOT_file))
+  n_subset <- nrow(unique(data.frame(master_df$VPHOT_file, master_df$JD, master_df$target)))
+  if (n_filename != n_subset) { return(-1) } 
+  else                        { return (n_subset)  }
+}
+
+##### utility: reads one tab-delimited file from VPHOT Photometry Report,
 #####    returns one R dataframe holding all data.
 get_one_VPHOT_photometry_report <- function (filepathname=
-                      "C:/Dev/Photometry/NGC 7790 I 1.txt"){
+                                               "C:/Dev/Photometry/NGC 7790 I 1.txt"){
   lines        <- readLines(filepathname)
   target       <- parse_VPHOT_header_line(lines,"Primary target:")
   exposure     <- parse_VPHOT_header_line(lines,"Exposure time:")
@@ -18,16 +39,16 @@ get_one_VPHOT_photometry_report <- function (filepathname=
   calibration  <- parse_VPHOT_header_line(lines,"Calibration:")
   ap_radius    <- parse_VPHOT_header_line(lines,"Apeture radius:") # yes, misspelled in AAVSO report.
   VPHOT_file   <- parse_VPHOT_header_line(lines,"File name:")
-
+  
   table_start_key <- "Star\tIM\tSNR\t"
   table_start_line <- which(substring(lines,1,nchar(table_start_key))==table_start_key)[1]
   table <- read.table(filepathname,skip=table_start_line-1,header=TRUE,sep="\t")
   cat("   ", filepathname,"table has",nrow(table),"rows.\n")
-
+  
   # Get index of column with catalog magnitudes by finding ".mag" at end of column's name.
   colnamelengths <- nchar(colnames(table))
   mag_column <- which(substring(colnames(table),colnamelengths-3,colnamelengths)==".mag")[1]
-
+  
   # X and Y have spaces for thousands separators--remove them.
   table$X <- gsub(" ", "", table$X, fixed = TRUE)
   table$Y <- gsub(" ", "", table$Y, fixed = TRUE)
@@ -59,7 +80,6 @@ get_one_VPHOT_photometry_report <- function (filepathname=
     Cal=calibration,
     Ap_radius=as.numeric(ap_radius),
     BV_color=as.numeric(table$B.V),
-    
     
     stringsAsFactors=FALSE)
 }
