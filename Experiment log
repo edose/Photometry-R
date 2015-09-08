@@ -1,14 +1,35 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
+------------------------------------------------------------------------------------------
 ##### Sept 7, 2015: Transform on 10 C11 images taken AN20150824, filters B, V, R, I, and Blue (Baader),
   to try to get more signal in B (if it transforms with quality close to that of B).
 VPHOT (sequence "NGC 7790 new") ok; .txt files in C:/Dev/Photometry/VPHOT/AN20150831.
+  The B filter image at 2015-09-01 06:55:41 UTC had very bad guiding--omit.
+Filter V, color V-I, omit stars 140, 139_1, 117, 131-1:
+  Slope vs catalog V = 0.9986 (0.0033):  excellent
+  Transform V(V-I)   = -0.0153(0.0040):  good, low value, and consistent with 8/24 data.
+  Factor between the 2 images = -0.059(0.004): odd, but acceptable.
+Filter B, color V-I, omit stars 137_2, 133_3:
+  Slope vs catalog B = 1.0076 (0.0058):  ~ ok.
+  Transform B(V-I)   = -0.0982 (0.0112): high, but precise and consistent with 8/24 data.
+Filter B, color B-V, omit stars 137_2, 133_3, 136_3:
+  Slope vs catalog B = 1.0075 (0.0054):  ~ ok
+  Transform B(B-V)   = -0.0917 (0.0104): high, but precise and consistent with 8/24 data.
+I see no reason to prefer B(B-V) over B(V-I) unless the data has B and V but no I.
+Filter R, color V-I, omit stars 133, 143_2, 135_7, 117, 144-1, minSNR=50:
+  Slope vs catalog R = 1.0037 (0.0023):  good.
+  Transform R(V-I)   = +0.0236 (0.0039): good, but oddly lower than 8/24 data.
+  Factor between the 2 images = -0.053 (0.003): odd but acceptable.
+Filter I, color V-I, omit stars 144_2, 145_6, 148_3:
+  Slope vs catalog I = 1.0042 (0.0026):  good.
+  Transform I(V-I)   = +0.0374 (0.0049): good, but oddly higher than 8/24 data.
+  Factor between the 2 images = -0.059 (0.004): odd but acceptable.
+Filter Blue (Baader) as a possible high-flux surrogate filter for B passband:
+  Fails badly (high fit sigma) for both V-I and B-V color. Nice try.
+--> USE THESE VALUES for system C11 "ALCOR".
 
-
-
-
-
+-----------------------------------------------------------------------------------
 ##### Sept 7, 2015: Transform on 4 C11 images taken AN20150824, filters B, V, R, I.
 VPHOT (sequence "NGC 7790 new") ok; .txt files in C:/Dev/Photometry/VPHOT/AN20150824.
 Filter V, color V-I, omit stars 145,145_5,131_4:

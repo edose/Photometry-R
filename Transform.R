@@ -23,28 +23,31 @@ make_transform_df <- function (VPHOTfolder="C:\\") {
 ##### from transform_df (made by make_transform_df()), run transform with options.
 transform <- function (dft, filter="V", color="V-I", minSNR=30, omitStars=c("")) {
   df_fit <- dft
-  # color MUST be either "V-I" or "B-V". Put proper color in field "CI".
+  # color MUST be either "V-I" or "B-V". Put proper color index in field "CI".
   if (color=="B-V") { df_fit$CI <- df_fit$BV_color } 
                else { df_fit$CI <- df_fit$VI_color } 
   
   # Keep only rows with valid and appropriate data for this fit.
-  df_fit <- df_fit[df_fit$Filter==filter, ]         # select rows for current filter.
-  df_fit <- df_fit[!is.na(df_fit$CI), ]             # select rows having color (required for transform).
-  df_fit <- df_fit[df_fit$SNR>=minSNR, ]            # only bright stars in this filter.
+  df_fit <- df_fit[toupper(df_fit$Filter)==toupper(filter), ]  # select rows for current filter.
+  df_fit <- df_fit[!is.na(df_fit$CI), ]             # keep only rows having color (required for transform).
+  df_fit <- df_fit[df_fit$SNR>=minSNR, ]            # keep only stars with sufficient S/N ratio.
   df_fit <- df_fit[!(df_fit$star %in% omitStars), ] # remove stars per user.
 
-  # Apply mixed-model lmer() if > one file for this filter, else regular lm() if only one.
-  numFiles = length(unique(df_fit$VPHOT_file))  
+  # Apply mixed-model lmer() if multiple files for this filter; if only one file, apply regular lm().
+  numFiles = length(unique(df_fit$VPHOT_file))
+  cat("transform() using",nrow(df_fit),"rows in",numFiles,"files of filter",filter,"\n")
+  cat("df_fit has",sum(is.na(df_fit)),"values=NA\n")
   if (numFiles == 1) {
     model <- lm (InstMag ~ CatMag + CI, data=df_fit)  # regular linear model.
+    model$star <- df_fit$star                         # add star names for plot_t().
   } else {
-    require(lme4)
-    model <- lmer(InstMag ~ CatMag + CI + (1 | VPHOT_file), data=df_fit) # mixed-model.
+    model <- lm (InstMag ~ CatMag + CI + as.factor(JD), data=df_fit)
+    model$star <- df_fit$star                         # add star names for plot_t().
   }
-  model$star <- df_fit$star
   return(model)
 }
 
+##### Custom transform plot to label extreme points by star name.
 plot_t <- function (model_transform) {
   plot(model_transform, labels.id=model_transform$star)
 }
