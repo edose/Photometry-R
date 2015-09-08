@@ -1,0 +1,30 @@
+EXPERIMENT LOG, Photometry project.
+Eric Dose, Bois d'Arc Observatory, Kansas.
+
+##### Sept 7, 2015: Transform on 10 C11 images taken AN20150824, filters B, V, R, I, and Blue (Baader),
+  to try to get more signal in B (if it transforms with quality close to that of B).
+VPHOT (sequence "NGC 7790 new") ok; .txt files in C:/Dev/Photometry/VPHOT/AN20150831.
+
+
+
+
+
+##### Sept 7, 2015: Transform on 4 C11 images taken AN20150824, filters B, V, R, I.
+VPHOT (sequence "NGC 7790 new") ok; .txt files in C:/Dev/Photometry/VPHOT/AN20150824.
+Filter V, color V-I, omit stars 145,145_5,131_4:
+  Slope vs catalog V = 1.002(0.002):     excellent.
+  Transform V(V-I)   = -0.0104(0.0052):  very nice result, and happily close to zero.
+Filter B, color V-I, omit stars 145, 136_2, 135_4:
+  Slope vs catalog B = 1.004(0.005): good, esp. for B with short exposure time.
+  Transform B(V-I)   = -0.1074 (0.0109) : very nice result, although awfully large value.
+Filter B, color B-V, omit stars 145, 136_2, 119:
+  Slope vs catalog B = 1.002(0.005):    very good.
+  Transform B(B-V)   = -0.0972(0.0101): in good agreement with B(V-I); 
+  --> Little improvement of B-V color over V-I: this could be due to B noise. Try longer exps later.
+Filter R, color V-I, omit stars 145, 131_4,136_2, 128_1, 149, 149_2:
+  Slope vs catalog R = 1.006(0.002):    not bad.
+  Transform R(V-I)   = +0.0348(0.0035): good result, although value a bit higher than I would with.
+Filter I, color V-I, omit stars 145, 131_4, 136_2, 148, 132-1, 152_4:
+  Slope vs catalog R = 1.003(0.002):    good.
+  Transform I(V-I)   = +0.0252(0.0039): good result.
+Need to try these later with better data.

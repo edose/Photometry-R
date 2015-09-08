@@ -1,41 +1,50 @@
 ##### Transform.R, Filter transform routine(s) for Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-##### from VPHOT photometry files, construct data frame ready for mixed-model lmer().
+##### from VPHOT photometry files, construct data frame ready for subsetting, then 
+#####    applying either linear model lm() or mixed-model lmer().
 #####    
 make_transform_df <- function (VPHOTfolder="C:\\") {
   ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
-  df <- make_master_df (VPHOTfolder)
+  dft <- make_master_df (VPHOTfolder)
+  cat(nrow(df),"rows.\n")
 
-  ##### Get V-I colors, make data frame including only stars with catalog V & I mags for color.
+  ##### Add V-I color field (B-V colors are already given by VPHOT), or NA if V or I not available.
   V_rows  <- df[df$Filter=="V",]
   V_stars <- V_rows$star
   I_rows  <- df[df$Filter=="I",]
   I_stars <- I_rows$star
-  color_stars <- unique(intersect(V_stars,I_stars))  # ID of all stars having catalog mags for both V & I.
-  
-  df_with_color <- df[df$star %in% color_stars,]      # keep only rows that can be used for color.
-  V_CatMags <- V_rows[match(df_with_color$star, V_rows$star),]$CatMag
-  I_CatMags <- I_rows[match(df_with_color$star, I_rows$star),]$CatMag
-  df_with_color$VI_color <- V_CatMags - I_CatMags
-  row.names(df_with_color) <- paste(df_with_color$star,df_with_color$Filter,sep="_")
-  return(df_with_color)
+  V_CatMags <- V_rows[match(dft$star, V_rows$star),]$CatMag
+  I_CatMags <- I_rows[match(dft$star, I_rows$star),]$CatMag
+  dft$VI_color <- V_CatMags - I_CatMags
+  return(dft)
 }
 
 ##### from transform_df (made by make_transform_df()), run transform with options.
-transform <- function (dft, filter="V", color="V-I", minSNR=30, omitStars="") {
-  if (color=="B-V") { dft$CI <- dft$BV_color } 
-               else { dft$CI <- dft$VI_color }
-
-  dft <- dft[dft$Filter==filter & dft$SNR>=minSNR,] # dft holds only bright stars in target filter.
-  dft <- dft[!(dft$star %in% omitStars),]        # remove stars per user.
+transform <- function (dft, filter="V", color="V-I", minSNR=30, omitStars=c("")) {
+  df_fit <- dft
+  # color MUST be either "V-I" or "B-V". Put proper color in field "CI".
+  if (color=="B-V") { df_fit$CI <- df_fit$BV_color } 
+               else { df_fit$CI <- df_fit$VI_color } 
   
-  numFiles = length(unique(dft$VPHOT_file))  # mixed-model lmer() if > one file, regular lm() if only one.
+  # Keep only rows with valid and appropriate data for this fit.
+  df_fit <- df_fit[df_fit$Filter==filter, ]         # select rows for current filter.
+  df_fit <- df_fit[!is.na(df_fit$CI), ]             # select rows having color (required for transform).
+  df_fit <- df_fit[df_fit$SNR>=minSNR, ]            # only bright stars in this filter.
+  df_fit <- df_fit[!(df_fit$star %in% omitStars), ] # remove stars per user.
+
+  # Apply mixed-model lmer() if > one file for this filter, else regular lm() if only one.
+  numFiles = length(unique(df_fit$VPHOT_file))  
   if (numFiles == 1) {
-    model <- lm (InstMag ~ CatMag + CI, data=dft)  # regular linear model.
+    model <- lm (InstMag ~ CatMag + CI, data=df_fit)  # regular linear model.
   } else {
     require(lme4)
-    model <- lmer(InstMag ~ CatMag + CI + (1 | VPHOT_file), data=dft) # mixed-model.
+    model <- lmer(InstMag ~ CatMag + CI + (1 | VPHOT_file), data=df_fit) # mixed-model.
   }
+  model$star <- df_fit$star
   return(model)
+}
+
+plot_t <- function (model_transform) {
+  plot(model_transform, labels.id=model_transform$star)
 }

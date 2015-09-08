@@ -49,14 +49,21 @@ get_one_VPHOT_photometry_report <- function (filepathname=
   colnamelengths <- nchar(colnames(table))
   mag_column <- which(substring(colnames(table),colnamelengths-3,colnamelengths)==".mag")[1]
   
-  # X and Y have spaces for thousands separators--remove them.
-  table$X <- gsub(" ", "", table$X, fixed = TRUE)
-  table$Y <- gsub(" ", "", table$Y, fixed = TRUE)
-  
-  exposure  <- trimws(gsub(" s","",exposure,fixed=TRUE))      # Remove " s" from end of exposure.
+  # Some fields as read have units at strings' end--remove them.
+  exposure  <- trimws(gsub(" s",     "",exposure, fixed=TRUE)) # Remove " s" from end of exposure.
   ap_radius <- trimws(gsub(" pixels","",ap_radius,fixed=TRUE)) # Remove " pixels" from end of ap radius.
+
+  # Some fields have spaces for thousands separators (inside the strings)--remove them.
+  exposure        <- gsub(" ", "", exposure,  fixed = TRUE)
+  JD              <- gsub(" ", "", JD,        fixed = TRUE)
+  airmass         <- gsub(" ", "", airmass,   fixed = TRUE)
+  ap_radius       <- gsub(" ", "", ap_radius, fixed = TRUE)  
+  table$X         <- gsub(" ", "", table$X,   fixed = TRUE)
+  table$Y         <- gsub(" ", "", table$Y,   fixed = TRUE)
+  table$Sky       <- gsub(" ", "", table$Sky, fixed = TRUE)
+  table$SNR       <- gsub(" ", "", table$SNR, fixed = TRUE)
   
-  #Construct the data frame.
+  # Construct the data frame.
   df <- data.frame(
     target=target,
     star=as.character(table$Star),
@@ -65,8 +72,8 @@ get_one_VPHOT_photometry_report <- function (filepathname=
     CatMag=table[,mag_column],
     X=as.numeric(table$X),
     Y=as.numeric(table$Y),
-    SNR=table$SNR,
-    Sky=table$Sky,
+    SNR=as.numeric(table$SNR),
+    Sky=as.numeric(table$Sky),
     
     VPHOT_file=VPHOT_file,
     Filter=filter,
