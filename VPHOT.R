@@ -1,47 +1,46 @@
-##### VPHOT.R, Input & data frames from AAVSO's VPHOT format
+##### VPhot.R, Input & data frames from AAVSO's VPhot photometry file format
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-##### utility: reads a folder of VPHOT photometry files, aggregates to one master data frame.
-make_VPHOT_maste_df <- function (VPHOTfolder="C:\\") {
+##### utility: reads a folder of VPhot photometry files, aggregates to one master data frame.
+make_VPhot_master_df <- function (VPhotFolder="C:\\") {
   ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
-  filenames <- trimws(list.files(VPHOTfolder, pattern=".txt$", full.names=TRUE, 
+  filenames <- trimws(list.files(VPhotFolder, pattern=".txt$", full.names=TRUE, 
                                  recursive=FALSE, ignore.case=TRUE))
-  
   df <- data.frame()
   for (filename in filenames){
-    df <- rbind(df, get_one_VPHOT_photometry_report(filename)) # get next raw data frame and append it.
+    df <- rbind(df, get_one_VPhot_photometry_report(filename)) # get next raw data frame and append it.
   }
   return(df)
 }
 
 ##### utility: returns number of images (VPHOT files) in VPHOT master data frame, 
 #####    or -1 if df appears invalid.
-count_images_in_VPHOT_master_df<- function(VPHOT_master_df){
-  n_filename <- length(unique(VPHOT_master_df$VPHOT_file))
-  n_subset <- nrow(unique(data.frame(VPHOT_master_df$VPHOT_file, VPHOT_master_df$JD, 
-                                     VPHOT_master_df$target)))
+count_images_in_VPhot_master_df<- function(VPhot_master_df){
+  n_filename <- length(unique(VPhot_master_df$VPhot_file))
+  n_subset <- nrow(unique(data.frame(VPhot_master_df$VPhot_file, VPhot_master_df$JD, 
+                                     VPhot_master_df$target)))
   if (n_filename != n_subset) { return(-1) } 
   else                        { return (n_subset)  }
 }
 
-##### utility: reads one tab-delimited file from VPHOT Photometry Report,
+##### utility: reads one tab-delimited file from VPhot Photometry Report,
 #####    returns one R dataframe holding all data.
-get_one_VPHOT_photometry_report <- function (filepathname=
+get_one_VPhot_photometry_report <- function (filepathname=
                                                "C:/Dev/Photometry/NGC 7790 I 1.txt"){
   # Get header lines.
   lines        <- readLines(filepathname)
-  target       <- parse_VPHOT_header_line(lines,"Primary target:")
-  exposure     <- parse_VPHOT_header_line(lines,"Exposure time:")
-  filter       <- parse_VPHOT_header_line(lines,"Filter:")
-  obs_datetime <- parse_VPHOT_header_line(lines,"Observation date/time:")
-  JD           <- parse_VPHOT_header_line(lines,"JD:")
-  decimal_date <- parse_VPHOT_header_line(lines,"Decimal date:")
-  RA           <- parse_VPHOT_header_line(lines,"R.A.:")
-  Dec          <- parse_VPHOT_header_line(lines,"Dec.:")
-  airmass      <- parse_VPHOT_header_line(lines,"Airmass:")
-  calibration  <- parse_VPHOT_header_line(lines,"Calibration:")
-  ap_radius    <- parse_VPHOT_header_line(lines,"Apeture radius:") # yes, misspelled in AAVSO report.
-  VPHOT_file   <- parse_VPHOT_header_line(lines,"File name:")
+  target       <- parse_VPhot_header_line(lines,"Primary target:")
+  exposure     <- parse_VPhot_header_line(lines,"Exposure time:")
+  filter       <- parse_VPhot_header_line(lines,"Filter:")
+  obs_datetime <- parse_VPhot_header_line(lines,"Observation date/time:")
+  JD           <- parse_VPhot_header_line(lines,"JD:")
+  decimal_date <- parse_VPhot_header_line(lines,"Decimal date:")
+  RA           <- parse_VPhot_header_line(lines,"R.A.:")
+  Dec          <- parse_VPhot_header_line(lines,"Dec.:")
+  airmass      <- parse_VPhot_header_line(lines,"Airmass:")
+  calibration  <- parse_VPhot_header_line(lines,"Calibration:")
+  ap_radius    <- parse_VPhot_header_line(lines,"Apeture radius:") # yes, misspelled in AAVSO report.
+  VPhot_file   <- parse_VPhot_header_line(lines,"File name:")
   
   #Get Target (unknown) lines, if any.
   table_start_key <- "Star\tIM\tSNR\t"
@@ -79,7 +78,7 @@ get_one_VPHOT_photometry_report <- function (filepathname=
     SNR=as.numeric(table$SNR),
     Sky=as.numeric(table$Sky),
     
-    VPHOT_file=VPHOT_file,
+    VPhot_file=VPhot_file,
     Filter=filter,
     Exposure=as.numeric(exposure),
     Airmass=as.numeric(airmass),
@@ -95,7 +94,7 @@ get_one_VPHOT_photometry_report <- function (filepathname=
     stringsAsFactors=FALSE)
 }
 
-parse_VPHOT_header_line <- function(lines, key){
+parse_VPhot_header_line <- function(lines, key){
   line <- lines[substring(lines,1,nchar(key))==key][1]
   trimws(substring(line,nchar(key)+1))
 }
