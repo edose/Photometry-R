@@ -6,7 +6,7 @@
 #####    
 make_transform_df <- function (VPHOTfolder="C:\\") {
   ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
-  dft <- make_master_df (VPHOTfolder)
+  dft <- make_VPHOT_master_df (VPHOTfolder)
   cat(nrow(df),"rows.\n")
 
   ##### Add V-I color field (B-V colors are already given by VPHOT), or NA if V or I not available.
