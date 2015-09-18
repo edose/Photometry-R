@@ -26,6 +26,7 @@ count_images_in_master_df <- function(master_df){
 #####    returns one R dataframe holding all data.
 get_one_VPHOT_photometry_report <- function (filepathname=
                                                "C:/Dev/Photometry/NGC 7790 I 1.txt"){
+  # Get header lines.
   lines        <- readLines(filepathname)
   target       <- parse_VPHOT_header_line(lines,"Primary target:")
   exposure     <- parse_VPHOT_header_line(lines,"Exposure time:")
@@ -40,6 +41,7 @@ get_one_VPHOT_photometry_report <- function (filepathname=
   ap_radius    <- parse_VPHOT_header_line(lines,"Apeture radius:") # yes, misspelled in AAVSO report.
   VPHOT_file   <- parse_VPHOT_header_line(lines,"File name:")
   
+  #Get Target (unknown) lines, if any.
   table_start_key <- "Star\tIM\tSNR\t"
   table_start_line <- which(substring(lines,1,nchar(table_start_key))==table_start_key)[1]
   table <- read.table(filepathname,skip=table_start_line-1,header=TRUE,sep="\t")

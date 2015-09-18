@@ -1,0 +1,20 @@
+To make new script in PixInsight,
+   typically found (2015) in a location such as
+   C:\Program Files\PixInsight\src\scripts\AdP\AperturePhotometry.js:
+   
+1. Make a copy of template javascript (.js) file under new filename (preferably in same folder).
+2. Make code edits as desired (Notepad++ as Administrator). 
+   Also:
+      Edit #feature-id to make script ID unique in PixInsight script lists.
+      Edit #feature-info, which will appear in script's info boxes.
+      Optionally edit #define VERSION "" which will appear in script dialog box header.
+      Edit #define TITLE "" which will appear in script dialog box header.
+3. In PixInsight, Script > Feature Scripts... dialog box:
+      Add, select Folder holding script .js file, OK. 
+	     It should respond with:
+         "1 additional script file found on directory", click Done.
+4. Access script via Script > [script category from #feature-id above],
+      for example Script > Image Analysis > MyNewImageAnalysisScript.
+
+(Next!...)
+
