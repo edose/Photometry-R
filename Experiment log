@@ -2,6 +2,18 @@ EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
 ------------------------------------------------------------------------------------------
+##### Sept 19 2015: Writing code for general photometric reduction.
+Decided to use PixInsight for automation, modified script AperturePhotometry.js to load catalog
+more than just the first image (modified script AperturePhotometryEVD.js). Works fine.
+Various R functions to read PixInsight csv output and AAVSO VPhot sequence files. Work fine.
+But on file SX Cyg-S001-R001-C002-V, PixInsight's image X,Y location and RA,Dec differ by about 150
+arcseconds--hopeless. Nothing I do seems to overcome this. The BG Cyg image had a similar problem, but
+I don't see it for other images. It doesn't seem to matter whether I plate solve in MaxIm (UCAC2) 
+or in PixInsight (any catalog). 
+
+This is a show-stopper. Not sure what to do.
+
+------------------------------------------------------------------------------------------
 ##### Sept 7, 2015: Transform on 10 C11 images taken AN20150824, filters B, V, R, I, and Blue (Baader),
   to try to get more signal in B (if it transforms with quality close to that of B).
 VPHOT (sequence "NGC 7790 new") ok; .txt files in C:/Dev/Photometry/VPHOT/AN20150831.
