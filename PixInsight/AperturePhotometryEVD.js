@@ -2008,8 +2008,8 @@ function PhotometryEngine(w)
    this.LoadStars = function (imgMetadata)
    {
       this.catalog.magMax = this.maxMagnitude;
-      //this.catalog.queryMargin = 1.5; // It loads all the stars in an area 50% bigger than the first image
-      this.catalog.queryMargin = 2.0; // EVD v 1.8.3 ... more elbow room.
+      this.catalog.queryMargin = 1.5; // It loads all the stars in an area 50% bigger than the first image
+      //this.catalog.queryMargin = 2.0; // EVD v 1.8.3 ... more elbow room.
       this.catalog.Load(imgMetadata, this.vizierServer);
       var stars = new Array();
       var margin = Math.max(0, this.margin - 5);
