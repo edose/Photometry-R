@@ -10,12 +10,16 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   # Parse ACP filenames for all FITS files in this folder.
   pattern <- paste("(.+)-S[[:digit:]]{3}-R[[:digit:]]{3}-C[[:digit:]]{3}-",
                    "([[:alpha:]][[:alnum:]]*)[_]*(.*)f[[:alpha:]]+", sep="")
-  for (iRow in 1:nrow(df)) {
+  filesDetected <- nrow(df)
+  for (iRow in 1:filesDetected) {
     filename <- df$ACP_name[iRow]
     substrings <- regmatches(filename, regexec(pattern, filename))[[1]]
     df$target[iRow] <- substrings[2]
   }
-  if (sum(!is.na(df$target)) <= 0) {
+  df <- df[!is.na(df$target),]  # keep only files with ACP-style names.
+  filesToRename <- nrow(df)
+  cat(filesDetected, "FITS files detected, of which",filesToRename,"shall be renamed.\n")
+  if (filesToRename <= 0) {
     stop(cat("STOPPING: no FITS files to rename in folder",folder,"(have you already renamed them?)"))
   }
   
@@ -42,6 +46,7 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   }
   df$JD_mid <- as.character(as.numeric(df$JD_start) + as.numeric(df$Exp_secs) / (24*3600))
   
+  # Report any mismatches between ACP name and FITS-header Object.
   mismatches <- df %>%
     select(ACP_name,target,Object) %>%
     filter(target!=Object)
@@ -50,7 +55,7 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
     write.table(mismatches,file="",quote=FALSE,row.names=FALSE)
   }
 
-  # Construct time-based index for files *within* each target.
+  # Construct time-based index for files *within* each target, then construct new names.
   df2 <- df %>% 
     group_by(Object) %>% 
     arrange(JD_start) %>% 
@@ -58,9 +63,7 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
     mutate(index=trimws(as.character(cumsum(one)))) %>%
     mutate(index=substring(paste("000",index,sep=""),nchar(index)+1,nchar(index)+3)) %>%
     select(-target,-one)
-
-  # Construct new file names from indices.
-  df2$newName <- paste(df2$Object,"-",df2$index,"-",df2$Filter,".fts",sep="")
+  df2$newName <- paste(df2$Object,"-",df2$index,"-",df2$Filter,".fts",sep="") # (dplyr mutate didn't work)
   
   # Rename all FITS files (after confirmation).
   userConfirmedRename <- "Y"==toupper(trimws(readline(
@@ -72,8 +75,8 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
       mutate(newName=make_safe_path(folder,newName))
     outcome <- file.rename(df_rename$oldName, df_rename$newName)
     cat(sum(outcome),"files have been renamed.")
-    # write.csv(df2,file=make_safe_path(folder,"rename.csv"),row.names=FALSE)
-    
+    write.csv(df2,file=make_safe_path(folder,"rename.csv"),row.names=FALSE)
+    cat(" summary file rename.csv has been written.\n")
   }
   return(df2)
 }
