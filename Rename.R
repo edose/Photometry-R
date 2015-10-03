@@ -1,21 +1,27 @@
 ##### Rename.R, renames FITS files from ACP (set-repeat-count naming) to sequential naming.
-##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun October 3 2015.
+#####    Renames all FITS files in given folder.
+#####    Returns data frame of FITS files' metadata, including new file names.
+#####    Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun October 3 2015.
 
 renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   df <- data.frame(ACP_name=list.files(path=folder,pattern="[.]*.f[[:alpha:]]*t"), 
                    target=NA, stringsAsFactors=FALSE)
-
-    # Parse ACP filenames for all FITS files in this folder.
-    pattern <- paste("(.+)-S[[:digit:]]{3}-R[[:digit:]]{3}-C[[:digit:]]{3}-",
-                         "([[:alpha:]][[:alnum:]]*)[_]*(.*)f[[:alpha:]]+", sep="")
-    for (iRow in 1:nrow(df)) {
-      filename <- df$ACP_name[iRow]
-      substrings <- regmatches(filename, regexec(pattern, filename))[[1]]
-      df$target[iRow] <- substrings[2]
-    }
-    
+  
+  # Parse ACP filenames for all FITS files in this folder.
+  pattern <- paste("(.+)-S[[:digit:]]{3}-R[[:digit:]]{3}-C[[:digit:]]{3}-",
+                   "([[:alpha:]][[:alnum:]]*)[_]*(.*)f[[:alpha:]]+", sep="")
+  for (iRow in 1:nrow(df)) {
+    filename <- df$ACP_name[iRow]
+    substrings <- regmatches(filename, regexec(pattern, filename))[[1]]
+    df$target[iRow] <- substrings[2]
+  }
+  if (sum(!is.na(df$target)) <= 0) {
+    stop(cat("STOPPING: no FITS files to rename in folder",folder,"(have you already renamed them?)"))
+  }
+  
   # Extract multiple metadata from FITS files' headers.  
   require(FITSio)
+  require(dplyr)
   get_header_value <- function(header,key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
@@ -35,9 +41,16 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
     df$Exp_secs[iRow] <- get_header_value(header, "EXPTIME")
   }
   df$JD_mid <- as.character(as.numeric(df$JD_start) + as.numeric(df$Exp_secs) / (24*3600))
-  cat ("Number of target-Object mismatches (s/b zero) =",sum(df$target != df$Object), "\n")
   
-  # Construct time-based index for files *within* each target
+  mismatches <- df %>%
+    select(ACP_name,target,Object) %>%
+    filter(target!=Object)
+  cat ("Object-target mismatches (s/b zero) =",nrow(mismatches), "\n")
+  if (nrow(mismatches) > 0) {
+    write.table(mismatches,file="",quote=FALSE,row.names=FALSE)
+  }
+
+  # Construct time-based index for files *within* each target.
   df2 <- df %>% 
     group_by(Object) %>% 
     arrange(JD_start) %>% 
@@ -46,8 +59,21 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
     mutate(index=substring(paste("000",index,sep=""),nchar(index)+1,nchar(index)+3)) %>%
     select(-target,-one)
 
-  # Construct new file names.
-  df2$newName <- paste(df2$Object,"-",df2$index,"-",df2$Filter,sep="")
+  # Construct new file names from indices.
+  df2$newName <- paste(df2$Object,"-",df2$index,"-",df2$Filter,".fts",sep="")
   
+  # Rename all FITS files (after confirmation).
+  userConfirmedRename <- "Y"==toupper(trimws(readline(
+    cat("Do you really want to rename all",nrow(df2), "FITS files? (y/n)"))))
+  if (userConfirmedRename) {
+    df_rename <- df2 %>%
+      select(ACP_name,newName) %>%
+      mutate(oldName=make_safe_path(folder,ACP_name)) %>%
+      mutate(newName=make_safe_path(folder,newName))
+    outcome <- file.rename(df_rename$oldName, df_rename$newName)
+    cat(sum(outcome),"files have been renamed.")
+    # write.csv(df2,file=make_safe_path(folder,"rename.csv"),row.names=FALSE)
+    
+  }
   return(df2)
 }
