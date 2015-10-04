@@ -18,22 +18,23 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   }
   df <- df[!is.na(df$target),]  # keep only files with ACP-style names.
   filesToRename <- nrow(df)
-  cat(filesDetected, "FITS files detected, of which",filesToRename,"shall be renamed.\n")
+  cat(filesDetected, "FITS files detected, of which", filesToRename, "shall be renamed.\n")
   if (filesToRename <= 0) {
-    stop(cat("STOPPING: no FITS files to rename in folder",folder,"(have you already renamed them?)"))
+    stop(cat("STOPPING: no FITS files to rename in folder", folder, 
+             "(have you already renamed them?)"))
   }
   
   # Extract multiple metadata from FITS files' headers.  
   require(FITSio)
   require(dplyr)
-  get_header_value <- function(header,key) {  # nested function.
+  get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
     value
     }
   df <- cbind(df, Object=NA, JD_start=NA, JD_mid=NA, Filter=NA, Airmass=NA, FWHM=NA, Exp_secs=NA)
   for (iRow in 1:nrow(df)) {  
-    fullfilename <- make_safe_path(folder,df$ACP_name[iRow])
+    fullfilename <- make_safe_path(folder, df$ACP_name[iRow])
     fileHandle <- file(description=fullfilename, open="rb")
     header <- parseHdr(readFITSheader(fileHandle))
     close(fileHandle)
@@ -44,7 +45,8 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
     df$FWHM[iRow]     <- get_header_value(header, "FWHM")
     df$Exp_secs[iRow] <- get_header_value(header, "EXPTIME")
   }
-  df$JD_mid <- as.character(as.numeric(df$JD_start) + as.numeric(df$Exp_secs) / (24*3600))
+  JD_half_duration <- (as.numeric(df$Exp_secs)/2) / (24*3600) # convert seconds to JD days.
+  df$JD_mid <- as.character(as.numeric(df$JD_start) + JD_half_duration)
   
   # Report any mismatches between ACP name and FITS-header Object.
   mismatches <- df %>%
