@@ -25,6 +25,7 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   }
   
   # Extract multiple metadata from FITS files' headers.  
+  source('C:/Dev/Photometry/Utility.R')
   require(FITSio)
   require(dplyr)
   get_header_value <- function(header, key) {  # nested function.
@@ -76,9 +77,9 @@ renameACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
       mutate(oldName=make_safe_path(folder,ACP_name)) %>%
       mutate(newName=make_safe_path(folder,newName))
     outcome <- file.rename(df_rename$oldName, df_rename$newName)
-    cat(sum(outcome),"files have been renamed.")
-    write.csv(df2,file=make_safe_path(folder,"rename.csv"),row.names=FALSE)
-    cat(" summary file rename.csv has been written.\n")
+    cat(sum(outcome),"files have been renamed...")
+    write.csv(df2,file=make_safe_path(folder,"$catalog.csv"),row.names=FALSE)
+    cat("and file $catalog.csv has been written.\n")
   }
   return(df2)
 }
