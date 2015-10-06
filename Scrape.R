@@ -10,7 +10,7 @@ ObsPlanner <- function (VStype="EB", faintMagLimit=15, localStdTime=22, maxHours
                        loctime=trimws(as.character(localStdTime)), maxh=trimws(as.character(maxHoursEW)), 
                          mindec=trimws(as.character(decLimitS)), maxdec=trimws(as.character(decLimitN)))
   result <- submit_form(session, form_out)
-  table <- (result %>% read_html() %>% html_table) [[2]]
+  table <- (result %>% read_html() %>% html_table()) [[2]]
   if (ncol(table) != 12) {
     stop("Table is corrupt, does not have 12 columns.")
   }

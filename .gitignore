@@ -3,3 +3,5 @@
 *.Rproj
 *.RData
 Docs/
+VPHOT/
+PixInsight/
