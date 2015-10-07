@@ -1,9 +1,10 @@
 ##### Scrape.R, gets important data from a few astro web sites, including sites with forms.
 #####    Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun October 3 2015.
 
-ObsPlanner <- function (VStype="EB", faintMagLimit=15, localStdTime=22, maxHoursEW=2,
+ObsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursEW=2,
                          decLimitS=0, decLimitN=60) {
   require(rvest)
+  require(dplyr)
   session <- html_session("https://www.aavso.org/observation-planner-tool")
   form_in <- (session %>% read_html() %>% html_form()) [[2]]
   form_out <- set_values(form_in, vartype=VStype, faintlim=trimws(as.character(faintMagLimit)), 
@@ -17,6 +18,9 @@ ObsPlanner <- function (VStype="EB", faintMagLimit=15, localStdTime=22, maxHours
   table <- table[-1,]  # remove first row, which is only the old column names.
   colnames(table) <- c("Name", "RA", "Dec", "Type", "max", "min", "band", "period", 
                          "N_total", "N_30", "obs_30", "Days")
+  if (nrow(table)<=0) {
+    stop("ERROR: No data retrieved. Returning table with zero rows.\n")
+  }
   
   # Parse RA and Dec (h:m:s) to degrees, add columns to table.
   RA_deg <- 15 * (as.numeric(as.difftime(table$RA,units="hours")))
@@ -28,5 +32,14 @@ ObsPlanner <- function (VStype="EB", faintMagLimit=15, localStdTime=22, maxHours
       ifelse(trimws(substrings[2])=="-", -1, 1)    
   }
   table <- table %>% 
-    mutate(RA_deg=RA_deg, Dec_deg=Dec_deg)
+    mutate(RA_deg=RA_deg, Dec_deg=Dec_deg)  
+  
+  # Convert strings representing numbers to numbers.
+  table <- table %>% mutate(Days=ifelse(Days=="30+",NA,Days))  # N_30==0 already implies that Days>30.
+  for (name in c("max", "min", "period", "N_total", "N_30", "obs_30", "Days")) {
+    table[name] <- as.numeric(unlist(table[name]))
+  }
+  cat("Returning",nrow(table),"VS targets of",length(unique(table$Type)),"distinct types.\n")
+  
+  return(table)
 }
