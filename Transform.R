@@ -1,15 +1,15 @@
 ##### Transform.R, Filter transform routine(s) for Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-##### from VPHOT photometry files, construct data frame ready for subsetting, then 
+##### from Vphot photometry files, construct data frame ready for subsetting, then 
 #####    applying either linear model lm() or mixed-model lmer().
 #####    
-make_transform_df <- function (VPHOTfolder="C:\\") {
-  ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
-  dft <- make_VPHOT_master_df (VPHOTfolder)
+make_transform_df <- function (VphotFolder="C:\\") {
+  ##### Argument "folder" must be a folder in which every .txt file is a transform Vphot file.
+  dft <- make_VPhot_master_df(VphotFolder)
   cat(nrow(df),"rows.\n")
 
-  ##### Add V-I color field (B-V colors are already given by VPHOT), or NA if V or I not available.
+  ##### Add V-I color field (B-V colors are already given by Vphot), or NA if V or I not available.
   V_rows  <- df[df$Filter=="V",]
   V_stars <- V_rows$star
   I_rows  <- df[df$Filter=="I",]
@@ -34,8 +34,12 @@ transform <- function (dft, filter="V", color="V-I", minSNR=30, omitStars=c(""))
   df_fit <- df_fit[!(df_fit$star %in% omitStars), ] # remove stars per user.
 
   # Apply mixed-model lmer() if multiple files for this filter; if only one file, apply regular lm().
-  numFiles = length(unique(df_fit$VPHOT_file))
-  cat("transform() using",nrow(df_fit),"rows in",numFiles,"files of filter",filter,"\n")
+  numFiles = length(unique(df_fit$VPhot_file)) # number of files represented in df_fit.
+  #cat(">", df_fit$Vphot_file, "<", "\n")
+  #cat(">", df_fit$Vphot_file[1], "<", "\n")
+  #cat(">", unique(df_fit$Vphot_file), "<", "\n")
+  #cat(numF, "\n")
+  cat("transform() using",nrow(df_fit), "rows in", numFiles, "files of filter", filter, "\n")
   cat("df_fit has",sum(is.na(df_fit)),"values=NA\n")
   if (numFiles == 1) {
     model <- lm (InstMag ~ CatMag + CI, data=df_fit)  # regular linear model.

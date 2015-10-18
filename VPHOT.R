@@ -7,7 +7,7 @@ make_VPhot_master_df <- function (VPhotFolder="C:\\") {
   filenames <- trimws(list.files(VPhotFolder, pattern=".txt$", full.names=TRUE, 
                                  recursive=FALSE, ignore.case=TRUE))
   df <- data.frame()
-  for (filename in filenames){
+  for (filename in filenames){   # TODO: redo this as list-build and then do.call() on rbind().
     df <- rbind(df, get_one_VPhot_photometry_report(filename)) # get next raw data frame and append it.
   }
   return(df)
