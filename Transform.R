@@ -1,13 +1,20 @@
 ##### Transform.R, Filter transform routine(s) for Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-### Transform process (probably run only twice per year, per telescope+camera rig): 
-###    1. Image in every filter: NGC 7790 or other suitable (dense) star field with a VPhot sequence.
+##### User functions in this file:
+#####   make_transform_df(): first R step in transform process, run once per process.
+#####   transform(): second R step in transform process, run once per filter.
+#####   plot_t(): plots residuals from transform() so that user can omit outlier point in repeat
+#####      run of transform() until satisfactory.
+
+### The transform process (probably run only twice per year, per telescope+camera rig): 
+###    1. Image in every filter: NGC 7790 or other suitable (dense) star field having a VPhot sequence.
 ###    2. Copy images' FITS files into a folder with only those files.
-###    3. Run: dft <- make_transform_df().
-###    4. For each filter, run (e.g. for filter R): summary(transform(dft, filter="R")).
-###    5. Transform for filter (given the color index definition, e.g.: R given V-I) is the "CI" 
-###          (Color Index) coefficient. And "CatMag" should be very close to 1.
+###    3. Run once: dft <- make_transform_df("C:/...yourFolderOfFITS").
+###    4. For *each* filter, run (e.g. for filter R): summary(transform(dft, filter="R")).
+###    5. After each transform() run, plot with plot_t(), omit outlier points, rerun transform().
+###    6. The transform value for each filter (given the color index definition, e.g.: R given V-I) 
+###          is the "CI" (Color Index) coefficient. Coefficient "CatMag" should be very close to 1.
 
 # make_transform_df(): from VPhot photometry files, construct data frame ready for subsetting, then 
 #    apply either linear model lm() or mixed-model lmer().

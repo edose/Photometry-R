@@ -1,7 +1,9 @@
 ##### VPhot.R, Input & data frames from AAVSO's VPhot photometry file format
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-# make_VPhot_master_df(): first step in transform process.
+##### User functions in this file: [none]
+
+# make_VPhot_master_df(): [support, not called by user; called by Transform.R::make_transform_df()].
 #    Reads a folder of VPhot photometry-report files, aggregates to one master data frame.
 #    Argument "VPhotFolder" must be a folder in which every .txt file is a VPhot photometry report file
 #    intended for use in determining filter transforms.

@@ -1,10 +1,14 @@
 ##### Rename.R: Rename or renumber FITS files in the user-specified folder.
 #####    Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun October 3 2015.
 
+##### User functions in this file:
+#####    renumberACP(): renames ACP-generated FITS files to sequentially numbered names.
+#####    TODO: new function renameObject(): changes FITS filename and FITS header field to a user-specified 
+#####       new object name after checking that name absent from other FITS files of that date.
 
-##### renumberACP(): Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
-#####    to sequential naming ("T Cep-001-I.fts").
-#####    Also returns data frame of FITS files' metadata, including new file names.
+# renumberACP(): Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
+#    to sequential naming ("T Cep-001-I.fts").
+#    Also returns data frame of FITS files' metadata, including new file names.
 renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   df <- data.frame(ACP_name=list.files(path=folder,pattern="[.]*.f[[:alpha:]]*t"), 
                    target=NA, stringsAsFactors=FALSE)

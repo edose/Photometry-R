@@ -1,8 +1,13 @@
 ##### Planning.R, gets important data from a few astro web sites, including sites with forms.
 #####    Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun October 3 2015.
 
+##### User functions in this file:
+#####    obsPlanner: get VS data from AAVSO Observation Planner; to rationally select a night's targets.
+
 # obsPlanner(): gets VS data from AAVSO Observation Planner, selected by type, timespan, etc.
-#    Returns a data frame sorted by RA.
+#    Returns a data frame sorted by RA. 
+#    Parameter "selectBest" gives the maximum number of targets, the best currently assumed to be 
+#       the maximum number of previous AAVSO observations; if selectBest <= 0, return all targets found.
 obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursEW=2,
                          decLimitS=0, decLimitN=60, selectBest=75) {
   require(rvest)

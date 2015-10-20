@@ -1,10 +1,11 @@
-##### This version depends on: 
-#        csv files from PixInxight (AperturePhotometryEVD.js script), one per image,
-#        sequence files exported from VPHOT, one per RA-Dec field, and
-#        cross-reference between catalog & AAVSO star names (file manually generated).
+##### defunct.R: Photometry code fragments lost by the wayside. Started early October 2015.
 
-##### Reads a folder of PixInsight photometry output (.csv) files, 
-#        aggregates to one master data frame and curates.
+# Reads a folder of PixInsight photometry output (.csv) files, 
+#    aggregates to one master data frame and curates.
+# This version depends on: 
+#    csv files from PixInxight (AperturePhotometryEVD.js script), one per image,
+#    sequence files exported from VPHOT, one per RA-Dec field, and
+#    cross-reference between catalog & AAVSO star names (file manually generated).
 make_PI_master_df <- function (PI_folder="C:\\") {
   ##### Argument "folder" must be a folder in which every .txt file is a transform VPHOT file.
   filenames <- trimws(list.files(PI_folder, pattern=".csv$", full.names=TRUE, 
