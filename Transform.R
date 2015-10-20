@@ -1,15 +1,23 @@
 ##### Transform.R, Filter transform routine(s) for Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun August 2015.
 
-##### from Vphot photometry files, construct data frame ready for subsetting, then 
-#####    applying either linear model lm() or mixed-model lmer().
-#####    
-make_transform_df <- function (VphotFolder="C:\\") {
-  ##### Argument "folder" must be a folder in which every .txt file is a transform Vphot file.
-  dft <- make_VPhot_master_df(VphotFolder)
+### Transform process (probably run only twice per year, per telescope+camera rig): 
+###    1. Image in every filter: NGC 7790 or other suitable (dense) star field with a VPhot sequence.
+###    2. Copy images' FITS files into a folder with only those files.
+###    3. Run: dft <- make_transform_df().
+###    4. For each filter, run (e.g. for filter R): summary(transform(dft, filter="R")).
+###    5. Transform for filter (given the color index definition, e.g.: R given V-I) is the "CI" 
+###          (Color Index) coefficient. And "CatMag" should be very close to 1.
+
+# make_transform_df(): from VPhot photometry files, construct data frame ready for subsetting, then 
+#    apply either linear model lm() or mixed-model lmer().
+#    Argument "folder": a folder in which every .txt file is a transform VPhot file.
+make_transform_df <- function (VPhotFolder="C:\\") {
+  source("C:/Dev/Photometry/VPhot.R")
+  dft <- make_VPhot_master_df(VPhotFolder)
   cat(nrow(df),"rows.\n")
 
-  ##### Add V-I color field (B-V colors are already given by Vphot), or NA if V or I not available.
+  ##### Add V-I color field (B-V colors are already given by VPhot), or NA if V or I not available.
   V_rows  <- df[df$Filter=="V",]
   V_stars <- V_rows$star
   I_rows  <- df[df$Filter=="I",]

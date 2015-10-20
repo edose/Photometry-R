@@ -3,10 +3,10 @@
 #####         identification of source signals, and is in any case too tied to catalogs, 
 #####         when all we want is fast, accurate AP of our targets.
 
-##### APT_one_FITS(): process one FITS file through APT. 
-#####    Requires calibrated FITS file. 
-#####    Also requires APT source-list file (previously constructed from VPhot sequence file).
-#####    Writes output file "APT-[FITS filename].txt" into FITS file's directory.
+# APT_one_FITS(): process one FITS file through APT. 
+#    Requires calibrated FITS file. 
+#    Also requires APT source-list file (previously constructed from VPhot sequence file).
+#    Writes output file "APT-[FITS filename].txt" into FITS file's directory.
 APT_one_FITS <- function (APTfolder="C:/Programs/APT/APT_v2.5.8/", 
                           FITSfolder=NULL, FITSfile=NULL) {
   
