@@ -24,12 +24,13 @@
 make_transform_df <- function (VPhotFolder="C:\\") {
   source("C:/Dev/Photometry/VPhot.R")
   dft <- make_VPhot_master_df(VPhotFolder)
-  cat(nrow(df),"rows.\n")
-
+  cat(nrow(dft),"rows.\n")
+  # cat(nrow(df),"rows.\n")
+  
   ##### Add V-I color field (B-V colors are already given by VPhot), or NA if V or I not available.
-  V_rows  <- df[df$Filter=="V",]
+  V_rows  <- dft[dft$Filter=="V",]
   V_stars <- V_rows$star
-  I_rows  <- df[df$Filter=="I",]
+  I_rows  <- dft[dft$Filter=="I",]
   I_stars <- I_rows$star
   V_CatMags <- V_rows[match(dft$star, V_rows$star),]$CatMag
   I_CatMags <- I_rows[match(dft$star, I_rows$star),]$CatMag
