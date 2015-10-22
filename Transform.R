@@ -14,7 +14,9 @@
 ###    4. For *each* filter, run (e.g. for filter R): summary(transform(dft, filter="R")).
 ###    5. After each transform() run, plot with plot_t(), omit outlier points, rerun transform().
 ###    6. The transform value for each filter (given the color index definition, e.g.: R given V-I) 
-###          is the "CI" (Color Index) coefficient. Coefficient "CatMag" should be very close to 1.
+###          is the "CI" (Color Index) coefficient. 
+
+##### Model improved Oct 21 2015 to fix CatMag coefficient to 1.
 
 # make_transform_df(): from VPhot photometry files, construct data frame ready for subsetting, then 
 #    apply either linear model lm() or mixed-model lmer().
@@ -57,10 +59,10 @@ transform <- function (dft, filter="V", color="V-I", minSNR=30, omitStars=c(""))
   cat("transform() using",nrow(df_fit), "rows in", numFiles, "files of filter", filter, "\n")
   cat("df_fit has",sum(is.na(df_fit)),"values=NA\n")
   if (numFiles == 1) {
-    model <- lm (InstMag ~ CatMag + CI, data=df_fit)  # regular linear model.
+    model <- lm (InstMag ~ offset(CatMag) + CI, data=df_fit)  # regular linear model.
     model$star <- df_fit$star                         # add star names for plot_t().
   } else {
-    model <- lm (InstMag ~ CatMag + CI + as.factor(JD), data=df_fit)
+    model <- lm (InstMag ~ offset(CatMag) + CI + as.factor(JD), data=df_fit)
     model$star <- df_fit$star                         # add star names for plot_t().
   }
   return(model)
