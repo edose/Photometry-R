@@ -62,7 +62,9 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
   return(table)
 }
 
-eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=85, selectBest=80) {
+eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=85, selectBest=150) {
+  require(dplyr)
   obsPlanner(VStype="M%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
-             decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest)
+             decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
+    select(-RA_deg, -Dec_deg)
 }

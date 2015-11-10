@@ -25,8 +25,7 @@ make_transform_df <- function (VPhotFolder="C:\\") {
   source("C:/Dev/Photometry/VPhot.R")
   dft <- make_VPhot_master_df(VPhotFolder)
   cat(nrow(dft),"rows.\n")
-  # cat(nrow(df),"rows.\n")
-  
+
   ##### Add V-I color field (B-V colors are already given by VPhot), or NA if V or I not available.
   V_rows  <- dft[dft$Filter=="V",]
   V_stars <- V_rows$star

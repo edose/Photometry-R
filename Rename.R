@@ -5,6 +5,7 @@
 #####    renumberACP(): renames ACP-generated FITS files to sequentially numbered names.
 #####    TODO: new function renameObject(): changes FITS filename and FITS header field to a user-specified 
 #####       new object name after checking that name absent from other FITS files of that date.
+#####    TODO: verify that this will work on *all* FITS files in a folder (keeping targets correct).
 
 # renumberACP(): Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
 #    to sequential naming ("T Cep-001-I.fts").
