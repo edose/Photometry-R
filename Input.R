@@ -1,102 +1,22 @@
-#####  APT.R -- functions to control & extract data from APT (Cal Tech aperture photometry software).
-#####      This is to replace previous use of PI (PixInsight), which has proven unreliable in its
+#####  Input.R -- for general photometry, all the functions needed to get from 
+#####               (1) a folder of one night's FITS files generated via Bob Denny's ACP 
+#####                      and a filtered optical rig, &
+#####               (2) pre-prepared field-of-view text file founded on AAVSO sequences (from VPhot)
+#####             through use of APT (Cal Tech's aperture photometry software), to get a master
+#####             data frame (AN) of that Astronight's photometric data. 
+#####             This master data frame is to be used by Model.R to build a mixed-model regression.
+#####             and finally to predict unknown 
+#####      APT was adopted to replace PI (PixInsight), which has proven unreliable in its
 #####         identification of source signals, and is in any case too tied to catalogs, 
-#####         when all we want is fast, accurate AP of our targets.
+#####         when all we want is fast, accurate AP of our comp, check, and target stars.
 
-# run_APT_all(): process all FITS files in folder through APT, build master df.
-run_APT_all <- function(AN_rel_folder="20151101-test") {
-  require(dplyr)
-  # make list of all FITS.
-  AN_folder   <- make_safe_path("J:/Astro/Images/C14",AN_folder)
-  FITS_folder <- make_safe_path(AN_folder,"Calibrated")
-  filenames   <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
-                                   recursive=FALSE, ignore.case=TRUE))
-  
-  # make data frame with FOV names
-  pattern<- "^(.+)-S[[:digit:]]{3}-R"
-  substrings <- regmatches(filenames,regexec(pattern,filenames))
-  FOVdf <- data.frame(matrix(unlist(substrings), nrow=length(substrings), byrow=T),
-                      stringsAsFactors=FALSE)
-  colnames(FOVdf) <- c("fragment","FOV")
-  FOVdf$filename <- filenames
-  FOVdf$fragment <- NULL
-  
-  # for each FOV, (1) read FOV file, (2) make APT source file,
-  #    (3) run_APT_oneFITS() on each FITS file & add to master df.
-  photometry_folder <- make_safe_path(AN_folder,"Photometry")
-  if (!dir.exists(photometry_folder)) {
-    dir.create(photometry_folder)
-  }
-  FOVs <- unique(FOVdf$target)
-  for (thisFOV in FOVs) {
-    # get FOV data from FOV file.
-    FOV_data <- read_FOV_file(thisFOV)
-    sequence_df <- FOV_data$sequence  # data frame of all objects in VPhot sequence
-    chart       <- FOV_data$chart     # ID of photometry (not graphical) AAVSO chart
-    
-    # write APT's sourcelist file for this FOV.
-    APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
-    write_APTsourcelist_file(APTsourcelist_path, sequence_df)
-    
-    # for each FITS file derived from this FOV, run APT to make APT output file.
-    FOVfiles <- FOVdf %>% 
-      filter(FOV==thisFOV) %>% 
-      select(filename)
-    for (FOVfile in FOVfiles) {
-      # TODO: set up APT and run_APT_oneFITS()
-      
-      
-    }
-    
-    
-  }
-  
-  return(df)
-}
+##### Always run renumberACP() and renameTarget() BEFORE calibrating the FITS files.
 
-# run_APT_oneFITS(): process one FITS file through APT. 
-#    Requires calibrated FITS file. 
-#    Also requires APT source-list file (previously constructed from VPhot sequence file).
-#    Writes output file "APT-[FITS filename].txt" into FITS file's directory.
-run_APT_oneFITS <- function (AN_folder=NULL, FITS_file=NULL) {
-  
-  APTprogram_folder <- "C:/Programs/APT/APT_v2.5.8/"
-  
-  # Construct arguments.
-  AN_folder            <- make_safe_path("J:/Astro/Images/C14",AN_folder)
-  FITS_folder          <- make_safe_path(AN_folder,"Calibrated")
-  FITS_path            <- make_safe_path(FITS_folder,FITS_file)
-  APTsourcelist_folder <- make_safe_path(AN_folder,"APT")
-  APTsourcelist_path   <- make_safe_path(APTsourcelist_folder,)
-  APToutput_path       <- make_safe_path(FITSfolder, paste("APT-",FITSfile,sep=""))
-  
-  APT_arguments <- c("-Duser.language=en",
-                     "-Duser.region=US",
-                     "-mx1024M",
-                     "-jar", make_safe_path(APTprogram_folder, "APT.jar"),
-                     "-i", FITS_path,
-                     "-s", APTsourceListFile,
-                     "-o", outputFile)
-  
-  # Run APT to generate output file.
-  errorCode <- system2("java", shQuote(APT_arguments), wait=TRUE)
-  if (errorCode == 0) return(outputFile) else return("")
-}
-
-
-##### Rename.R: Rename or renumber FITS files in the user-specified folder.
-#####    Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun October 3 2015.
-
-##### User functions in this file:
-#####    renumberACP(): renames ACP-generated FITS files to sequentially numbered names.
-#####    TODO: new function renameObject(): changes FITS filename and FITS header field to a user-specified 
-#####       new object name after checking that name absent from other FITS files of that date.
-#####    TODO: verify that this will work on *all* FITS files in a folder (keeping targets correct).
-
-# renumberACP(): Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
-#    to sequential naming ("T Cep-001-I.fts").
-#    Also returns data frame of FITS files' metadata, including new file names.
 renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
+  # Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
+  # to sequential naming ("T Cep-001-I.fts").
+  # Also returns data frame of FITS files' metadata, including new file names,
+  # and writes this data to a file $catalog.csv stored with the FITS files.
   df <- data.frame(ACP_name=list.files(path=folder,pattern="[.]*.f[[:alpha:]]*t"), 
                    target=NA, stringsAsFactors=FALSE)
   
@@ -118,7 +38,7 @@ renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   }
   
   # Extract multiple metadata from FITS files' headers.  
-  source('C:/Dev/Photometry/Utility.R')
+  source('C:/Dev/Photometry/$Utility.R')
   require(FITSio)
   require(dplyr)
   get_header_value <- function(header, key) {  # nested function.
@@ -175,4 +95,86 @@ renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
     cat("and file $catalog.csv has been written.\n")
   }
   return(df2)
+}
+
+#####    TODO: new function renameObject(): changes FITS filename and FITS header field to a user-specified 
+#####       new object name after checking that name absent from other FITS files of that date.
+
+run_APT_all <- function(AN_rel_folder="20151101-test") {
+# Process all FITS files in folder through APT, build master df.
+  require(dplyr)
+  # make list of all FITS.
+  AN_folder   <- make_safe_path("J:/Astro/Images/C14",AN_folder)
+  FITS_folder <- make_safe_path(AN_folder,"Calibrated")
+  filenames   <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
+                                   recursive=FALSE, ignore.case=TRUE))
+  
+  # make data frame with FOV names
+  pattern<- "^(.+)-S[[:digit:]]{3}-R"
+  substrings <- regmatches(filenames,regexec(pattern,filenames))
+  FOVdf <- data.frame(matrix(unlist(substrings), nrow=length(substrings), byrow=T),
+                      stringsAsFactors=FALSE)
+  colnames(FOVdf) <- c("fragment","FOV")
+  FOVdf$filename <- filenames
+  FOVdf$fragment <- NULL
+  
+  # for each FOV, (1) read FOV file, (2) make APT source file,
+  #    (3) run_APT_oneFITS() on each FITS file & add to master df.
+  photometry_folder <- make_safe_path(AN_folder,"Photometry")
+  if (!dir.exists(photometry_folder)) {
+    dir.create(photometry_folder)
+  }
+  FOVs <- unique(FOVdf$target)
+  for (thisFOV in FOVs) {
+    # get FOV data from FOV file.
+    FOV_data <- read_FOV_file(thisFOV)
+    sequence_df <- FOV_data$sequence  # data frame of all objects in VPhot sequence
+    chart       <- FOV_data$chart     # ID of photometry (not graphical) AAVSO chart
+    
+    # write APT's sourcelist file for this FOV.
+    APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
+    write_APTsourcelist_file(APTsourcelist_path, sequence_df)
+    
+    # for each FITS file derived from this FOV, run APT to make APT output file.
+    FOVfiles <- FOVdf %>% 
+      filter(FOV==thisFOV) %>% 
+      select(filename)
+    for (FOVfile in FOVfiles) {
+      # TODO: set up APT and run_APT_oneFITS()
+      
+      
+    }
+    
+    
+  }
+  
+  return(df)
+}
+
+run_APT_oneFITS <- function (AN_folder=NULL, FITS_file=NULL) {
+# run_APT_oneFITS(): process one FITS file through APT. 
+#    Requires calibrated FITS file. 
+#    Also requires APT source-list file (previously constructed from VPhot sequence file).
+#    Writes output file "APT-[FITS filename].txt" into FITS file's directory.
+  APTprogram_folder <- "C:/Programs/APT/APT_v2.5.8/"
+  
+  # Construct arguments.
+  AN_folder            <- make_safe_path("J:/Astro/Images/C14",AN_folder)
+  FITS_folder          <- make_safe_path(AN_folder,"Calibrated")
+  FITS_path            <- make_safe_path(FITS_folder,FITS_file)
+  APTsourcelist_folder <- make_safe_path(AN_folder,"APT")
+  APTsourcelist_path   <- make_safe_path(APTsourcelist_folder,)
+  APToutput_path       <- make_safe_path(FITSfolder, paste("APT-",FITSfile,sep=""))
+  
+  APT_arguments <- c("-Duser.language=en",
+                     "-Duser.region=US",
+                     "-mx1024M",
+                     "-jar", make_safe_path(APTprogram_folder, "APT.jar"),
+                     "-i", FITS_path,
+                     "-s", APTsourceListFile,
+                     "-o", outputFile)
+  
+  # Run APT to generate output file.
+  errorCode <- system2("java", shQuote(APT_arguments), wait=TRUE)
+  if (errorCode == 0) return(outputFile) else return("")
 }
