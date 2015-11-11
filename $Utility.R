@@ -1,6 +1,8 @@
 ##### $Utility.R, Support for VS Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun September 18 2015.
 
+##### SUPPORT FILES ONLY in this file. ##########################################
+
 make_safe_path <- function (folder, filename, extension="") {
 # Pastes correctly regardless of duplicated "/". Disregard extension if it's in filename.
   gsub("/+","/",paste(trimws(folder),"/",trimws(filename),trimws(extension),sep=""),fixed=FALSE)
@@ -26,6 +28,10 @@ read_FOV_file <- function (FOV_name) {
   }
   FOV_data <- list()
   FOV_data$Sequence <- directive_value("#SEQUENCE")
+  center <- directive_value("#CENTER")
+  FOV_data$RA_center  <- get_RA_deg(center[1])
+  FOV_data$Dec_center <- get_Dec_deg(center[2])
+  # TODO: parse all the other FOV-file directives.
   
   # Parse STAR LINES (embedded lines from VPhot sequence):
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=0, fill=TRUE, strip.white=TRUE, 
@@ -66,21 +72,33 @@ read_FOV_file <- function (FOV_name) {
   return(list(FOV_data=FOV_data, star_data=df_star))
 }
 
-get_RA_deg <- function (RA_full_hex_string) {
-  # argument must be one string of format "12:34:56.232323".
-  pattern <- "([+-]*)([[:digit:]]+)[:]{1}([[:digit:]]+)[:]{1}([[:digit:]])+(.?[[:digit:]]*)"
-  str <- regmatches(RA_full_hex_string, regexec(pattern,RA_full_hex_string))[[1]]
-  str[5] <- paste(str[5],str[6],"0",sep="")
-  RA_deg <- 15 * sum(as.numeric(str[3:5]) * c(1, 1/60, 1/3600))
+get_RA_deg <- function (RA_string) {
+  # argument must be either (1) one string of format "12:34:56.232323" (full hex string), or
+  #    (2) already a numeric string between 0 and 360 (degrees string).
+  str <- unlist(strsplit(RA_string,":",fixed=TRUE))
+  if (length(str)==1) {
+    RA_deg = as.double(RA_string)
+  } else {
+    str <- c(str,rep("0",3))
+    RA_deg <- 15 * sum(as.numeric(str[1:3]) * c(1, 1/60, 1/3600))
+  }
+  if (RA_deg < 0 | RA_deg > 360 ) RA_deg = NA
   return(RA_deg)
 }
 
-get_Dec_deg <- function (Dec_full_hex_string) {
-  # argument must be one string of format "+12:34:56.232323" or "-12:34:56.232323" or "0:0:0", etc.
-  pattern <- "([+-]*)([[:digit:]]+)[:]{1}([[:digit:]]+)[:]{1}([[:digit:]])+(.?[[:digit:]]*)"
-  str <- regmatches(Dec_full_hex_string, regexec(pattern,Dec_full_hex_string))[[1]]
-  str[5] <- paste(str[5],str[6],"0",sep="")
-  Dec_deg <- sum(as.numeric(str[3:5]) * c(1, 1/60, 1/3600))
-  if (trimws(str[2])=="-") Dec_deg <- -1 * Dec_deg
+get_Dec_deg <- function (Dec_string) {
+  # argument must be either (1) one string of format "+12:34:56.232323" or "-12:34:56.232323" or "0:0:0"
+  #   (full hex string), or (2) already a numeric string between -90 and +90 (degrees string).  str <- unlist(strsplit(RA_string,":",fixed=TRUE))
+  str <- unlist(strsplit(Dec_string,":",fixed=TRUE))
+  if (length(str)==1) {
+    Dec_deg = as.double(Dec_string)
+  } else {
+    str <- c(str,rep("0",3))
+    print (str)
+    Dec_sign <- sign(as.numeric(paste(str[1],"1",sep=""))) # append digit to prevent "-0" problem.
+    print(Dec_sign)
+    Dec_deg <- Dec_sign * sum(abs(as.numeric(str[1:3])) * c(1, 1/60, 1/3600))
+  }
+  if (Dec_deg < -90 | Dec_deg > +90 ) Dec_deg = NA
   return(Dec_deg)
 }

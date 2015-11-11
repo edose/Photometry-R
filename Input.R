@@ -10,8 +10,6 @@
 #####         identification of source signals, and is in any case too tied to catalogs, 
 #####         when all we want is fast, accurate AP of our comp, check, and target stars.
 
-##### Always run renumberACP() and renameTarget() BEFORE calibrating the FITS files.
-
 renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   # Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
   # to sequential naming ("T Cep-001-I.fts").
