@@ -32,13 +32,12 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
   }
   
   # Parse RA and Dec (h:m:s) to degrees, add columns to table.
-  RA_deg <- 15 * (as.numeric(as.difftime(table$RA,units="hours")))
-  Dec_deg <- rep(NA, nrow(table))
-  pattern <- "([+-]*)([[:digit:]]+)[:]{1}([[:digit:]]+)[:]{1}([[:digit:].]+)"
+  source ("C:/Dev/Photometry/$Utility.R")
+  RA_Deg  <- rep(NA, nrow(table))
+  Dec_Deg <- rep(NA, nrow(table))
   for (iRow in 1:nrow(table)) {
-    substrings <- regmatches(table$Dec[iRow], regexec(pattern, table$Dec[iRow]))[[1]]  
-    Dec_deg[iRow] <- sum(as.numeric(substrings[3:5]) * c(1, 1/60, 1/3600)) *
-      ifelse(trimws(substrings[2])=="-", -1, 1)    
+    RA_deg[iRow]  <- get_RA_deg(table$RA[iRow])
+    Dec_deg[iRow] <- get_Dec_deg(table$Dec[iRow])
   }
   table <- table %>% mutate(RA_deg=RA_deg, Dec_deg=Dec_deg)  
   

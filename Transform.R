@@ -174,6 +174,7 @@ parse_VPhot_header_line <- function(lines, key){
   trimws(substring(line,nchar(key)+1))
 }
 
+# TODO: Refactor this down to a shell around $Utility.R::read_FOV_file().
 get_one_VPhot_sequence <- function(sequence=c("CF Cas"), folder="C:/Dev/Photometry/VPhot/") {
   # [support, not typically called by user].
   # Reads one sequence (star list with RA/dec & magnitudes) as constructed in VPhot 

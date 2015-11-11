@@ -65,3 +65,22 @@ read_FOV_file <- function (FOV_name) {
   df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
   return(list(FOV_data=FOV_data, star_data=df_star))
 }
+
+get_RA_deg <- function (RA_full_hex_string) {
+  # argument must be one string of format "12:34:56.232323".
+  pattern <- "([+-]*)([[:digit:]]+)[:]{1}([[:digit:]]+)[:]{1}([[:digit:]])+(.?[[:digit:]]*)"
+  str <- regmatches(RA_full_hex_string, regexec(pattern,RA_full_hex_string))[[1]]
+  str[5] <- paste(str[5],str[6],"0",sep="")
+  RA_deg <- 15 * sum(as.numeric(str[3:5]) * c(1, 1/60, 1/3600))
+  return(RA_deg)
+}
+
+get_Dec_deg <- function (Dec_full_hex_string) {
+  # argument must be one string of format "+12:34:56.232323" or "-12:34:56.232323" or "0:0:0", etc.
+  pattern <- "([+-]*)([[:digit:]]+)[:]{1}([[:digit:]]+)[:]{1}([[:digit:]])+(.?[[:digit:]]*)"
+  str <- regmatches(Dec_full_hex_string, regexec(pattern,Dec_full_hex_string))[[1]]
+  str[5] <- paste(str[5],str[6],"0",sep="")
+  Dec_deg <- sum(as.numeric(str[3:5]) * c(1, 1/60, 1/3600))
+  if (trimws(str[2])=="-") Dec_deg <- -1 * Dec_deg
+  return(Dec_deg)
+}
