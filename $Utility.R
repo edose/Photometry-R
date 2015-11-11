@@ -14,24 +14,45 @@ read_FOV_file <- function (FOV_name) {
   FOV_folder <- "C:/Dev/Photometry/FOV"
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
   lines <- readLines(FOV_path)
-  for (line in lines) {
-    line <- trimws(strsplit(line,";",fixed=TRUE)[1])  # remove comments, then trim white space
+  for (iLine in 1:length(lines)) {
+    lines[iLine] <- lines[iLine] %>% 
+      strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
   }
-  
+
   # Parse DIRECTIVE LINES -> FOV_data (a list)
   directiveLines <- lines[stri_detect_regex(lines,'^#')]
   # Nested function:
   directive_value <- function(key) {
     line  <- directiveLines[substring(directiveLines,1,nchar(key))==key][1]
-    directive <- (unlist(strsplit(line,"[ \t]")))[1]
-    value <- trimws(substring(line,nchar(directive)+1))  # all but the directive
+    directive <- line %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% first()
+    value <- line %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
   }
   FOV_data <- list()
+  FOV_data$XXX <- directive_value("#XXX")  # test dummy: ensure NA is returned
   FOV_data$Sequence <- directive_value("#SEQUENCE")
-  center <- directive_value("#CENTER")
+  center <- directive_value("#CENTER") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
   FOV_data$RA_center  <- get_RA_deg(center[1])
   FOV_data$Dec_center <- get_Dec_deg(center[2])
-  # TODO: parse all the other FOV-file directives.
+  FOV_data$Chart <- directive_value("#CHART")
+  FOV_data$Date <- directive_value("#DATE")
+  exps <- directive_value("#EXP") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  if (is.na(exps[1])) {
+    df_exps <- NA
+  } else {
+    df_exps <- data.frame(Filter="", Seconds="", stringsAsFactors = FALSE) # primer row; removed below.
+    for (iExp in 1:length(exps)) {
+      strs <- exps[iExp] %>% strsplit("=",fixed=TRUE) %>% unlist() %>% trimws()
+      filter <- strs[1]
+      exps_filter <- strs[2] %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
+      for (iExpFilter in 1:length(exps_filter)) {
+        thisExp <- c(Filter=filter,Seconds=exps_filter[iExpFilter])
+        df_exps <- rbind(df_exps,thisExp)
+      }
+    }
+  }
+  FOV_data$Exposures <- df_exps %>% filter(Filter!="") %>% filter(Seconds!="") # remove primer row.
+  mt <- directive_value("#MAINTARGET") %>% strsplit(" ",fixed=TRUE) %>% unlist() %>% trimws()
+  # TODO : parse #MAINTARGET directive.
   
   # Parse STAR LINES (embedded lines from VPhot sequence):
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=0, fill=TRUE, strip.white=TRUE, 
@@ -43,8 +64,7 @@ read_FOV_file <- function (FOV_name) {
   df_star$MagV <- NA
   df_star$MagR <- NA
   df_star$MagI <- NA
-  df_star$Sequence <- FOV_data$Sequence
-  
+
   # temporary lookup/cross-reference data frame
   mag_xref <- data.frame(passband=c("MagU","MagB","MagV","MagR","MagI"), stringsAsFactors = FALSE)
   rownames(mag_xref) <- c("1024","1","2","4","8") 
@@ -94,9 +114,7 @@ get_Dec_deg <- function (Dec_string) {
     Dec_deg = as.double(Dec_string)
   } else {
     str <- c(str,rep("0",3))
-    print (str)
     Dec_sign <- sign(as.numeric(paste(str[1],"1",sep=""))) # append digit to prevent "-0" problem.
-    print(Dec_sign)
     Dec_deg <- Dec_sign * sum(abs(as.numeric(str[1:3])) * c(1, 1/60, 1/3600))
   }
   if (Dec_deg < -90 | Dec_deg > +90 ) Dec_deg = NA
