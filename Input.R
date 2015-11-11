@@ -109,7 +109,7 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
   filenames   <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
                                    recursive=FALSE, ignore.case=TRUE))
   
-  # make data frame with FOV names
+  # make data frame with all FOV names for this AN
   pattern<- "^(.+)-S[[:digit:]]{3}-R"
   substrings <- regmatches(filenames,regexec(pattern,filenames))
   FOVdf <- data.frame(matrix(unlist(substrings), nrow=length(substrings), byrow=T),
@@ -151,8 +151,14 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
   return(df)
 }
 
+
+################################################################################################
+##### Below are support-only functions, not called by user. ####################################
+
+
+
 run_APT_oneFITS <- function (AN_folder=NULL, FITS_file=NULL) {
-# run_APT_oneFITS(): process one FITS file through APT. 
+# Process one FITS file through APT. 
 #    Requires calibrated FITS file. 
 #    Also requires APT source-list file (previously constructed from VPhot sequence file).
 #    Writes output file "APT-[FITS filename].txt" into FITS file's directory.
