@@ -28,7 +28,6 @@ read_FOV_file <- function (FOV_name) {
     value <- line %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
   }
   FOV_data <- list()
-  FOV_data$XXX <- directive_value("#XXX")  # test dummy: ensure NA is returned
   FOV_data$Sequence <- directive_value("#SEQUENCE")
   center <- directive_value("#CENTER") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
   FOV_data$RA_center  <- get_RA_deg(center[1])
@@ -51,9 +50,37 @@ read_FOV_file <- function (FOV_name) {
     }
   }
   FOV_data$Exposures <- df_exps %>% filter(Filter!="") %>% filter(Seconds!="") # remove primer row.
-  mt <- directive_value("#MAINTARGET") %>% strsplit(" ",fixed=TRUE) %>% unlist() %>% trimws()
-  # TODO : parse #MAINTARGET directive.
-  
+  cad_strs <- directive_value("#CADENCE") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  if(length(cad_strs) >= 2) {
+    cad_num  <- cad_strs[1] %>% as.numeric()
+    cad_unit <- cad_strs[2] %>% substr(1,1) %>% tolower()
+    if ((cad_num <= 0) | (!cad_unit %in% c("s","m","h","d"))) {
+      FOV_data$Cadence     <- NA
+      FOV_data$CadenceUnit <- NA
+    } else {
+      FOV_data$Cadence     <- cad_num
+      FOV_data$CadenceUnit <- cad_unit
+    }
+  } else {
+    FOV_data$Cadence     <- NA
+    FOV_data$CadenceUnit <- NA
+  }
+  stare_strs <- directive_value("#STAREFOR") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  if (length(stare_strs) >= 2) {
+    stare_num  <- stare_strs[1] %>% as.numeric()
+    stare_unit <- stare_strs[2] %>% substr(1,1) %>% tolower()
+    if ((stare_num <= 0) | (!stare_unit %in% c("s","m","h","d"))) {
+      FOV_data$Stare     <- NA
+      FOV_data$StareUnit <- NA
+    } else {
+      FOV_data$Stare     <- stare_num
+      FOV_data$StareUnit <- stare_unit
+    }
+  } else {
+    FOV_data$Stare     <- NA
+    FOV_data$StareUnit <- NA
+  }
+
   # Parse STAR LINES (embedded lines from VPhot sequence):
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=0, fill=TRUE, strip.white=TRUE, 
                         comment.char="#", stringsAsFactors = FALSE, 
