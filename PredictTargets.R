@@ -4,14 +4,14 @@
 
 write_AAVSO_reportfile <- function (df_master, AN_folder) {
   require(dplyr)
-  out <- "#TYPE=EXTENDED"
-  out <- out %>% c("#OBSCODE=DERA") # DERA = Eric Dose
-  out <- out %>% c("#SOFTWARE=custom R Scripts")
-  out <- out %>% c("#DELIM=,")
-  out <- out %>% c("#DATE=JD")
-  out <- out %>% c("#OBSTYPE=CCD")
-  out <- out %>% c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
-  
+  out <- "#TYPE=EXTENDED" %>%
+    c("#OBSCODE=DERA") %>% #       DERA = Eric Dose's observer code @ AAVSO
+    c("#SOFTWARE=custom R Scripts, github/edose") %>%
+    c("#DELIM=,") %>%
+    c("#DATE=JD") %>%
+    c("#OBSTYPE=CCD") %>%
+    c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
+
   # TODO : curate df_report from df_in.
   
   # Format each row of df_report as a text line.
