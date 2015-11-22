@@ -102,19 +102,22 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
 # Process all FITS files in folder through APT, build master df.
   require(dplyr)
   # make list of all FITS.
-  AN_folder   <- make_safe_path("J:/Astro/Images/C14",AN_folder)
+  AN_folder   <- make_safe_path("J:/Astro/Images/C14",AN_rel_folder)
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
-  filenames   <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
-                                   recursive=FALSE, ignore.case=TRUE))
+  FITS_files  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
+                                    recursive=FALSE, ignore.case=TRUE))
+  FITS_paths  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=TRUE, 
+                                    recursive=FALSE, ignore.case=TRUE))
   
-  # make data frame with all FOV names for this AN
+  # make data frame with all FOV names for this AN, one row per FITS file.
   pattern<- "^(.+)-S[[:digit:]]{3}-R"
-  substrings <- regmatches(filenames,regexec(pattern,filenames))
+  substrings <- regmatches(FITS_files,regexec(pattern,FITS_files))
   FOVdf <- data.frame(matrix(unlist(substrings), nrow=length(substrings), byrow=T),
-                      stringsAsFactors=FALSE)
-  colnames(FOVdf) <- c("fragment","FOV")
-  FOVdf$filename <- filenames
-  FOVdf$fragment <- NULL
+                      stringsAsFactors=FALSE) %>%
+    select(-1)
+  colnames(FOVdf) <- "FOVname"
+  FOVdf$FITS_file <- FITS_files
+  FOVdf$FITS_path <- FITS_paths
   
   # for each FOV, (1) read FOV file, (2) make APT source file,
   #    (3) run_APT_oneFITS() on each FITS file & add to master df.
@@ -122,31 +125,30 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
   if (!dir.exists(photometry_folder)) {
     dir.create(photometry_folder)
   }
-  FOVs <- unique(FOVdf$target)
+  master_df <- data.frame()  # start with a null data frame and later add to it.
+  
+  FOVs <- unique(FOVdf$FOVname)
   for (thisFOV in FOVs) {
-    # get FOV data from FOV file.
-    FOV_data <- read_FOV_file(thisFOV)
-    sequence_df <- FOV_data$sequence  # data frame of all objects in VPhot sequence
-    chart       <- FOV_data$chart     # ID of photometry (not graphical) AAVSO chart
-    
+    FOV_list    <- read_FOV_file(thisFOV)
+
     # write APT's sourcelist file for this FOV.
-    APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
-    write_APTsourcelist_file(APTsourcelist_path, sequence_df)
+    APTsourcelist_path <- make_safe_path(AN_folder,"APTsource.txt")
+    write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
     
     # for each FITS file derived from this FOV, run APT to make APT output file.
-    FOVfiles <- FOVdf %>% 
-      filter(FOV==thisFOV) %>% 
-      select(filename)
-    for (FOVfile in FOVfiles) {
-      # TODO: set up APT and run_APT_oneFITS()
-      
-      
+    FOV_FITS_paths <- FOVdf %>% 
+      filter(FOVname==thisFOV) %>% 
+      select(FITS_path)
+    for (thisFITS_path in FOV_FITS_paths) {
+      APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path)
+      df_FITS <- parse_APToutput(APToutput_path)
+      # TODO : add columns for FOV, FITS etc info to df_FITS.
+      # TODO : remove rows for obs saturated near obs (check *Ur* FITS, not Calibrated).
+      master_df <- rbind (master_df, df_FITS)  
     }
-    
-    
   }
-  
-  return(df)
+    
+  return(master_df)  # one row per observation.
 }
 
 
@@ -155,30 +157,39 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
 
 
 
-run_APT_oneFITS <- function (AN_folder=NULL, FITS_file=NULL) {
+run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_path) {
 # Process one FITS file through APT. 
 #    Requires calibrated FITS file. 
 #    Also requires APT source-list file (previously constructed from VPhot sequence file).
-#    Writes output file "APT-[FITS filename].txt" into FITS file's directory.
-  APTprogram_folder <- "C:/Programs/APT/APT_v2.5.8/"
-  
+#    Writes output file "APToutput.txt" into the AN directory.
+
   # Construct arguments.
-  AN_folder            <- make_safe_path("J:/Astro/Images/C14",AN_folder)
-  FITS_folder          <- make_safe_path(AN_folder,"Calibrated")
-  FITS_path            <- make_safe_path(FITS_folder,FITS_file)
-  APTsourcelist_folder <- make_safe_path(AN_folder,"APT")
-  APTsourcelist_path   <- make_safe_path(APTsourcelist_folder,)
-  APToutput_path       <- make_safe_path(FITSfolder, paste("APT-",FITSfile,sep=""))
+  APTprogram_path <- "C:/Programs/APT/APT_v2.5.8/APT.jar"
+  APToutput_path  <- make_safe_path(AN_folder, "APToutput.txt")
   
   APT_arguments <- c("-Duser.language=en",
                      "-Duser.region=US",
                      "-mx1024M",
-                     "-jar", make_safe_path(APTprogram_folder, "APT.jar"),
-                     "-i", FITS_path,
-                     "-s", APTsourceListFile,
-                     "-o", outputFile)
+                     "-jar", APTprogram_path,
+                     "-i", thisFITS_path,
+                     "-s", APTsourcelist_path,
+                     "-o", APToutput_path)  
+                     # prefs file is default (set up in APT GUI)
   
   # Run APT to generate output file.
-  errorCode <- system2("java", shQuote(APT_arguments), wait=TRUE)
-  if (errorCode == 0) return(outputFile) else return("")
+  errorCode <- system2("java", shQuote(APT_arguments), wait=TRUE) # Run APT program.
+  if (errorCode == 0) return(APToutput_path) else return("")      # return output path.
+}
+
+write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
+  FOV_list$star_data %>% 
+    select(degRA,degDec) %>% 
+    format(nsmall=6) %>% 
+    write.table(APTsourcelist_path, quote=FALSE, row.names=FALSE)
+}
+
+parse_APToutput <- function (APToutput_path) {
+  # parse APT text output file, coerce data into a data frame for this one FITS file.
+  
+  
 }
