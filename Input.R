@@ -142,8 +142,9 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
     for (thisFITS_path in FOV_FITS_paths) {
       APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path)
       df_FITS <- parse_APToutput(APToutput_path)
-      # TODO : add columns for FOV, FITS etc info to df_FITS.
+      df_FITS <- removeSaturatedObs (df_FITS)
       # TODO : remove rows for obs saturated near obs (check *Ur* FITS, not Calibrated).
+      # TODO : add columns for FOV, FITS etc info to df_FITS.
       master_df <- rbind (master_df, df_FITS)  
     }
   }
@@ -189,7 +190,53 @@ write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
 }
 
 parse_APToutput <- function (APToutput_path) {
-  # parse APT text output file, coerce data into a data frame for this one FITS file.
+  # parse APT text output file, return data frame for this one file (one image).
+  lines <- readLines(APToutput_path)
+  
+  # Parse header, assign column range to each key.
+  header <- lines[3]
+  headerKeys <- c("Number", "CentroidX", "CentroidY", "SourceIntensity", "SourceUncertainty",
+                  "Magnitude", "MagUncertainty", "SkyMedian", "SkySigma",
+                  "RadiusCentroid", "SkyRadiusInner", "SkyRadiusOuter", "ApertureNumRejected",
+                  "RadialProfileFWHM") # key "Image" is left-justified; handle separately.
+  fieldWidths <- c(6,16,16,16,16,  16,16,16,16,  12,12,12,12,  12)
+  rightmostColumns <- NULL
+  for (key in headerKeys) {
+    rightmostColumns <- c(rightmostColumns,
+                          stri_locate_first_fixed(header, paste(" ",key," ",sep=""))[2]-1) # append
+  }
+  leftmostColumns <- rightmostColumns - fieldWidths + 1
+  FITSpath_leftColumn <- stri_locate_first_fixed(header, paste(" Image ",sep=""))[1]+1
+  stopString <- "End of "
+  df_APT <- as.data.frame(NULL)   # empty data frame to begin.
+  filenames <- as.vector(NULL)     # empty vector to begin.
+  # For each star, parse all values and add a row to data frame.
+  for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
+    if (substring(line,1,nchar(stopString))==stopString) 
+      break
+    FITSpath <- trimws(substring(line,FITSpath_leftColumn))
+    line <- line %>% substring(1,FITSpath_leftColumn-1) %>% paste(" ")
+    values <- rep(NA,length(headerKeys))
+    for (iKey in 1:length(headerKeys)) {
+      values[iKey] <- as.numeric(substring(line,leftmostColumns[iKey],rightmostColumns[iKey]))
+    }
+    df_APT   <- rbind(df_APT, values)
+    filenames <- c(filenames,FITSpath)
+  }
+  df_APT <- cbind(df_APT, filenames)
+  colnames(df_APT) <- c("Number","Xpixels","Ypixels","Intensity","Uncertainty","Mag","MagUncertainty",
+                        "SkyMedian","SkySigma","Radius","SkyRadiusInner","SkyRadiusOuter",
+                        "ApNumRej","FWHMpixels","FITSpath")
+  return(df_APT %>% arrange(Number))
+  }
+
+removeSaturatedObs <- function(df_FITS) {
+  # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
+  # remove that row from df_FITS and return.
+  CalFITS_path <- df_FITS$FITS_path
   
   
+  
+  return(df_FITS)
 }
+

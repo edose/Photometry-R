@@ -135,7 +135,7 @@ get_RA_deg <- function (RA_string) {
 
 get_Dec_deg <- function (Dec_string) {
   # argument must be either (1) one string of format "+12:34:56.232323" or "-12:34:56.232323" or "0:0:0"
-  #   (full hex string), or (2) already a numeric string between -90 and +90 (degrees string).  str <- unlist(strsplit(RA_string,":",fixed=TRUE))
+  #   (full hex string), or (2) already a numeric string between -90 and +90 (degrees string).
   str <- unlist(strsplit(Dec_string,":",fixed=TRUE))
   if (length(str)==1) {
     Dec_deg = as.double(Dec_string)
