@@ -141,15 +141,16 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
       select(FITS_path)
     for (thisFITS_path in FOV_FITS_paths) {
       APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path)
-      df_FITS <- parse_APToutput(APToutput_path)
-      df_FITS <- removeSaturatedObs (df_FITS)
-      # TODO : remove rows for obs saturated near obs (check *Ur* FITS, not Calibrated).
-      # TODO : add columns for FOV, FITS etc info to df_FITS.
-      master_df <- rbind (master_df, df_FITS)  
+      df_APT <- parse_APToutput(APToutput_path) # ok 11/23/2015
+      # TODO : next fn, mark rows for obs saturated near obs (check *Ur* FITS, not Calibrated).
+      df_APT <- markSaturatedObs (df_APT) # adds column "Saturated".
+      # TODO : next fn, add columns for FOV, FITS etc info to df_FITS.
+      df_thisFITS <- buildMasterRows (df_APT, FOV_list) # make master rows for stars in this FITS file.
+      df_master <- rbind (df_master, df_thisFITS)       # append master rows to master data frame.
     }
   }
     
-  return(master_df)  # one row per observation.
+  return(df_master)  # one row per observation, for every FITS file.
 }
 
 
@@ -206,11 +207,12 @@ parse_APToutput <- function (APToutput_path) {
                           stri_locate_first_fixed(header, paste(" ",key," ",sep=""))[2]-1) # append
   }
   leftmostColumns <- rightmostColumns - fieldWidths + 1
-  FITSpath_leftColumn <- stri_locate_first_fixed(header, paste(" Image ",sep=""))[1]+1
-  stopString <- "End of "
-  df_APT <- as.data.frame(NULL)   # empty data frame to begin.
-  filenames <- as.vector(NULL)     # empty vector to begin.
+  FITSpath_leftColumn <- (stri_locate_first_fixed(header, " Image "))[1]+1
+  
   # For each star, parse all values and add a row to data frame.
+  stopString <- "End of "
+  df_APT <- data.frame()    # empty data frame to begin.
+  filenames <- vector()     # empty vector to begin.
   for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
     if (substring(line,1,nchar(stopString))==stopString) 
       break
@@ -224,19 +226,55 @@ parse_APToutput <- function (APToutput_path) {
     filenames <- c(filenames,FITSpath)
   }
   df_APT <- cbind(df_APT, filenames)
+  df_APT$FITSpath <- as.character(df_APT$FITSpath) # else it ends up as a factor.
   colnames(df_APT) <- c("Number","Xpixels","Ypixels","Intensity","Uncertainty","Mag","MagUncertainty",
                         "SkyMedian","SkySigma","Radius","SkyRadiusInner","SkyRadiusOuter",
                         "ApNumRej","FWHMpixels","FITSpath")
   return(df_APT %>% arrange(Number))
   }
 
-removeSaturatedObs <- function(df_FITS) {
+markSaturatedObs <- function(df_APT) {
+  # NOT YET TESTED (written 11/24/2015). !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
-  # remove that row from df_FITS and return.
-  CalFITS_path <- df_FITS$FITS_path
+  # set Saturated=TRUE for that row in df_FITS and return.
+  # We want to use the original (Ur) FITS file for true checking of pixel saturation.
+  CalFITS_path <- as.character(df_APT$FITSpath[1])
+  saturatedADU <- 55000  # pixels pre-calibration above this ADU level to be marked Saturated.
   
+  # make UrFITS_path from CalFITS_path
+  pattern <- "^(.+)/Calibrated/(.+)"
+  substrings <- unlist(regmatches(CalFITS_path, regexec(pattern, CalFITS_path)))
+  UrFITS_path <- paste(substrings[2],"/Ur/",substrings[3],sep="")
   
-  
+  # grab image matrix from Ur FITS file (not from Calibrated FITS file)
+  zz <- file(description=UrFITS_path, open="rb")
+  header <- readFITSheader(zz)
+  D <- readFITSarray(zz, header)
+  close(zz)
+  image <- D$imDat
+  Xsize <- D$axDat$len[1]
+  Ysize <- D$axDat$len[2]
+  df_APT$Saturated <- FALSE  # add column to data frame with initial values.
+  for (iObj in 1:nrow(df_FITS)) {
+    Xcenter <- df_APT$Xpixels[iObj]
+    Ycenter <- df_APT$Ypixels[iObj]
+    radius  <- df_APT$Radius[iObj]
+    Xlow  <- max(1, floor(Xcenter-radius))
+    Xhigh <- min(Xsize, ceiling(Xcenter+radius))
+    Ylow  <- max(1, floow(Ycenter-radius))
+    Yhigh <- min(Ysize, ceiling(Ycenter+radius))
+    for (X in Xlow:Xhigh) {
+      for (Y in Ylow:Yhigh) {
+        if ((X-Xcenter)^2+(Y-Ycenter)^2 <= radius^2) {
+          if (image[X,Y] > saturatedADU) {
+            df_APT$Saturated[iObj] <- TRUE
+            print (paste(iObj, X, Y, image[X,Y] ,sep=" "))
+          } # if
+        } # if
+      } # for Y
+    } # for X
+
+  } # for iObj
   return(df_FITS)
 }
 
