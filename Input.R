@@ -125,28 +125,29 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
   if (!dir.exists(photometry_folder)) {
     dir.create(photometry_folder)
   }
-  master_df <- data.frame()  # start with a null data frame and later add to it.
+  master_df <- data.frame()  # start with a null data frame and later add rows to it.
   
   FOVs <- unique(FOVdf$FOVname)
   for (thisFOV in FOVs) {
-    FOV_list    <- read_FOV_file(thisFOV)
+    FOV_list <- read_FOV_file(thisFOV)  # all static info defining this FOV
+    FOV_FITS_paths <- FOVdf %>%         # list of all full FITS paths under this FOV
+      filter(FOVname==thisFOV) %>% 
+      select(FITS_path) %>% 
+      unlist()
 
-    # write APT's sourcelist file for this FOV.
+    # write APT's sourcelist file (one only) for all FITS files using this FOV.
     APTsourcelist_path <- make_safe_path(AN_folder,"APTsource.txt")
-    write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
+    APT_star_data <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
     
     # for each FITS file derived from this FOV, run APT to make APT output file.
-    FOV_FITS_paths <- FOVdf %>% 
-      filter(FOVname==thisFOV) %>% 
-      select(FITS_path)
     for (thisFITS_path in FOV_FITS_paths) {
+      df_FITSheader <- getFITSheaderInfo(thisFITS_path)
       APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path)
-      df_APT <- parse_APToutput(APToutput_path) # ok 11/23/2015
-      # TODO : next fn, mark rows for obs saturated near obs (check *Ur* FITS, not Calibrated).
-      df_APT <- markSaturatedObs (df_APT) # adds column "Saturated".
-      # TODO : next fn, add columns for FOV, FITS etc info to df_FITS.
-      df_thisFITS <- buildMasterRows (df_APT, FOV_list) # make master rows for stars in this FITS file.
-      df_master <- rbind (df_master, df_thisFITS)       # append master rows to master data frame.
+      df_APT <- parse_APToutput(APToutput_path) %>%
+        markSaturatedObs()
+      # TODO : next fn, perform all joins.
+      df_master_thisFITS <- makeRows_thisFITS (df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
+      df_master <- rbind (df_master, df_master_thisFITS)         # append master rows to master data frame.
     }
   }
     
@@ -168,6 +169,7 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_
   # Construct arguments.
   APTprogram_path <- "C:/Programs/APT/APT_v2.5.8/APT.jar"
   APToutput_path  <- make_safe_path(AN_folder, "APToutput.txt")
+  unlink(APToutput_path, force=TRUE)   # else APT might append to old data (bad). 
   
   APT_arguments <- c("-Duser.language=en",
                      "-Duser.region=US",
@@ -184,10 +186,15 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_
 }
 
 write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
-  FOV_list$star_data %>% 
-    select(degRA,degDec) %>% 
+  APT_star_data <- star_data %>% mutate(Number=1:nrow(star_data))
+  
+  APT_star_data %>%
+    arrange(Number) %>%          # ensure stars are in correct order in APT source file.
+    select(degRA,degDec) %>%     # APT source file needs only degRA & degDec
     format(nsmall=6) %>% 
-    write.table(APTsourcelist_path, quote=FALSE, row.names=FALSE)
+    write.table(APTsourcelist_path, quote=FALSE, row.names=FALSE, col.names=FALSE) # no header line.
+  
+  return(APT_star_data) # with Number to ensure join works correctly.
 }
 
 parse_APToutput <- function (APToutput_path) {
@@ -226,21 +233,21 @@ parse_APToutput <- function (APToutput_path) {
     filenames <- c(filenames,FITSpath)
   }
   df_APT <- cbind(df_APT, filenames)
-  df_APT$FITSpath <- as.character(df_APT$FITSpath) # else it ends up as a factor.
   colnames(df_APT) <- c("Number","Xpixels","Ypixels","Intensity","Uncertainty","Mag","MagUncertainty",
                         "SkyMedian","SkySigma","Radius","SkyRadiusInner","SkyRadiusOuter",
                         "ApNumRej","FWHMpixels","FITSpath")
+  df_APT$FITSpath <- as.character(df_APT$FITSpath) # else it ends up as a factor.
   return(df_APT %>% arrange(Number))
   }
 
-markSaturatedObs <- function(df_APT) {
-  # NOT YET TESTED (written 11/24/2015). !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+markSaturatedObs <- function(df_APT, saturatedADU=55000) {
+  # TESTED 11/29/2015.
   # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
   # set Saturated=TRUE for that row in df_FITS and return.
   # We want to use the original (Ur) FITS file for true checking of pixel saturation.
+  # Note: APT's first pixel is numbered "1", MaxIm's is numbered "0".
   CalFITS_path <- as.character(df_APT$FITSpath[1])
-  saturatedADU <- 55000  # pixels pre-calibration above this ADU level to be marked Saturated.
-  
+
   # make UrFITS_path from CalFITS_path
   pattern <- "^(.+)/Calibrated/(.+)"
   substrings <- unlist(regmatches(CalFITS_path, regexec(pattern, CalFITS_path)))
@@ -248,6 +255,7 @@ markSaturatedObs <- function(df_APT) {
   
   # grab image matrix from Ur FITS file (not from Calibrated FITS file)
   zz <- file(description=UrFITS_path, open="rb")
+  require(FITSio)
   header <- readFITSheader(zz)
   D <- readFITSarray(zz, header)
   close(zz)
@@ -255,26 +263,69 @@ markSaturatedObs <- function(df_APT) {
   Xsize <- D$axDat$len[1]
   Ysize <- D$axDat$len[2]
   df_APT$Saturated <- FALSE  # add column to data frame with initial values.
-  for (iObj in 1:nrow(df_FITS)) {
+
+  # now, mark Saturated=TRUE for any row (Observation) with a saturated pixel within aperture.
+  for (iObj in 1:nrow(df_APT)) {
+    n <- df_APT$Number[iObj]
     Xcenter <- df_APT$Xpixels[iObj]
     Ycenter <- df_APT$Ypixels[iObj]
-    radius  <- df_APT$Radius[iObj]
-    Xlow  <- max(1, floor(Xcenter-radius))
-    Xhigh <- min(Xsize, ceiling(Xcenter+radius))
-    Ylow  <- max(1, floow(Ycenter-radius))
-    Yhigh <- min(Ysize, ceiling(Ycenter+radius))
+    testRadius  <- df_APT$Radius[iObj] + 0.5
+    Xlow  <- max(1, floor(Xcenter-testRadius))
+    Xhigh <- min(Xsize, ceiling(Xcenter+testRadius))
+    Ylow  <- max(1, floor(Ycenter-testRadius))
+    Yhigh <- min(Ysize, ceiling(Ycenter+testRadius))
     for (X in Xlow:Xhigh) {
       for (Y in Ylow:Yhigh) {
-        if ((X-Xcenter)^2+(Y-Ycenter)^2 <= radius^2) {
+        if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
           if (image[X,Y] > saturatedADU) {
             df_APT$Saturated[iObj] <- TRUE
-            print (paste(iObj, X, Y, image[X,Y] ,sep=" "))
           } # if
         } # if
       } # for Y
     } # for X
-
   } # for iObj
-  return(df_FITS)
+  return(df_APT)
 }
 
+getFITSheaderInfo <- function (FITS_path) {
+  source('C:/Dev/Photometry/$Utility.R')
+  require(FITSio)
+  require(dplyr)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }
+  fileHandle <- file(description=FITS_path, open="rb")
+  header <- parseHdr(readFITSheader(fileHandle))
+  close(fileHandle)
+
+  df <- data.frame(Object=NA)
+  df$Object   <- get_header_value(header, "OBJECT")
+  df$JD_start <- as.numeric(get_header_value(header, "JD"))
+  df$Exposure <- as.numeric(get_header_value(header, "EXPOSURE"))
+  df$JD_mid   <- df$JD_start + (df$Exposure / (24*3600) / 2)
+  df$Filter   <- get_header_value(header, "FILTER")
+  df$Airmass  <- as.numeric(get_header_value(header, "AIRMASS"))
+  return (df)
+}
+
+df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_data) {
+  # Combine all relevant data for all APT-detected stars for this FITS file.
+  # Inputs:
+  #   df_APT = parsed output from APT run on this FITS file.
+  #   APT_star_data = FOV star data IN ORDER given to APT (so that data can be joined herein).
+  #   df_FITSheader = data from FITS file header (Filter used, JD of exposure, etc; uniform for all rows)
+  #   FOV_data = data about the FOV (uniform across all rows)
+
+  df <- left_join(df_APT, APT_star_data, by="Number") %>%
+    cbind(df_FITSheader) %>%
+    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, Date=FOV_data$Date)
+  
+  # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
+  magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
+  columnIndex <- match(magColumnName, colnames(df))
+  df$CatMag <- df[,columnIndex]  # new column
+  df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))]
+  return(df)
+}
