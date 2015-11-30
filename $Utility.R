@@ -13,7 +13,7 @@ read_FOV_file <- function (FOV_name) {
   require(dplyr)
   FOV_folder <- "C:/Dev/Photometry/FOV"
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
-  lines <- readLines(FOV_path)
+  lines <- readLines(FOV_path, warn=FALSE)   # read last line even without EOL character(s).
   for (iLine in 1:length(lines)) {
     lines[iLine] <- lines[iLine] %>% 
       strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
@@ -34,10 +34,13 @@ read_FOV_file <- function (FOV_name) {
   FOV_data$Dec_center <- get_Dec_deg(center[2])
   FOV_data$Chart <- directive_value("#CHART")
   FOV_data$Date <- directive_value("#DATE")
-  exps <- directive_value("#EXP") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  # TODO : directive #EXP needs to be OPTIONAL.
+  exps <- directive_value("#EXP")
   if (is.na(exps[1])) {
-    df_exps <- NA
+    #df_exps <- NA
+    FOV_data$Exposures <- NA
   } else {
+    exps <- exps %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
     df_exps <- data.frame(Filter="", Seconds="", stringsAsFactors = FALSE) # primer row; removed below.
     for (iExp in 1:length(exps)) {
       strs <- exps[iExp] %>% strsplit("=",fixed=TRUE) %>% unlist() %>% trimws()
@@ -48,8 +51,8 @@ read_FOV_file <- function (FOV_name) {
         df_exps <- rbind(df_exps,thisExp)
       }
     }
+    FOV_data$Exposures <- df_exps %>% filter(Filter!="") %>% filter(Seconds!="") # remove primer row.
   }
-  FOV_data$Exposures <- df_exps %>% filter(Filter!="") %>% filter(Seconds!="") # remove primer row.
   cad_strs <- directive_value("#CADENCE") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
   if(length(cad_strs) >= 2) {
     cad_num  <- cad_strs[1] %>% as.numeric()

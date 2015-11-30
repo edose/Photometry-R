@@ -10,93 +10,9 @@
 #####         identification of source signals, and is in any case too tied to catalogs, 
 #####         when all we want is fast, accurate AP of our comp, check, and target stars.
 
-renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
-  # Renames FITS files from ACP naming ("T Cep-S001-R001-C001-I.fts")
-  # to sequential naming ("T Cep-001-I.fts").
-  # Also returns data frame of FITS files' metadata, including new file names,
-  # and writes this data to a file $catalog.csv stored with the FITS files.
-  df <- data.frame(ACP_name=list.files(path=folder,pattern="[.]*.f[[:alpha:]]*t"), 
-                   target=NA, stringsAsFactors=FALSE)
-  
-  # Parse ACP filenames for all FITS files in this folder.
-  pattern <- paste("(.+)-S[[:digit:]]{3}-R[[:digit:]]{3}-C[[:digit:]]{3}-",
-                   "([[:alpha:]][[:alnum:]]*)[_]*(.*)f[[:alpha:]]+", sep="")
-  filesDetected <- nrow(df)
-  for (iRow in 1:filesDetected) {
-    filename <- df$ACP_name[iRow]
-    substrings <- regmatches(filename, regexec(pattern, filename))[[1]]
-    df$target[iRow] <- substrings[2]
-  }
-  df <- df[!is.na(df$target),]  # keep only files with ACP-style names.
-  filesToRename <- nrow(df)
-  cat(filesDetected, "FITS files detected, of which", filesToRename, "shall be renamed.\n")
-  if (filesToRename <= 0) {
-    stop(cat("STOPPING: no FITS files to rename in folder", folder, 
-             "(have you already renamed them?)"))
-  }
-  
-  # Extract multiple metadata from FITS files' headers.  
-  source('C:/Dev/Photometry/$Utility.R')
-  require(FITSio)
-  require(dplyr)
-  get_header_value <- function(header, key) {  # nested function.
-    value <- header[which(header==key)+1]
-    if (length(value)==0) value <- NA
-    value
-  }
-  df <- cbind(df, Object=NA, JD_start=NA, JD_mid=NA, Filter=NA, Airmass=NA, FWHM=NA, Exp_secs=NA)
-  for (iRow in 1:nrow(df)) {  
-    fullfilename <- make_safe_path(folder, df$ACP_name[iRow])
-    fileHandle <- file(description=fullfilename, open="rb")
-    header <- parseHdr(readFITSheader(fileHandle))
-    close(fileHandle)
-    df$Object[iRow]   <- get_header_value(header, "OBJECT")
-    df$JD_start[iRow] <- get_header_value(header, "JD")
-    df$Filter[iRow]   <- get_header_value(header, "FILTER")
-    df$Airmass[iRow]  <- get_header_value(header, "AIRMASS")
-    df$FWHM[iRow]     <- get_header_value(header, "FWHM")
-    df$Exp_secs[iRow] <- get_header_value(header, "EXPTIME")
-  }
-  JD_half_duration <- (as.numeric(df$Exp_secs)/2) / (24*3600) # convert seconds to JD days.
-  df$JD_mid <- as.character(as.numeric(df$JD_start) + JD_half_duration)
-  
-  # Report any mismatches between ACP name and FITS-header Object.
-  mismatches <- df %>%
-    select(ACP_name,target,Object) %>%
-    filter(target!=Object)
-  cat ("Object-target mismatches (s/b zero) =",nrow(mismatches), "\n")
-  if (nrow(mismatches) > 0) {
-    write.table(mismatches,file="",quote=FALSE,row.names=FALSE)
-  }
-  
-  # Construct time-based index for files *within* each target, then construct new names.
-  df2 <- df %>% 
-    group_by(Object) %>% 
-    arrange(JD_start) %>% 
-    mutate(one=1) %>% 
-    mutate(index=trimws(as.character(cumsum(one)))) %>%
-    mutate(index=substring(paste("000",index,sep=""),nchar(index)+1,nchar(index)+3)) %>%
-    select(-target,-one)
-  df2$newName <- paste(df2$Object,"-",df2$index,"-",df2$Filter,".fts",sep="") # (dplyr mutate didn't work)
-  
-  # Rename all FITS files (after confirmation).
-  userConfirmedRename <- "Y"==toupper(trimws(readline(
-    cat("Do you really want to rename all",nrow(df2), "FITS files? (y/n)"))))
-  if (userConfirmedRename) {
-    df_rename <- df2 %>%
-      select(ACP_name,newName) %>%
-      mutate(oldName=make_safe_path(folder,ACP_name)) %>%
-      mutate(newName=make_safe_path(folder,newName))
-    outcome <- file.rename(df_rename$oldName, df_rename$newName)
-    cat(sum(outcome),"files have been renamed...")
-    write.csv(df2,file=make_safe_path(folder,"$catalog.csv"),row.names=FALSE)
-    cat("and file $catalog.csv has been written.\n")
-  }
-  return(df2)
-}
-
 #####    TODO: new function renameObject(): changes FITS filename and FITS header field to a user-specified 
 #####       new object name after checking that name absent from other FITS files of that date.
+#####       (Useful when an ACP plan didn't use the best Object name.)
 
 run_APT_all <- function(AN_rel_folder="20151101-test") {
 # Process all FITS files in folder through APT, build master df.
@@ -125,10 +41,20 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
   if (!dir.exists(photometry_folder)) {
     dir.create(photometry_folder)
   }
-  master_df <- data.frame()  # start with a null data frame and later add rows to it.
+  df_master <- data.frame()  # start with a null data frame and later add rows to it.
+  FOVdf %>% 
+    select(FOVname) %>% 
+    group_by(FOVname) %>%
+    summarize(nFITS=n()) %>% 
+    as.data.frame() %>% 
+    print()
+  isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
+  print(isYES)
+  if (!isYES) stop("Stopped at user request.")
   
   FOVs <- unique(FOVdf$FOVname)
   for (thisFOV in FOVs) {
+    print(paste("Top of outer loop, thisFOV >", thisFOV, "<", sep=""))
     FOV_list <- read_FOV_file(thisFOV)  # all static info defining this FOV
     FOV_FITS_paths <- FOVdf %>%         # list of all full FITS paths under this FOV
       filter(FOVname==thisFOV) %>% 
@@ -141,16 +67,19 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
     
     # for each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
+      print(paste("Top of inner loop, thisFITS_path >", thisFITS_path, "<", sep=""))
       df_FITSheader <- getFITSheaderInfo(thisFITS_path)
-      APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path)
+      APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path) # runs APT.
+      print(paste("thisFITS_path >", thisFITS_path, "<",sep=""))
       df_APT <- parse_APToutput(APToutput_path) %>%
         markSaturatedObs()
-      # TODO : next fn, perform all joins.
-      df_master_thisFITS <- makeRows_thisFITS (df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
-      df_master <- rbind (df_master, df_master_thisFITS)         # append master rows to master data frame.
+      print(paste("df_APT done: ",nrow(df_APT), " rows",sep=""))
+      df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
+      print(paste("df_master_thisFITS: ",nrow(df_master_thisFITS), " rows",sep=""))
+      df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
+      print(paste("df_master: ",nrow(df_master), " rows",sep=""))
     }
   }
-    
   return(df_master)  # one row per observation, for every FITS file.
 }
 
@@ -181,6 +110,7 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_
                      # prefs file is default (set up in APT GUI)
   
   # Run APT to generate output file.
+  print("################## Call APT here.")
   errorCode <- system2("java", shQuote(APT_arguments), wait=TRUE) # Run APT program.
   if (errorCode == 0) return(APToutput_path) else return("")      # return output path.
 }
@@ -310,7 +240,7 @@ getFITSheaderInfo <- function (FITS_path) {
   return (df)
 }
 
-df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_data) {
+make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_data) {
   # Combine all relevant data for all APT-detected stars for this FITS file.
   # Inputs:
   #   df_APT = parsed output from APT run on this FITS file.
@@ -320,7 +250,7 @@ df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_data) 
 
   df <- left_join(df_APT, APT_star_data, by="Number") %>%
     cbind(df_FITSheader) %>%
-    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, Date=FOV_data$Date)
+    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, FOV_date=FOV_data$Date)
   
   # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
