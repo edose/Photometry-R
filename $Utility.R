@@ -88,7 +88,7 @@ read_FOV_file <- function (FOV_name) {
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=0, fill=TRUE, strip.white=TRUE, 
                         comment.char="#", stringsAsFactors = FALSE, 
                         col.names=c("StarID", "degRA", "degDec", "Mags", "StarType",6:10))
-  df_star <- df_star[-stri_startswith_fixed(df_star[,1],";"),1:5] # remove comments, keep only 1st 5 cols
+  df_star <- df_star[!stri_startswith_fixed(df_star[,1],";"),1:5] # remove comments, keep only 1st 5 cols
   df_star$MagU <- NA
   df_star$MagB <- NA
   df_star$MagV <- NA

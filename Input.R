@@ -14,11 +14,11 @@
 #####       new object name after checking that name absent from other FITS files of that date.
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
-run_APT_all <- function(AN_rel_folder="20151101-test") {
+run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test") {
 # Process all FITS files in folder through APT, build master df.
   require(dplyr)
   # make list of all FITS.
-  AN_folder   <- make_safe_path("J:/Astro/Images/C14",AN_rel_folder)
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
   FITS_files  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
                                     recursive=FALSE, ignore.case=TRUE))
@@ -67,27 +67,22 @@ run_APT_all <- function(AN_rel_folder="20151101-test") {
     
     # for each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
-      print(paste("Top of inner loop, thisFITS_path >", thisFITS_path, "<", sep=""))
       df_FITSheader <- getFITSheaderInfo(thisFITS_path)
       APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path) # runs APT.
-      print(paste("thisFITS_path >", thisFITS_path, "<",sep=""))
       df_APT <- parse_APToutput(APToutput_path) %>%
         markSaturatedObs()
-      print(paste("df_APT done: ",nrow(df_APT), " rows",sep=""))
       df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
-      print(paste("df_master_thisFITS: ",nrow(df_master_thisFITS), " rows",sep=""))
       df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
       print(paste("df_master: ",nrow(df_master), " rows",sep=""))
     }
   }
+  save(df_master, 
+       file=make_safe_path(AN_folder, "df_master.Rdata")) # may later recover via df <- load(df_master_path).
   return(df_master)  # one row per observation, for every FITS file.
 }
 
-
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
-
-
 
 run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_path) {
 # Process one FITS file through APT. 
