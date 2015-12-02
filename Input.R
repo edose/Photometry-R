@@ -52,6 +52,8 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   print(isYES)
   if (!isYES) stop("Stopped at user request.")
   
+  ##### TODO : write new fn >>> prepare_APTprefs(defaultAPTpref_path, thisAPTpref_path, [option parms] ).
+  
   FOVs <- unique(FOVdf$FOVname)
   for (thisFOV in FOVs) {
     print(paste("Top of outer loop, thisFOV >", thisFOV, "<", sep=""))
@@ -103,6 +105,8 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_
                      "-s", APTsourcelist_path,
                      "-o", APToutput_path)  
                      # prefs file is default (set up in APT GUI)
+  
+  ##### TODO : modify APT_arguments just above to use file at thisAPTpref_path. (?)
   
   # Run APT to generate output file.
   print("################## Call APT here.")
@@ -162,6 +166,11 @@ parse_APToutput <- function (APToutput_path) {
                         "SkyMedian","SkySigma","Radius","SkyRadiusInner","SkyRadiusOuter",
                         "ApNumRej","FWHMpixels","FITSpath")
   df_APT$FITSpath <- as.character(df_APT$FITSpath) # else it ends up as a factor.
+  
+  ##### TODO : (1) Write+test correcting Mag column for FITS Exposure time (not done by APT).
+  #####        (2) Probably remove Intensity column (not well defined by APT).
+  #####        (3) Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
+  
   return(df_APT %>% arrange(Number))
   }
 
