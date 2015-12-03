@@ -20,7 +20,7 @@ read_FOV_file <- function (FOV_name) {
   }
 
   # Parse DIRECTIVE LINES -> FOV_data (a list)
-  directiveLines <- lines[stri_detect_regex(lines,'^#')]
+  directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
   # Nested function:
   directive_value <- function(key) {
     line  <- directiveLines[substring(directiveLines,1,nchar(key))==key][1]
@@ -28,13 +28,16 @@ read_FOV_file <- function (FOV_name) {
     value <- line %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
   }
   FOV_data <- list()
+  
+  # REQUIRED directives here.
   FOV_data$Sequence <- directive_value("#SEQUENCE")
   center <- directive_value("#CENTER") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
   FOV_data$RA_center  <- get_RA_deg(center[1])
   FOV_data$Dec_center <- get_Dec_deg(center[2])
   FOV_data$Chart <- directive_value("#CHART")
   FOV_data$Date <- directive_value("#DATE")
-  # TODO : directive #EXP needs to be OPTIONAL.
+  
+  # OPTIONAL directives below here.
   exps <- directive_value("#EXP")
   if (is.na(exps[1])) {
     #df_exps <- NA

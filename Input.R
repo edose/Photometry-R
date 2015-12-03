@@ -14,7 +14,8 @@
 #####       new object name after checking that name absent from other FITS files of that date.
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
-run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test") {
+run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
+                        APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
 # Process all FITS files in folder through APT, build master df.
   require(dplyr)
   # make list of all FITS.
@@ -51,8 +52,9 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
   print(isYES)
   if (!isYES) stop("Stopped at user request.")
-  
-  ##### TODO : write new fn >>> prepare_APTprefs(defaultAPTpref_path, thisAPTpref_path, [option parms] ).
+  APTstdout_path  <- make_safe_path(AN_folder, "APTstdout.txt")
+  unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
+  allAPTstdout <- character(0)
   
   FOVs <- unique(FOVdf$FOVname)
   for (thisFOV in FOVs) {
@@ -70,14 +72,17 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     # for each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
       df_FITSheader <- getFITSheaderInfo(thisFITS_path)
-      APToutput_path <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path) # runs APT.
-      df_APT <- parse_APToutput(APToutput_path) %>%
-        markSaturatedObs()
+      APTstdout <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path, 
+                                        APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref")
+      df_APT <- parse_APToutput(APToutput_path) %>% markSaturatedObs()
       df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
       df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
+      allAPTstdout <- c(allAPTstdout, APTstdout)
+      print(paste("allAPTstdout now has ", length(allAPTstdout), " lines."))
       print(paste("df_master: ",nrow(df_master), " rows",sep=""))
     }
   }
+  write(allAPTstdout, APTstdout_path)
   save(df_master, 
        file=make_safe_path(AN_folder, "df_master.Rdata")) # may later recover via df <- load(df_master_path).
   return(df_master)  # one row per observation, for every FITS file.
@@ -86,7 +91,8 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
 
-run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_path) {
+run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, 
+                             APTsourcelist_path, APTpreferences_path) {
 # Process one FITS file through APT. 
 #    Requires calibrated FITS file. 
 #    Also requires APT source-list file (previously constructed from VPhot sequence file).
@@ -103,6 +109,7 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_
                      "-jar", APTprogram_path,
                      "-i", thisFITS_path,
                      "-s", APTsourcelist_path,
+                     "-p", APTpreferences_path,
                      "-o", APToutput_path)  
                      # prefs file is default (set up in APT GUI)
   
@@ -110,8 +117,8 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, APT_sourcelist_
   
   # Run APT to generate output file.
   print("################## Call APT here.")
-  errorCode <- system2("java", shQuote(APT_arguments), wait=TRUE) # Run APT program.
-  if (errorCode == 0) return(APToutput_path) else return("")      # return output path.
+  stdOutput <- system2("java", shQuote(APT_arguments), stdout=TRUE, wait=TRUE) # Run APT program.
+  return(stdOutput)      # return text output as character vector
 }
 
 write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {

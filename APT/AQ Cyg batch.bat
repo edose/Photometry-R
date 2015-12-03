@@ -1,2 +1,0 @@
-rem c:\Programs\APT\APT_v2.5.8\apt.bat -i "J:\Astro\Images\C14\20151016\Calibrated\AQ Cyg-S001-R001-C001-I.fts" -s "C:\Dev\Photometry\APT\AQ Cyg.txt" -o "C:\Dev\Photometry\APT\AQ Cyg output.txt"
-java -Duser.language=en -Duser.region=US -mx1024M -jar "c:\Programs\APT\APT_v2.5.8\APT.jar" -i "J:\Astro\AQ.fts" -s "C:\Dev\Photometry\APT\AQ Cyg sourcelist.txt" -o "C:\Dev\Photometry\APT\AQ Cyg output.txt"

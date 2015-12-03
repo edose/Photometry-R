@@ -33,8 +33,8 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
   
   # Parse RA and Dec (h:m:s) to degrees, add columns to table.
   source ("C:/Dev/Photometry/$Utility.R")
-  RA_Deg  <- rep(NA, nrow(table))
-  Dec_Deg <- rep(NA, nrow(table))
+  RA_deg  <- rep(NA, nrow(table))
+  Dec_deg <- rep(NA, nrow(table))
   for (iRow in 1:nrow(table)) {
     RA_deg[iRow]  <- get_RA_deg(table$RA[iRow])
     Dec_deg[iRow] <- get_Dec_deg(table$Dec[iRow])
