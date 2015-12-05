@@ -16,7 +16,7 @@
 
 run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
-# Process all FITS files in folder through APT, build master df.
+# Process all FITS files in folder through APT, build & return master df.
   require(dplyr)
   # make list of all FITS.
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -25,6 +25,7 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
                                     recursive=FALSE, ignore.case=TRUE))
   FITS_paths  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=TRUE, 
                                     recursive=FALSE, ignore.case=TRUE))
+  print(paste(">>>>> FITS folder=",FITS_folder), quote=FALSE)
   
   # make data frame with all FOV names for this AN, one row per FITS file.
   pattern<- "^(.+)-S[[:digit:]]{3}-R"
@@ -50,7 +51,6 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     as.data.frame() %>% 
     print()
   isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
-  print(isYES)
   if (!isYES) stop("Stopped at user request.")
   APTstdout_path  <- make_safe_path(AN_folder, "APTstdout.txt")
   unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
@@ -58,7 +58,7 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   
   FOVs <- unique(FOVdf$FOVname)
   for (thisFOV in FOVs) {
-    print(paste("Top of outer loop, thisFOV >", thisFOV, "<", sep=""))
+    print(paste("FOV >", thisFOV, "<", sep=""), quote=FALSE)
     FOV_list <- read_FOV_file(thisFOV)  # all static info defining this FOV
     FOV_FITS_paths <- FOVdf %>%         # list of all full FITS paths under this FOV
       filter(FOVname==thisFOV) %>% 
@@ -78,8 +78,8 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
       df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
       df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
       allAPTstdout <- c(allAPTstdout, APTstdout)
-      print(paste("allAPTstdout now has ", length(allAPTstdout), " lines."))
-      print(paste("df_master: ",nrow(df_master), " rows",sep=""))
+      print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
+                  " --> df_master now has", nrow(df_master), "rows"), quote=FALSE)
     }
   }
   write(allAPTstdout, APTstdout_path)
@@ -113,10 +113,7 @@ run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL,
                      "-o", APToutput_path)  
                      # prefs file is default (set up in APT GUI)
   
-  ##### TODO : modify APT_arguments just above to use file at thisAPTpref_path. (?)
-  
   # Run APT to generate output file.
-  print("################## Call APT here.")
   stdOutput <- system2("java", shQuote(APT_arguments), stdout=TRUE, wait=TRUE) # Run APT program.
   return(stdOutput)      # return text output as character vector
 }
@@ -135,15 +132,19 @@ write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
 
 parse_APToutput <- function (APToutput_path) {
   # parse APT text output file, return data frame for this one file (one image).
+  
   lines <- readLines(APToutput_path)
   
-  # Parse header, assign column range to each key.
+  # Parse APT output header, set up a column range for each key.
+  require(stringi)
   header <- lines[3]
-  headerKeys <- c("Number", "CentroidX", "CentroidY", "SourceIntensity", "SourceUncertainty",
+  headerKeys <- c("Number", "CentroidX", "CentroidY", # "SourceIntensity", "SourceUncertainty",
                   "Magnitude", "MagUncertainty", "SkyMedian", "SkySigma",
                   "RadiusCentroid", "SkyRadiusInner", "SkyRadiusOuter", "ApertureNumRejected",
                   "RadialProfileFWHM") # key "Image" is left-justified; handle separately.
-  fieldWidths <- c(6,16,16,16,16,  16,16,16,16,  12,12,12,12,  12)
+  fieldWidths <- c(6,16,16,
+                   # 16,16,  
+                  16,16,16,16,  12,12,12,12,  12)
   rightmostColumns <- NULL
   for (key in headerKeys) {
     rightmostColumns <- c(rightmostColumns,
@@ -169,14 +170,13 @@ parse_APToutput <- function (APToutput_path) {
     filenames <- c(filenames,FITSpath)
   }
   df_APT <- cbind(df_APT, filenames)
-  colnames(df_APT) <- c("Number","Xpixels","Ypixels","Intensity","Uncertainty","Mag","MagUncertainty",
-                        "SkyMedian","SkySigma","Radius","SkyRadiusInner","SkyRadiusOuter",
-                        "ApNumRej","FWHMpixels","FITSpath")
+  colnames(df_APT) <- c("Number", "Xpixels", "Ypixels", # "Intensity", "Uncertainty",
+                        "RawMagAPT", "MagUncertainty",
+                        "SkyMedian", "SkySigma", "Radius", "SkyRadiusInner", "SkyRadiusOuter",
+                        "ApNumRej", "FWHMpixels", "FITSpath")
   df_APT$FITSpath <- as.character(df_APT$FITSpath) # else it ends up as a factor.
   
-  ##### TODO : (1) Write+test correcting Mag column for FITS Exposure time (not done by APT).
-  #####        (2) Probably remove Intensity column (not well defined by APT).
-  #####        (3) Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
+  ##### TODO : Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
   
   return(df_APT %>% arrange(Number))
   }
@@ -259,9 +259,12 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   #   df_FITSheader = data from FITS file header (Filter used, JD of exposure, etc; uniform for all rows)
   #   FOV_data = data about the FOV (uniform across all rows)
 
+  # Join APT, FOV star, and APT data  to give master data frame
   df <- left_join(df_APT, APT_star_data, by="Number") %>%
     cbind(df_FITSheader) %>%
-    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, FOV_date=FOV_data$Date)
+    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, FOV_date=FOV_data$Date) %>%
+    mutate(RawMagAPT = RawMagAPT + 2.5 * log10(Exposure)) %>%
+    rename(InstMag=RawMagAPT)
   
   # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")

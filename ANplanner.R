@@ -25,8 +25,8 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
     stop("Table is corrupt, does not have 12 columns.")
   }
   table <- table[-1,]  # remove first row, which is only the old column names.
-  colnames(table) <- c("Name", "RA", "Dec", "Type", "max", "min", "band", "period", 
-                       "N_total", "N_30", "obs_30", "Days")
+  colnames(table) <- c("Name", "RA", "Dec", "Type", "Max", "Min", "band", "Period", 
+                       "N_total", "N_30", "Obs_30", "Days")
   if (nrow(table)<=0) {
     stop("ERROR: No data retrieved. Returning table with zero rows.\n")
   }
@@ -42,8 +42,8 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
   table <- table %>% mutate(RA_deg=RA_deg, Dec_deg=Dec_deg)  
   
   # Convert strings representing numbers to numbers.
-  table <- table %>% mutate(Days=ifelse(Days=="30+",NA,Days))  # N_30==0 already implies that Days>30.
-  for (name in c("max", "min", "period", "N_total", "N_30", "obs_30", "Days")) {
+  table <- table %>% mutate(Days=ifelse(Days=="30+", NA, Days))  # N_30==0 already implies that Days>30.
+  for (name in c("Max", "Min", "Period", "N_total", "N_30", "Obs_30", "Days")) {
     table[name] <- as.numeric(unlist(table[name]))
   }
   if (selectBest <= 0) {
@@ -55,7 +55,7 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
       filter(N_total>0) %>% 
       arrange(desc(N_total)) %>% 
       head(selectBest)
-    cat("Returning", nrow(table), "VS targets (from", nrowOld, ") of", 
+    cat("obsPlanner returns", nrow(table), "VS targets (from", nrowOld, ") of", 
         length(unique(table$Type)), "(from", typesOld, ") distinct types.\n")
   }
   table <- table %>% arrange(RA_deg)
@@ -67,4 +67,14 @@ eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=
   obsPlanner(VStype="M%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
     select(-RA_deg, -Dec_deg)
+}
+
+eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=85, selectBest=150) {
+  require(dplyr)
+  obsPlanner(VStype="E%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
+             decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
+    select(-RA_deg, -Dec_deg) %>%
+    filter(Max > 9.8) %>%
+    filter(Min > 10.5) %>%
+    filter(Period > 0)
 }
