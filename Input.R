@@ -14,6 +14,9 @@
 #####       new object name after checking that name absent from other FITS files of that date.
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
+#####    TODO : (1) get the color index into the master data frame (what happened?).
+#####           (2) need a unique star ID (paste Chart:starID ?).
+
 run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
 # Process all FITS files in folder through APT, build & return master df.
@@ -50,7 +53,8 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     summarize(nFITS=n()) %>% 
     as.data.frame() %>% 
     print()
-  isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
+  # isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
+  isYES <- cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper()
   if (!isYES) stop("Stopped at user request.")
   APTstdout_path  <- make_safe_path(AN_folder, "APTstdout.txt")
   unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
@@ -138,13 +142,11 @@ parse_APToutput <- function (APToutput_path) {
   # Parse APT output header, set up a column range for each key.
   require(stringi)
   header <- lines[3]
-  headerKeys <- c("Number", "CentroidX", "CentroidY", # "SourceIntensity", "SourceUncertainty",
+  headerKeys <- c("Number", "CentroidX", "CentroidY",
                   "Magnitude", "MagUncertainty", "SkyMedian", "SkySigma",
                   "RadiusCentroid", "SkyRadiusInner", "SkyRadiusOuter", "ApertureNumRejected",
-                  "RadialProfileFWHM") # key "Image" is left-justified; handle separately.
-  fieldWidths <- c(6,16,16,
-                   # 16,16,  
-                  16,16,16,16,  12,12,12,12,  12)
+                  "RadialProfileFWHM") # key "Image" is left-justified; handle separately below.
+  fieldWidths <- c(6,16,16, 16,16,16,16,  12,12,12,12,  12)
   rightmostColumns <- NULL
   for (key in headerKeys) {
     rightmostColumns <- c(rightmostColumns,
@@ -167,16 +169,14 @@ parse_APToutput <- function (APToutput_path) {
       values[iKey] <- as.numeric(substring(line,leftmostColumns[iKey],rightmostColumns[iKey]))
     }
     df_APT   <- rbind(df_APT, values)
-    filenames <- c(filenames,FITSpath)
+    filenames <- c(filenames,FITSpath) # build separate vector of filenames.
   }
-  df_APT <- cbind(df_APT, filenames)
-  colnames(df_APT) <- c("Number", "Xpixels", "Ypixels", # "Intensity", "Uncertainty",
-                        "RawMagAPT", "MagUncertainty",
-                        "SkyMedian", "SkySigma", "Radius", "SkyRadiusInner", "SkyRadiusOuter",
-                        "ApNumRej", "FWHMpixels", "FITSpath")
+  df_APT <- cbind(df_APT, filenames)   # add completed vector of filenames as a new column.
+  colnames(df_APT) <- c("Number", "Xpixels", "Ypixels",
+                        "RawMagAPT", "MagUncertainty", "SkyMedian", "SkySigma", 
+                        "Radius", "SkyRadiusInner", "SkyRadiusOuter", "ApNumRej", 
+                        "FWHMpixels", "FITSpath")
   df_APT$FITSpath <- as.character(df_APT$FITSpath) # else it ends up as a factor.
-  
-  ##### TODO : Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
   
   return(df_APT %>% arrange(Number))
   }
@@ -259,10 +259,12 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   #   df_FITSheader = data from FITS file header (Filter used, JD of exposure, etc; uniform for all rows)
   #   FOV_data = data about the FOV (uniform across all rows)
 
-  # Join APT, FOV star, and APT data  to give master data frame
+  # Join APT, FOV star, and APT data  to give master data frame.
+  #   CI is color index V-I; RawMagAPT is 
   df <- left_join(df_APT, APT_star_data, by="Number") %>%
     cbind(df_FITSheader) %>%
-    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, FOV_date=FOV_data$Date) %>%
+    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, FOV_date=FOV_data$Date,
+           CI=MagV-MagI) %>%
     mutate(RawMagAPT = RawMagAPT + 2.5 * log10(Exposure)) %>%
     rename(InstMag=RawMagAPT)
   
@@ -270,6 +272,10 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
   columnIndex <- match(magColumnName, colnames(df))
   df$CatMag <- df[,columnIndex]  # new column
-  df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))]
+  df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
+  
+  ##### TODO : Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
+  ##### TODO : Later, consider writing SkyMedian routine (split annulus) to better reject noise, stars etc.
+  
   return(df)
 }

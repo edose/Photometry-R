@@ -25,7 +25,7 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
     stop("Table is corrupt, does not have 12 columns.")
   }
   table <- table[-1,]  # remove first row, which is only the old column names.
-  colnames(table) <- c("Name", "RA", "Dec", "Type", "Max", "Min", "band", "Period", 
+  colnames(table) <- c("Name", "RA", "Dec", "Type", "Max", "Min", "Band", "Period", 
                        "N_total", "N_30", "Obs_30", "Days")
   if (nrow(table)<=0) {
     stop("ERROR: No data retrieved. Returning table with zero rows.\n")
@@ -66,7 +66,10 @@ eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=
   require(dplyr)
   obsPlanner(VStype="M%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
-    select(-RA_deg, -Dec_deg)
+    select(-RA_deg, -Dec_deg) %>%
+    filter(Max > 9.8) %>%
+    filter(Min > 10.5) %>%
+    filter(Period > 0)
 }
 
 eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=85, selectBest=150) {

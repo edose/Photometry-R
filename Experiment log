@@ -1,6 +1,30 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
+Major TODO list (20151209): 
+* Test df_master building with several data sets.
+* Write R functions for building AN directory structure, including renaming & early statistics/diagnostics.
+* Write R FWHM (& aperture flux) routines to replace those in APT?
+* Then at long last: Start making models & writing function(s) for Model.R.
+
+------------------------------------------------------------------------------------------
+##### Dec 5 2015: Nearing completion of Input (master data frame) generation.
+Dumped PixInsight for APT, which identifies signals very well and and whose output file is easy to parse, 
+but its FWHM values are flaky, and I'm not crazy about its Sky (background) values either.
+Saturated star profiles are marked by examining (in R) the *uncalibrated* Ur FITS files to eliminate
+bias from applying flats.
+We now extract catalog info from FOV (field of view) files automatically. These FOV files are built around
+VPhot (AAVSO) Sequence files by adding a few metadata as directive lines beginning with #.
+We correct Instrument magnitudes from APT's raw IMags, which don't properly account for exposure time.
+
+##### Oct 21 2015: Transforms (C14-BOREA rig) done on NGC 7790, using code in Transform.R and 
+using VPhot photometry reports, and fixing CatMag slope to exactly one. 
+The resulting transform numbers based on V-I color are:
+V = -0.0259 (0.0108)
+R = +0.0319 (0.0093)
+I = +0.0064 (0.0100)
+These seem small, which is good, with small uncertainties, also good.
+
 ------------------------------------------------------------------------------------------
 ##### Sept 19 2015: Writing code for general photometric reduction.
 Decided to use PixInsight for automation, modified script AperturePhotometry.js to load catalog
