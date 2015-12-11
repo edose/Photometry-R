@@ -2,31 +2,51 @@
 ##### TODO : write function model(), whose ,
 #####          and whose output is a model object from lmer(). 
 
-model <- function (df_master, filter="V", maxUncert=0.02, fit_transform=FALSE, fit_extinction=TRUE) {
+model <- function (df_master, filter="V", maxMagUncertainty=0.02, fit_transform=FALSE, fit_extinction=TRUE,
+                   fit_starID=FALSE) {
   # Input is the Astronight's master data frame (or CSV file of it).
   # Returns lmer model object (of class merMod) of fit to comparison stars only.
   require(dplyr)
   require(magrittr)
   df_model <- df_master %>%
+    filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
-    filter(MagUncertainty<=maxUncert) %>%
+    filter(UseInModel==TRUE) %>%
+    filter(MagUncertainty<=maxMagUncertainty) %>%
     filter(Saturated==FALSE) %>%
-    filter(StarType=="Comp")
-  
-  formula_string <- "InstMag ~ offset(CatMag) + JD_mid + "
-  offset<- rep(0,nrow(df_model))
+    filter(!is.na(CI)) %>%
+    filter(CI<=1.6)
+
+  formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
+  thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
-    formula_string <- paste(formula_string, ""      sep="")
+    formula_string <- paste0(formula_string, " + CI")
   } else {
     transform <- list(V=-0.0259,R=+0.0319,I=+0.0064)[filter] %>% unlist() # default (not fit) value.
+    thisOffset <- thisOffset + transform * df_model$CI
   }
   if (fit_extinction) {
-    
+    formula_string <- paste0(formula_string, " + Airmass")
   } else {
     extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # default (not fit) value.
+    thisOffset <- thisOffset + extinction * df_model$Airmass
+  }
+  if (fit_starID) {
+    formula_string <- paste0(formula_string, " + (1|ModelStarID)")
   }
   
   
+  
+  thisFormula <- as.formula(formula_string)
+  df_model <- df_model %>%
+    mutate(JD_mid=as.factor(JD_mid)) %>%
+    mutate(ModelStarID=as.factor(ModelStarID))
+  
+  # Run model.
+  require(lme4)  
+  thisModel <- lmer (thisFormula, data=df_model, REML=FALSE, offset=thisOffset)
+  
+  # Initial stats & diagnostics.
   
   return (thisModel)
 }

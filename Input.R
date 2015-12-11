@@ -54,7 +54,7 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     as.data.frame() %>% 
     print()
   # isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
-  isYES <- cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper()
+  isYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
   if (!isYES) stop("Stopped at user request.")
   APTstdout_path  <- make_safe_path(AN_folder, "APTstdout.txt")
   unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
@@ -261,9 +261,16 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
 
   # Join APT, FOV star, and APT data  to give master data frame.
   #   CI is color index V-I; RawMagAPT is 
+  
+  APT_star_data <- APT_star_data %>%
+    mutate(ModelStarID=paste0(FOV_data$Sequence,"_",APT_star_data$StarID)) %>%
+    mutate(UseInModel=TRUE)
+  
   df <- left_join(df_APT, APT_star_data, by="Number") %>%
     cbind(df_FITSheader) %>%
-    mutate(Sequence=FOV_data$Sequence, Chart=FOV_data$Chart, FOV_date=FOV_data$Date,
+    mutate(Sequence=FOV_data$Sequence, 
+           Chart=FOV_data$Chart, 
+           FOV_date=FOV_data$Date,
            CI=MagV-MagI) %>%
     mutate(RawMagAPT = RawMagAPT + 2.5 * log10(Exposure)) %>%
     rename(InstMag=RawMagAPT)
@@ -273,7 +280,8 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   columnIndex <- match(magColumnName, colnames(df))
   df$CatMag <- df[,columnIndex]  # new column
   df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
-  
+  df$UseInModel <- TRUE   # these can be set to FALSE by user to eliminate from model.
+
   ##### TODO : Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
   ##### TODO : Later, consider writing SkyMedian routine (split annulus) to better reject noise, stars etc.
   
