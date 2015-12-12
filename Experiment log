@@ -1,8 +1,10 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
-Major TODO list (20151209): 
+Major TODO list (20151211): 
 * Test df_master building with several data sets.
+* Do we need a function to rename FITS sequentially (e.g., BF Cep-a-001-I.fts, where a is plan name)
+    then collect in \Ur dir?
 * Write R functions for building AN directory structure, including renaming & early statistics/diagnostics.
 * Write R FWHM (& aperture flux) routines to replace those in APT?
 * Then at long last: Start making models & writing function(s) for Model.R.

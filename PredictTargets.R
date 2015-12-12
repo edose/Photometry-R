@@ -1,8 +1,41 @@
 ##### PredictTargets.R   Predict magnitudes of Target (unknown) stars in Astronight's master data frame.
-#####    Writes AAVSO-ready text file.
-#####    Uses this Astronight's lmer() model object from Model.R::model().
+#####    Uses this Astronight's lmer() model object etc from Model.R::modelAll().
 
-write_AAVSO_reportfile <- function (df_master, AN_folder) {
+predictAll <- function (model, df_master, AN_folder, maxMagUncertainty=0.05) {
+  require(dplyr)
+  filters <- df_master$Filter %>% unique()
+  df_targets <- data.frame()
+  for (filter in filters) {
+    df_targets <- rbind(df_targets, predictOneFilter(model, df_master, filter, maxMagUncertainty))
+  }
+  return (df_targets)
+}
+
+
+predictOneFilter <- function (model, df_master, filter, maxMagUncertainty) {
+  require(dplyr)
+  df <- df_master %>%
+    filter(StarType %in% c("Check","Target")) %>%
+    filter(Filter==filter) %>%
+    filter(UseInModel==TRUE) %>%
+    filter(Saturated==FALSE) %>%
+    filter(MagUncertainty<=maxMagUncertainty) %>%
+    mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # set Targets' color index to zero (correct later).
+    mutate(CatMag=0, PredictedMag=NA, estimError=NA)
+  
+  rawMag <- df$InstMag - predict(model,df,re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
+  
+  ##### TODO : make sure extinction, transform, and modelStarID are all handled properly, that is,
+  #####        that they are all properly included in predicted values (there is a suspicious 0.2 mag bias).
+  #####        --> Might best test by duplicating comp stars as supposed Targets in df_master, then 
+  #####            comparing the results with original values (should be very close).
+  
+  return (df_targets)
+}
+
+
+write_AAVSO_reportfile <- function (AN_folder) {
+  #####    Writes AAVSO-ready text file.
   require(dplyr)
   out <- "#TYPE=EXTENDED" %>%
     c("#OBSCODE=DERA") %>% #       DERA = Eric Dose's observer code @ AAVSO
@@ -12,7 +45,7 @@ write_AAVSO_reportfile <- function (df_master, AN_folder) {
     c("#OBSTYPE=CCD") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
 
-  # TODO : curate df_report from df_in.
+  # TODO : (1) read in all df_target_V etc data frames, (2) create df_report.
   
   # Format each row of df_report as a text line.
   obs_lines <- paste(
@@ -42,3 +75,6 @@ write_AAVSO_reportfile <- function (df_master, AN_folder) {
   print(paste("AAVSO report for folder ",AN_folder," written: ",length(obs_lines)," observations."))
 }
 
+
+################################################################################################
+##### Below are support-only functions, not called by user. ####################################

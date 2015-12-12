@@ -14,8 +14,6 @@
 #####       new object name after checking that name absent from other FITS files of that date.
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
-#####    TODO : (1) get the color index into the master data frame (what happened?).
-#####           (2) need a unique star ID (paste Chart:starID ?).
 
 run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
@@ -280,7 +278,6 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   columnIndex <- match(magColumnName, colnames(df))
   df$CatMag <- df[,columnIndex]  # new column
   df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
-  df$UseInModel <- TRUE   # these can be set to FALSE by user to eliminate from model.
 
   ##### TODO : Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
   ##### TODO : Later, consider writing SkyMedian routine (split annulus) to better reject noise, stars etc.
