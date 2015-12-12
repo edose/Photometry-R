@@ -1,36 +1,54 @@
 ##### PredictTargets.R   Predict magnitudes of Target (unknown) stars in Astronight's master data frame.
 #####    Uses this Astronight's lmer() model object etc from Model.R::modelAll().
 
-predictAll <- function (model, df_master, AN_folder, maxMagUncertainty=0.05) {
+predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty=0.05) {
   require(dplyr)
-  filters <- df_master$Filter %>% unique()
+  filtersModelList <- names(masterModelList)
+  filtersDfMaster  <- df_master$Filter %>% unique()
+  filters <- intersect(filtersModellist, filtersDfMaster)
+  
   df_targets <- data.frame()
   for (filter in filters) {
-    df_targets <- rbind(df_targets, predictOneFilter(model, df_master, filter, maxMagUncertainty))
+    df_targets <- df_targets %>%
+      rbind(predictOneFilter(modelList, df_master, filter, maxMagUncertainty))
   }
   return (df_targets)
 }
 
 
-predictOneFilter <- function (model, df_master, filter, maxMagUncertainty) {
+predictOneFilter <- function (modelList, df_master, filter, maxMagUncertainty) {
   require(dplyr)
+  # Unpack input model list.
+  model      <- modelList$model
+  filter     <- modelList$filter
+  transform  <- modelList$transform
+  extinction <- modelList$extinction
+  
+  # Make working data frame and perform raw prediction.
   df <- df_master %>%
     filter(StarType %in% c("Check","Target")) %>%
     filter(Filter==filter) %>%
     filter(UseInModel==TRUE) %>%
     filter(Saturated==FALSE) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
-    mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # set Targets' color index to zero (correct later).
+    mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # zero Targets' (but not Checks') color index (adjust later).
     mutate(CatMag=0, PredictedMag=NA, estimError=NA)
+  modelMag <- predict(model,df,re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
   
-  rawMag <- df$InstMag - predict(model,df,re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
+  # Adjust for terms not included in model's formula.
+  if (!is.na(transform)) {
+    modelMag <- modelMag + transform * df$CI
+  }
+  if (!is.na(extinction)) {
+    modelMag <- modelMag + extinction * Airmass
+  }
+
+  # Compute and store predicted magnitude.
+  df <- df %>% mutate(PredictedMag = df$InstMag - modelMag)
   
-  ##### TODO : make sure extinction, transform, and modelStarID are all handled properly, that is,
-  #####        that they are all properly included in predicted values (there is a suspicious 0.2 mag bias).
-  #####        --> Might best test by duplicating comp stars as supposed Targets in df_master, then 
-  #####            comparing the results with original values (should be very close).
-  
-  return (df_targets)
+  ##### TODO : compute & store estimated errors.
+
+  return (df)
 }
 
 

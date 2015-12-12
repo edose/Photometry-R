@@ -3,12 +3,14 @@
 modelAll <- function(df_master, maxMagUncertainty=0.02, 
                      fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   filters <- df_master$Filter %>% unique()
-  masterList <- list()
+  masterModelList <- list()
+  print(filters)
   for (filter in filters) {
     filterList <- modelOneFilter(df_master, filter, maxMagUncertainty, 
                                  fit_transform, fit_extinction, fit_starID)
-    masterList$filter <- filterList
+    masterModelList[[filter]] <- filterList
   }
+  return (masterModelList)
 }
 
 modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, 

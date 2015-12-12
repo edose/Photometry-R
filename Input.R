@@ -19,6 +19,8 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
 # Process all FITS files in folder through APT, build & return master df.
   require(dplyr)
+  source("C:/Dev/Photometry/$Utility.R")
+  
   # make list of all FITS.
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
@@ -54,7 +56,10 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   # isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
   isYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
   if (!isYES) stop("Stopped at user request.")
+  
   APTstdout_path  <- make_safe_path(AN_folder, "APTstdout.txt")
+  APTsourcelist_path <- make_safe_path(AN_folder,"APTsource.txt")
+  APToutput_path  <- make_safe_path(AN_folder, "APToutput.txt")
   unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
   allAPTstdout <- character(0)
   
@@ -68,14 +73,14 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
       unlist()
 
     # write APT's sourcelist file (one only) for all FITS files using this FOV.
-    APTsourcelist_path <- make_safe_path(AN_folder,"APTsource.txt")
     APT_star_data <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
     
     # for each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
       df_FITSheader <- getFITSheaderInfo(thisFITS_path)
-      APTstdout <- run_APT_oneFITS(AN_folder, thisFITS_path, APTsourcelist_path, 
-                                        APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref")
+      APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
+                                   APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
+                                   APToutput_path)
       df_APT <- parse_APToutput(APToutput_path) %>% markSaturatedObs()
       df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
       df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
@@ -93,18 +98,17 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
 
-run_APT_oneFITS <- function (AN_folder=NULL, thisFITS_path=NULL, 
-                             APTsourcelist_path, APTpreferences_path) {
+run_APT_oneFITS <- function (thisFITS_path=NULL, 
+                             APTsourcelist_path, APTpreferences_path, APToutput_path) {
 # Process one FITS file through APT. 
 #    Requires calibrated FITS file. 
 #    Also requires APT source-list file (previously constructed from VPhot sequence file).
 #    Writes output file "APToutput.txt" into the AN directory.
 
-  # Construct arguments.
   APTprogram_path <- "C:/Programs/APT/APT_v2.5.8/APT.jar"
-  APToutput_path  <- make_safe_path(AN_folder, "APToutput.txt")
   unlink(APToutput_path, force=TRUE)   # else APT might append to old data (bad). 
-  
+
+  # Construct arguments.
   APT_arguments <- c("-Duser.language=en",
                      "-Duser.region=US",
                      "-mx1024M",
