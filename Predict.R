@@ -15,7 +15,6 @@ predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty
   return (df_targets)
 }
 
-
 predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertainty) {
   require(dplyr)
   # Unpack input model list.

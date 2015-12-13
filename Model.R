@@ -13,6 +13,9 @@ modelAll <- function(df_master, maxMagUncertainty=0.02,
   return (masterModelList)
 }
 
+################################################################################################
+##### Below are test or support-only functions, rarely or not typically called by user. ########
+
 modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, 
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Input is the Astronight's master data frame.
@@ -25,9 +28,10 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02,
     filter(UseInModel==TRUE) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
     filter(Saturated==FALSE) %>%
+    filter(!is.na(CatMag)) %>%
     filter(!is.na(CI)) %>%
     filter(CI<=1.6)
-
+  
   formula_string <- "InstMag ~ offset(CatMag) + Vignette + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
@@ -56,24 +60,26 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02,
   # Run model.
   require(lme4)  
   thisModel <- lmer (thisFormula, data=df_model, REML=FALSE, offset=thisOffset)
-  
-  # Initial stats & diagnostics.
 
-  return (list(model=thisModel, filter=filter, transform=transform, extinction=extinction))
+  # Initial stats & diagnostics.
+  
+  df_model <- df_model %>% mutate(Residuals=residuals(thisModel))
+  return (list(model=thisModel, df=df_model, filter=filter, transform=transform, extinction=extinction))
 }
 
-################################################################################################
-##### Below are support-only functions, not called by user. ####################################
-
 mock_df_master <- function (df_master, stdevMag=0.01) {
-  xrefZeroPoint  <- list(I=-19,R=-20,V=-21)             %>% unlist() # arbitrary but realistic.
-  xrefExtinction <- list(I=0.08,R=0.1,V=0.2)            %>% unlist() # same as modelAll() defaults.
-  xrefTransform  <- list(V=-0.0259,R=+0.0319,I=+0.0064) %>% unlist() # same as modelAll() defaults.
+  require(dplyr)
+  ZeroPoint  <- list(I=-19,R=-20,V=-21)             %>% unlist() # arbitrary but realistic.
+  Extinction <- list(I=0.08,R=0.1,V=0.2)            %>% unlist() # same as modelAll() defaults.
+  Transform  <- list(V=-0.0259,R=+0.0319,I=+0.0064) %>% unlist() # same as modelAll() defaults.
+  vignetteCorner <- list(I=0.09,R=0.1,V=+0.06)      %>% unlist() # InstMag increase at image corner.
   df_mock <- df_master %>%
     mutate(InstMagSaved=InstMag) %>%
-    mutate(ZeroPoint=xrefZeroPoint[Filter]) %>%
-    mutate(Extinction=xrefExtinction[Filter]) %>%
-    mutate(Transform=xrefTransform[Filter]) %>%
-    mutate(InstMag=CatMag + ZeroPoint + Extinction*Airmass + Transform*CI + rnorm(InstMag,0,stdevMag))
+    mutate(InstMag=CatMag + 
+             ZeroPoint[Filter] + 
+             Extinction[Filter]*Airmass + 
+             Transform[Filter]*CI + 
+             vignetteCorner[Filter]*Vignette + 
+             rnorm(InstMag,0,stdevMag))
   return(df_mock)
 }

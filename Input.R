@@ -15,6 +15,76 @@
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
 
+prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
+  require(dplyr)
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
+  CalibrationFolder         <- make_safe_path(AN_folder, "Calibration")
+  CalibrationMastersFolder  <- make_safe_path(AN_folder, "CalibrationMasters")
+  AutoFlatFolder            <- make_safe_path(AN_folder, "AutoFlat")
+  UncalibratedFolder        <- make_safe_path(AN_folder, "Uncalibrated")
+  UrFolder                  <- make_safe_path(AN_folder, "Ur")
+  PhotometryFolder          <- make_safe_path(AN_folder, "Photometry")
+                                            
+  
+  # Make new folders as needed.
+  if (!dir.exists(CalibrationFolder)) {
+    if (dir.exists(AutoFlatFolder)) {
+      dir.create(CalibrationFolder)   # create Calibration folder if either flats or darks exist.
+    }
+  }
+  if (!dir.exists(CalibrationMastersFolder)) { dir.create(CalibrationMastersFolder) }
+  if (!dir.exists(UrFolder))                 { dir.create(UrFolder) }
+  if (!dir.exists(PhotometryFolder))         { dir.create(PhotometryFolder) }
+  
+  # Move flats to \Calibration, remove \AutoFlat.
+  if (dir.exists(AutoFlatFolder)) {
+    allAutoFlatFiles <- list.files(AutoFlatFolder, full.names=TRUE)
+    CopiedOK <- file.copy(allAutoFlatFiles, CalibrationFolder, copy.date=TRUE)
+    if (all(CopiedOK)) {
+      file.remove(allAutoFlatFiles)
+      unlink(AutoFlatFolder,recursive=TRUE)
+      AutoFlatFolder <- ""
+      print(paste("Flats:", length(allAutoFlatFiles), "moved to Calibration folder OK." ))
+    } else {
+      print(paste(">>>>> Problem moving", sum(!CopiedOK), "Flats to Calibration folder."))
+    }
+  }
+  
+  # Copy all files (flats+darks+bias) from \Calibration to \CalibrationMasters.
+  allCalibrationFiles <- list.files(CalibrationFolder, full.names=TRUE)
+  CopiedOK <- file.copy(allCalibrationFiles, CalibrationMastersFolder, copy.date=TRUE)
+  if (all(CopiedOK)) {
+    print(paste("Darks+bias+flats:", length(allCalibrationFiles), "moved to CalibrationMasters folder OK."))
+  } else {
+    print(paste(">>>>> Problem moving", sum(!CopiedOK), "Darks+bias+flats to CalibrationMasters folder."))
+  }
+
+  # Copy all FITS from top folder to \Ur, then move them all to \Uncalibrated (later renamed \Calibrated).
+  
+  
+  
+  
+}
+
+
+prepare_AN_folder2 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
+  require(dplyr)
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
+  CalibrationFolder         <- make_safe_path(AN_folder, "Calibration")
+  CalibrationMastersFolder  <- make_safe_path(AN_folder, "CalibrationMasters")
+  CalibratedFolder          <- make_safe_path(AN_folder, "Calibrated")
+  UncalibratedFolder        <- make_safe_path(AN_folder, "Uncalibrated")
+  UrFolder                  <- make_safe_path(AN_folder, "Ur")
+  
+  # Delete non-master calibration files from \CalibrationMasters.
+  
+  # Verify (via FITS headers) all files in \Uncalibrated were calibrated, then rename folder to \Calibrated.
+
+}
+
+
 run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
 # Process all FITS files in folder through APT, build & return master df.
