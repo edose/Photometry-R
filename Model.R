@@ -4,7 +4,6 @@ modelAll <- function(df_master, maxMagUncertainty=0.02,
                      fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   filters <- df_master$Filter %>% unique()
   masterModelList <- list()
-  print(filters)
   for (filter in filters) {
     filterList <- modelOneFilter(df_master, filter, maxMagUncertainty, 
                                  fit_transform, fit_extinction, fit_starID)
@@ -28,7 +27,8 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02,
     filter(!is.na(CI)) %>%
     filter(CI<=1.6)
 
-  formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
+  # formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
+  formula_string <- "InstMag ~ offset(CatMag) + Vignette + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
     transform <- NA
@@ -65,3 +65,15 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02,
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
 
+mock_df_master <- function (df_master, stdevMag=0.01) {
+  xrefZeroPoint  <- list(I=-19,R=-20,V=-21)             %>% unlist() # arbitrary but realistic.
+  xrefExtinction <- list(I=0.08,R=0.1,V=0.2)            %>% unlist() # same as modelAll() defaults.
+  xrefTransform  <- list(V=-0.0259,R=+0.0319,I=+0.0064) %>% unlist() # same as modelAll() defaults.
+  df_mock <- df_master %>%
+    mutate(InstMagSaved=InstMag) %>%
+    mutate(ZeroPoint=xrefZeroPoint[Filter]) %>%
+    mutate(Extinction=xrefExtinction[Filter]) %>%
+    mutate(Transform=xrefTransform[Filter]) %>%
+    mutate(InstMag=CatMag + ZeroPoint + Extinction*Airmass + Transform*CI + rnorm(InstMag,0,stdevMag))
+  return(df_mock)
+}

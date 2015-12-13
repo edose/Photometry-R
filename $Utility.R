@@ -110,7 +110,8 @@ read_FOV_file <- function (FOV_name) {
       mag_key_value <- trimws(unlist(strsplit(mag,"_",fixed=TRUE)))
       column_name   <- mag_xref[mag_key_value[1],]
       if (!is.na(column_name)) {
-        CH_rows[irow,column_name] <- as.numeric(mag_key_value[2])
+        mag_value <- as.numeric(mag_key_value[2])
+        CH_rows[irow,column_name] <- ifelse(mag_value==0, NA, mag_value) # VPhot writes zero to mean NA.
       }
     }
   }
@@ -122,6 +123,10 @@ read_FOV_file <- function (FOV_name) {
   df_star$StarType[df_star$StarType=="T"] <- "Target"         #  "
   df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
   df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
+  
+  if (sum(df_star$StarType=="Check")<=0) {
+    print(paste(">>>>> Warning: FOV file",FOV_name,"has NO CHECK STAR."))
+  }
   return(list(FOV_data=FOV_data, star_data=df_star))
 }
 

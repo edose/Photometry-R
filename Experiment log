@@ -1,15 +1,19 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
-Major TODO list (20151211): 
-* Test df_master building with several data sets.
+Major TODO list (20151212): 
+* Test Model.R and PredictTargets.R with artificial data set (calculated InstMag values should suffice).
 * Do we need a function to rename FITS sequentially (e.g., BF Cep-a-001-I.fts, where a is plan name)
     then collect in \Ur dir?
 * Write R functions for building AN directory structure, including renaming & early statistics/diagnostics.
 * Write R FWHM (& aperture flux) routines to replace those in APT?
 * Then at long last: Start making models & writing function(s) for Model.R.
 
-------------------------------------------------------------------------------------------
+##### Dec 12 2015: Model and Predict functions work now, but the data show some bias, with bright stars 
+and faint stars having residuals of opposite sign. It's too early to chase & address any bias
+(which may not exist). This bias could be due to biased sky background estimation, or it could be induced 
+simply by noise in the data. Probably time to make an artificial data set w/calculated InstMag values.
+
 ##### Dec 5 2015: Nearing completion of Input (master data frame) generation.
 Dumped PixInsight for APT, which identifies signals very well and and whose output file is easy to parse, 
 but its FWHM values are flaky, and I'm not crazy about its Sky (background) values either.

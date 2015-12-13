@@ -5,12 +5,12 @@ predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty
   require(dplyr)
   filtersModelList <- names(masterModelList)
   filtersDfMaster  <- df_master$Filter %>% unique()
-  filters <- intersect(filtersModellist, filtersDfMaster)
+  filters <- intersect(filtersModelList, filtersDfMaster)
   
   df_targets <- data.frame()
   for (filter in filters) {
     df_targets <- df_targets %>%
-      rbind(predictOneFilter(modelList, df_master, filter, maxMagUncertainty))
+      rbind(predictOneFilter(masterModelList, df_master, filter, maxMagUncertainty))
   }
   return (df_targets)
 }
@@ -40,7 +40,7 @@ predictOneFilter <- function (modelList, df_master, filter, maxMagUncertainty) {
     modelMag <- modelMag + transform * df$CI
   }
   if (!is.na(extinction)) {
-    modelMag <- modelMag + extinction * Airmass
+    modelMag <- modelMag + extinction * df$Airmass
   }
 
   # Compute and store predicted magnitude.

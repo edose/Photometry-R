@@ -53,7 +53,7 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     summarize(nFITS=n()) %>% 
     as.data.frame() %>% 
     print()
-  # isYES <- "Y"==toupper(trimws(readline(cat("Proceed? (y/n)"))))
+
   isYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
   if (!isYES) stop("Stopped at user request.")
   
@@ -89,6 +89,13 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
                   " --> df_master now has", nrow(df_master), "rows"), quote=FALSE)
     }
   }
+  
+  Xcenter = 3*1024/2  # for 3K x 2K chip
+  Ycenter = 2*1024/2
+  XY2_corner = Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner for normalization.
+  df_master <- df_master %>%
+    mutate(Vignette=((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner)
+  
   write(allAPTstdout, APTstdout_path)
   save(df_master, 
        file=make_safe_path(AN_folder, "df_master.Rdata")) # may later recover via df <- load(df_master_path).
