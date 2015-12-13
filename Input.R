@@ -16,6 +16,10 @@
 
 
 prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
+  ##### Current version (20151213) of prepare_AN_folder1() and ...2() do not handle (plan) subfolders 
+  #####   of target FITS, thus they also cannot handle duplicate filenames. 
+  #####   Consider renaming and collecting target FITS files in a later version of these two functions.
+  
   require(dplyr)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -25,7 +29,7 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
   UncalibratedFolder        <- make_safe_path(AN_folder, "Uncalibrated")
   UrFolder                  <- make_safe_path(AN_folder, "Ur")
   PhotometryFolder          <- make_safe_path(AN_folder, "Photometry")
-                                            
+  scriptCompletedOK <- TRUE  # default until negated by problem.  
   
   # Make new folders as needed.
   if (!dir.exists(CalibrationFolder)) {
@@ -44,10 +48,10 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
     if (all(CopiedOK)) {
       file.remove(allAutoFlatFiles)
       unlink(AutoFlatFolder,recursive=TRUE)
-      AutoFlatFolder <- ""
       print(paste("Flats:", length(allAutoFlatFiles), "moved to Calibration folder OK." ))
     } else {
       print(paste(">>>>> Problem moving", sum(!CopiedOK), "Flats to Calibration folder."))
+      scriptCompletedOK <- FALSE
     }
   }
   
@@ -58,19 +62,38 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
     print(paste("Darks+bias+flats:", length(allCalibrationFiles), "moved to CalibrationMasters folder OK."))
   } else {
     print(paste(">>>>> Problem moving", sum(!CopiedOK), "Darks+bias+flats to CalibrationMasters folder."))
+    scriptCompletedOK <- FALSE
   }
 
   # Copy all FITS from top folder to \Ur, then move them all to \Uncalibrated (later renamed \Calibrated).
+  allTargetFiles <- list.files(AN_top_folder, full.names=TRUE)
+  CopiedOK <- file.copy(allTargetFiles, UrFolder, copy.date=TRUE)
+  CopiedOK <- c(CopiedOK, 
+                file.copy(allTargetFiles, UncalibratedFolder, copy.date=TRUE))
+  if (all(CopiedOK)) {
+    file.remove(allTargetFiles)
+    print(paste("Target FITS:", length(allTargetFiles), "moved to Ur and Uncalibrated folders OK."))
+  } else {
+    print(paste(">>>>> Problem moving", sum(!CopiedOK), "target FITS to UR and Uncalibrated folders."))
+    scriptCompletedOK <- FALSE
+  }
   
-  
-  
-  
+  if (scriptCompletedOK) {
+    print(paste("Script #1 completed OK.\n",
+                "Now, in MaxIm make Calibration Masters & calibrate all target FITS."))
+  } else {
+    print(paste(">>>>> Problem completing script #1. Check above warnings to correct."))
+  }
 }
 
 
 prepare_AN_folder2 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
-  require(dplyr)
+  ##### Run this after (1) running prepare_AN_folder1() and
+  #####   (2) using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
+  
   source("C:/Dev/Photometry/$Utility.R")
+  require(dplyr)
+  
   AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
   CalibrationFolder         <- make_safe_path(AN_folder, "Calibration")
   CalibrationMastersFolder  <- make_safe_path(AN_folder, "CalibrationMasters")
@@ -79,8 +102,48 @@ prepare_AN_folder2 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
   UrFolder                  <- make_safe_path(AN_folder, "Ur")
   
   # Delete non-master calibration files from \CalibrationMasters.
+  allCalibrationMasterFiles <- list.files(CalibrationMastersFolder, full.names=FALSE)
+  nonMasterFiles <- allCalibrationmasterFiles[!substr(allCalibrationMasterFiles,1,7)=="Master_"]
+  nonMasterPaths <- make_safe_path(CalibrationMastersFolder,allCalibrationMasterFiles)
+  file.remove(nonMasterPaths)
+
   
   # Verify (via FITS headers) all files in \Uncalibrated were calibrated, then rename folder to \Calibrated.
+  require(FITSio)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }
+  
+  allegedlyCalibrated <- setdiff(list.files(UncalibratedFolder, full.names=TRUE), 
+                                 list.dirs(UncalibratedFolder))
+  nUncalibrated <- 0
+  for (thisFile in allegedlyCalibrated) {
+    fileHandle <- file(description=thisFile, open="rb")
+    header <- parseHdr(readFITSheader(fileHandle))
+    close(fileHandle)
+    calstatValue <- get_header_value(header, "CALSTAT")
+    if (calstatValue != "BDF") {
+      nUncalibrated <- nUncalibrated + 1
+    }
+  }
+  if (nUncalibrated >= 1) {
+    print(paste(">>>>> STOP: of", length(allegedlyCalibrated), "FITS files,", 
+                nUncalibrated, "have not been calibrated."))
+  } else {
+    if (!dir.exists(CalibratedFolder)) { dir.create(CalibratedFolder) }
+    CopiedOK <- file.copy(allegedlyCalibrated, CalibratedFolder, copy.date=TRUE)
+    if (all(CopiedOK)) {
+      file.remove(allegedlyCalibrated)
+      print(paste("Calibrated FITS:", length(allegedlyCalibrated), "moved to new Calibrated folder OK."))
+    } else {
+      print(paste(">>>>> Problem moving", sum(!CopiedOK), "calibrated FITS to Calibrated folder."))
+    }
+    
+  }
+
+
 
 }
 
