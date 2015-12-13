@@ -10,19 +10,19 @@ predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty
   df_targets <- data.frame()
   for (filter in filters) {
     df_targets <- df_targets %>%
-      rbind(predictOneFilter(masterModelList, df_master, filter, maxMagUncertainty))
+      rbind(predictOneFilter(masterModelList[[filter]], df_master, filter, maxMagUncertainty))
   }
   return (df_targets)
 }
 
 
-predictOneFilter <- function (modelList, df_master, filter, maxMagUncertainty) {
+predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertainty) {
   require(dplyr)
   # Unpack input model list.
-  model      <- modelList$model
-  filter     <- modelList$filter
-  transform  <- modelList$transform
-  extinction <- modelList$extinction
+  model      <- filterModelList$model
+  transform  <- filterModelList$transform
+  extinction <- filterModelList$extinction
+  JD_mid_model_levels <- model.frame(model) %>% select(JD_mid) %>% unique() %>% unlist() %>% levels()
   
   # Make working data frame and perform raw prediction.
   df <- df_master %>%
@@ -31,9 +31,14 @@ predictOneFilter <- function (modelList, df_master, filter, maxMagUncertainty) {
     filter(UseInModel==TRUE) %>%
     filter(Saturated==FALSE) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
+    filter(JD_mid %in% JD_mid_model_levels) %>%
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # zero Targets' (but not Checks') color index (adjust later).
+    mutate(CatMagSaved=CatMag) %>%
     mutate(CatMag=0, PredictedMag=NA, estimError=NA)
-  modelMag <- predict(model,df,re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
+  modelMag <- predict(model, df, re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
+  df <- df %>%
+    mutate(CatMag=CatMagSaved) %>%   # restore CatMag (which needed to be zero to do predictions).
+    select(-CatMagSaved)            
   
   # Adjust for terms not included in model's formula.
   if (!is.na(transform)) {

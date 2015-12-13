@@ -2,6 +2,7 @@
 
 modelAll <- function(df_master, maxMagUncertainty=0.02, 
                      fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
+  require(dplyr)
   filters <- df_master$Filter %>% unique()
   masterModelList <- list()
   for (filter in filters) {
@@ -27,7 +28,6 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02,
     filter(!is.na(CI)) %>%
     filter(CI<=1.6)
 
-  # formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   formula_string <- "InstMag ~ offset(CatMag) + Vignette + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
