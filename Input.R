@@ -15,6 +15,100 @@
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
 
+prepare_AN_folder0 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-Test") {
+  ##### prepare_AN_folder() started 20151216.
+  ##### Rename all FITS (including in subfolders) from ACP names to serial names.
+  
+  require(dplyr)
+  require(stringi)
+  source("C:/Dev/Photometry/$Utility.R")
+  require(FITSio)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }  
+  
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  
+  # Collect file names for all relevant FITS files.
+  df <- data.frame(RelPath=list.files(AN_folder, full.names=FALSE, recursive=TRUE, include.dirs=FALSE),
+                   stringsAsFactors = FALSE) %>%
+    filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
+    mutate(OldRelDir="", NewFilename="", Object="", Filter="", JD_start=NA)
+
+  # Collect header data from FITS files.
+  nErrors <- 0
+  for (iRow in 1:nrow(df)) {
+    relPath <- df$RelPath[iRow]
+    fullPath <- make_safe_path(AN_folder, relPath)
+    oldFilename <- strsplit(relPath,"/")[[1]] %>% last()
+    
+    pattern<- "^(.+)-S[[:digit:]]{3}-R"
+    objectFromFilename <- regmatches(oldFilename,regexec(pattern,oldFilename)) %>% unlist() %>% nth(2)
+    pattern <- "-R[[:digit:]]{3}-C[[:digit:]]{3}-([[:alpha:]]{1,6})[._]"
+    filterFromFilename <- regmatches(oldFilename,regexec(pattern,oldFilename)) %>% unlist() %>% nth(2)
+    
+    fileHandle <- file(description=fullPath, open="rb")
+    header <- parseHdr(readFITSheader(fileHandle))
+    close(fileHandle)
+    objectFromFITS <- get_header_value(header, "OBJECT")
+    filterFromFITS <- get_header_value(header, "FILTER")
+    JD_start       <- get_header_value(header, "JD")
+    errorThisFile <- FALSE
+    if (objectFromFilename != objectFromFITS) {
+      cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
+      nErrors <- nErrors + 1
+      errorThisFile <- TRUE
+    }
+    if (objectFromFilename!=objectFromFITS) {
+      cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
+      nErrors <- nErrors + 1
+      errorThisFile <- TRUE
+    }
+    if (!errorThisFile) {
+      df$OldRelDir[iRow] <- substring(relPath, 1, nchar(relPath)-nchar(oldFilename))
+      df$Object[iRow]    <- objectFromFITS
+      df$Filter[iRow]    <- filterFromFITS
+      df$JD_start[iRow]  <- JD_start
+    }
+    if (nErrors>0) {
+      stop(paste("There were",nErrors,"FITS/filename mismatches in Object or Filter IDs",sep=""))
+    }
+  }
+
+  # Make new filenames.
+  df <- df %>% arrange(Object, JD_start)
+  iObjectFile <- 1
+  for (iRow in 1:nrow(df)) {
+    if (iRow >= 2) {
+      if (df$Object[iRow] != df$Object[iRow-1]) {
+        iObjectFile <- 1
+      }
+    }
+    df$NewFilename[iRow] <- paste(df$Object[iRow], "-", stri_pad_left(iObjectFile,4,"0"), "-", 
+                         df$Filter[iRow],".fts",sep="")
+    iObjectFile <- iObjectFile + 1
+  }
+  
+  # Rename all FITS files, moving any files in subfolders to main AN_folder.
+  for (iRow in 1:nrow(df)) {
+    oldFullPath <- make_safe_path(AN_folder,df$RelPath[iRow])
+    newFullPath <- make_safe_path(AN_folder,df$NewFilename[iRow]) # all files end up in AN_folder
+    # cat(paste(">",oldFullPath,"< to >",newFullPath,"<\n",sep=""))
+    file.rename(oldFullPath,newFullPath)
+  }
+  
+  # Remove all old subdirectories (must now be emptied by previous file.rename() call).
+  dirs <- df %>% select(OldRelDir) %>% filter(nchar(OldRelDir)>0) %>% unique()
+  dirs <- ifelse(stri_endswith_fixed(dirs,"/"),substring(dirs,1,nchar(dirs)-1),dirs)
+  unlink(make_safe_path(AN_folder,dirs), recursive=TRUE)
+  
+  return (df)
+  
+}
+
 prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
   ##### prepare_AN_folder1() tested OK 20151213.
   ##### Current version (20151213) of prepare_AN_folder1() and ...2() do not handle (plan) subfolders 
@@ -50,9 +144,9 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
     if (all(CopiedOK)) {
       file.remove(allAutoFlatFiles)
       unlink(AutoFlatFolder,recursive=TRUE)
-      print(paste("Flats:", length(allAutoFlatFiles), "moved to Calibration folder OK." ))
+      cat(paste("Flats:", length(allAutoFlatFiles), "moved to Calibration folder OK." ))
     } else {
-      print(paste(">>>>> Problem moving", sum(!CopiedOK), "Flats to Calibration folder."))
+      cat(paste(">>>>> Problem moving", sum(!CopiedOK), "Flats to Calibration folder."))
       scriptCompletedOK <- FALSE
     }
   }
@@ -61,9 +155,9 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
   allCalibrationFiles <- list.files(CalibrationFolder, full.names=TRUE)
   CopiedOK <- file.copy(allCalibrationFiles, CalibrationMastersFolder, copy.date=TRUE)
   if (all(CopiedOK)) {
-    print(paste("Darks+bias+flats:", length(allCalibrationFiles), "moved to CalibrationMasters folder OK."))
+    cat(paste("Darks+bias+flats:", length(allCalibrationFiles), "moved to CalibrationMasters folder OK."))
   } else {
-    print(paste(">>>>> Problem moving", sum(!CopiedOK), "Darks+bias+flats to CalibrationMasters folder."))
+    cat(paste(">>>>> Problem moving", sum(!CopiedOK), "Darks+bias+flats to CalibrationMasters folder."))
     scriptCompletedOK <- FALSE
   }
 
@@ -75,20 +169,22 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
                 file.copy(allTargetFiles, UncalibratedFolder, copy.date=TRUE))
   if (all(CopiedOK)) {
     file.remove(allTargetFiles)
-    print(paste("Target FITS:", length(allTargetFiles), "moved to Ur and Uncalibrated folders OK."))
+    cat(paste("Target FITS:", length(allTargetFiles), "moved to Ur and Uncalibrated folders OK."))
   } else {
-    print(paste(">>>>> Problem moving", sum(!CopiedOK), "target FITS to UR and Uncalibrated folders."))
+    cat(paste(">>>>> Problem moving", sum(!CopiedOK), "target FITS to UR and Uncalibrated folders."))
     scriptCompletedOK <- FALSE
   }
   
   if (scriptCompletedOK) {
-    print("Script #1 completed OK.")
-    print("Now --> ensure all needed flats+darks are in /Calibration (copy from prev ANs if not),")
-    print("   then in MaxIm: use /CalibrationMasters to make masters,")
-    print("   then in MaxIm: calibrate all FITS in /Uncalibrated,")
-    print("   then in R: prepare_AN_folder2().")
+    cat("Script #1 completed OK.")
+    cat("Now --> ensure all needed flats+darks (or Masters) are in /CalibrationMasters")
+    cat("   Get Masters from prev ANs if not),")
+    cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters")
+    cat("   then in MaxIm: 'Replace w/Masters'")
+    cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.")
+    cat("   Then in R: prepare_AN_folder2().")
   } else {
-    print(paste(">>>>> Problem completing script #1. Check above warnings to correct."))
+    cat(paste(">>>>> Problem completing script #1. Check above warnings to correct."))
   }
 }
 
