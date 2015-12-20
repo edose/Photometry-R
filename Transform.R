@@ -79,7 +79,7 @@ make_VPhot_master_df <- function (VPhotFolder="C:\\") {
   filenames <- trimws(list.files(VPhotFolder, pattern=".txt$", full.names=TRUE, 
                                  recursive=FALSE, ignore.case=TRUE))
   df <- data.frame()
-  for (filename in filenames){   # TODO: redo this as list-build and then do.call() on rbind().
+  for (filename in filenames){
     df <- rbind(df, get_one_VPhot_photometry_report(filename)) # get next raw data frame and append it.
   }
   return(df)
@@ -174,7 +174,6 @@ parse_VPhot_header_line <- function(lines, key){
   trimws(substring(line,nchar(key)+1))
 }
 
-# TODO: Refactor this down to a shell around $Utility.R::read_FOV_file().
 get_one_VPhot_sequence <- function(sequence=c("CF Cas"), folder="C:/Dev/Photometry/VPhot/") {
   # [support, not typically called by user].
   # Reads one sequence (star list with RA/dec & magnitudes) as constructed in VPhot 

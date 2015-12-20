@@ -1,12 +1,11 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
-Major TODO list (20151213): 
-* Chase down residual bias--probably an aperture or noise problem in APT.
-* Do we need a function to rename FITS sequentially (e.g., BF Cep-a-001-I.fts, where a is plan name)
-    then collect in \Ur dir?
-* Write R FWHM (& aperture flux) routines to replace those in APT?
-* Write R CalibrationMaster + Calibration routines (someday)?
+Immediate TODO list (20151220): 
+1. Chase down residual bias--probably an aperture or noise problem in APT.
+2. Diagnostics & plots: model outliers & model quality (residual plots e.g.)
+3. predictOneFilter(): Compute estimated errors, esp. for AAVSO report usage.
+
 
 ##### Dec 13 2015: Model and Predict are stable. Bias in residual plots of real (APT) data still appear.
 Wrote and tested directory-structure prep routines in Input.R.

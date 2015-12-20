@@ -50,7 +50,7 @@ predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertai
   # Compute and store predicted magnitude.
   df <- df %>% mutate(PredictedMag = df$InstMag - modelMag)
   
-  ##### TODO : compute & store estimated errors.
+  ##### Compute & store estimated errors.
 
   return (df)
 }
@@ -67,7 +67,9 @@ write_AAVSO <- function (AN_folder) {
     c("#OBSTYPE=CCD") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
 
-  # TODO : (1) read in all df_target_V etc data frames, (2) create df_report.
+  # Read in all df_target_V etc data frames.
+  
+  # Create data frame df_report.
   
   # Format each row of df_report as a text line.
   obs_lines <- paste(

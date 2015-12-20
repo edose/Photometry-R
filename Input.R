@@ -10,13 +10,9 @@
 #####         identification of source signals, and is in any case too tied to catalogs, 
 #####         when all we want is fast, accurate AP of our comp, check, and target stars.
 
-#####    TODO: new function renameObject(): changes FITS filename and FITS header field to a user-specified 
-#####       new object name after checking that name absent from other FITS files of that date.
-#####       (Useful when an ACP plan didn't use the best Object name.)
 
-
-renameFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test") {
-  ##### prepare_AN_folder() started 20151216.
+renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test") {
+  ##### tested OK 20151220.
   ##### Rename all FITS (including in subfolders) from ACP names to serial names.
   
   require(dplyr)
@@ -101,11 +97,13 @@ renameFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151
   file.rename(oldFullPath,newFullPath)
 
   # Remove all old subdirectories (must now be emptied by previous file.rename() call).
-  dirsToRemove <- df %>% select(OldRelDir) %>% filter(nchar(OldRelDir)>0) %>% unique()
+  dirsToRemove <- df %>% select(OldRelDir) %>% filter(nchar(OldRelDir)>0) %>% unique() %>% unlist()
   dirsToRemove <- ifelse(stri_endswith_fixed(dirsToRemove,"/"),
                          substring(dirsToRemove,1,nchar(dirsToRemove)-1),
                          dirsToRemove)
-  unlink(make_safe_path(AN_folder,dirsToRemove), recursive=TRUE)
+  cat("Deleting", length(dirsToRemove), "directories:\n")
+  write.table(dirsToRemove, file="", row.names=FALSE, col.names=FALSE) 
+  unlink(make_safe_path(AN_folder,dirsToRemove), recursive=TRUE, force=TRUE)
   
   # write data frame as text file and as R object, return data frame.
   PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
@@ -117,11 +115,9 @@ renameFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151
   return (df)
 }
 
-prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
-  ##### prepare_AN_folder1() tested OK 20151213.
-  ##### Current version (20151213) of prepare_AN_folder1() and ...2() do not handle (plan) subfolders 
-  #####   of target FITS, thus they also cannot handle duplicate filenames. 
-  #####   Thus ALWAYS run prepare_AN_folder0() on a AN folder before running this.
+prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
+  ##### tested OK 20151220.
+  #####   ALWAYS run renameACP() (or similar renaming fn) on a AN folder before running this.
   
   require(dplyr)
   source("C:/Dev/Photometry/$Utility.R")
@@ -190,16 +186,16 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20
     cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters\n")
     cat("   then in MaxIm: 'Replace w/Masters'\n")
     cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.\n")
-    cat("   Then in R: prepare_AN_folder2().\n")
+    cat("   Then in R: finishFITS().\n")
   } else {
     cat(paste(">>>>> Problem completing script #1. Check above warnings to correct.\n"))
   }
 }
 
 
-finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
-  ##### prepare_AN_folder2() tested OK 20151213.
-  ##### Run this after (1) running prepare_AN_folder1() and
+finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
+  ##### tested OK 20151220.
+  ##### Run this after (1) renameACP() (or similar renaming fn) and prepareForCal(), and then after
   #####   (2) using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
   
   source("C:/Dev/Photometry/$Utility.R")
@@ -534,8 +530,5 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   df$CatMag <- df[,columnIndex]  # new column
   df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
 
-  ##### TODO : Consider writing own FWHM routine (APT's seems unstable, compared to MaxIm's).
-  ##### TODO : Later, consider writing SkyMedian routine (split annulus) to better reject noise, stars etc.
-  
   return(df)
 }
