@@ -1,0 +1,24 @@
+TODO list: as of 20151220.
+
+Input.R:
+* [someday] FOV file: new per-star notation to mark interfering stars, esp by direction (& arcsec dist?) 
+(or by RA Dec). --> OR possibly this can be automated in the aperture math alone (median-of-medians?) so
+that we avoid this effort to make FOV files (and avoid complicating them as well).
+* [someday] Rewrite aperture math (InstMag, FWHM, Sky), then using APT only to get pixel coordinates for targets. 
+This should improve interference rejection in sky annulus, FWHM values good enough to use in curating
+observations, etc.
+* [someday] Write own CalibrationMaster & Calibrate All routines to completely replace MaxIm usage.
+* [someday] use AAVSO chart data directly (reading the HTML), use VPhot *only* to verify star quality &
+possibly to mark interfering sources esp. in sky annulus.
+
+Transform.R: 
+* [someday] Rewrite this completely into Input.R, to use its normal image processing and to extract
+transforms by Model.R, rather than via this separate transform-extraction workflow.
+
+Model.R: 
+
+
+FOVs, diagnostics etc:
+* Routine to verify all FOV files for consistency, e.g., all Target FOVs lacking check star, missing
+directives, etc.
+* New directive for FOV type: Target, Standard (etc?)

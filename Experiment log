@@ -1,11 +1,12 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
-Immediate TODO list (20151220): 
+Immediate TODO list for entire workflow (20151220): 
 1. Chase down residual bias--probably an aperture or noise problem in APT.
-2. Diagnostics & plots: model outliers & model quality (residual plots e.g.)
+2. Diagnostics & plots: model outliers & model quality (incl. residual plots for bias)
 3. predictOneFilter(): Compute estimated errors, esp. for AAVSO report usage.
 
+##### Dec 20 2015: Input.R functions work, are as good as they need to be for now.
 
 ##### Dec 13 2015: Model and Predict are stable. Bias in residual plots of real (APT) data still appear.
 Wrote and tested directory-structure prep routines in Input.R.

@@ -11,8 +11,60 @@
 #####         when all we want is fast, accurate AP of our comp, check, and target stars.
 
 
+renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test", 
+                         oldObject, newObject) {
+  ## Tests OK 20151220.
+  ##### For occasional use in renaming objects (FITS header *and* FITS file name), typically as first step.
+  ##### Handles files in subdirectories OK. 
+  require(dplyr)
+  require(stringi)
+  source("C:/Dev/Photometry/$Utility.R")
+  require(FITSio)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }  
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+
+  # Make list of all FITS files with oldObject at beginning of file name.
+  df <- data.frame(RelPath=list.files(AN_folder, full.names=FALSE, recursive=TRUE, include.dirs=FALSE),
+                   stringsAsFactors = FALSE) %>%
+    filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
+    mutate(RelDir="", OldFilename="", NewFilename="")
+  for (iRow in 1:nrow(df)) {
+    df$OldFilename[iRow]=strsplit(df$RelPath[iRow],"/")[[1]] %>% last() # doesn't work with %>%filter()
+  }
+  df <- df %>%
+    filter(stri_startswith_fixed(OldFilename,paste(oldObject,"-",sep=""))) %>%
+    mutate(OldObject=oldObject) %>%
+    mutate(Stub=substring(OldFilename, nchar(oldObject)+1)) %>%
+    mutate(NewFilename=paste(newObject, Stub, sep="")) %>%
+    mutate(RelDir=substring(RelPath, 1, nchar(RelPath)-nchar(OldFilename))) %>%
+    mutate(newRelPath=make_safe_path(RelDir,NewFilename)) %>%
+    mutate(oldFullPath=make_safe_path(AN_folder,RelPath), newFullPath=make_safe_path(AN_folder, newRelPath))
+
+  # Update FITS Object in header, write new file, & if successful then delete old file.
+  cat("Renaming",nrow(df),"files: ")
+  for (iRow in 1:nrow(df)) {
+    fullPath <- make_safe_path(AN_folder, df$RelPath[iRow])
+    fits <- readFITS(fullPath)
+    fits$header <- modVal("OBJECT", newObject, paste("renamed: was '",oldObject,"'", sep=""), 
+                          headerName=fits$header)
+    writeFITSim16i(fits$imDat, file=df$newFullPath[iRow], axDat=fits$axDat, header=fits$header) # 16-bit
+    if (file.exists(df$newFullPath[iRow])) {
+      if (file.size(df$newFullPath[iRow]) >= 0.9 * file.size(df$oldFullPath[iRow])) {
+        file.remove(df$oldFullPath[iRow])
+        cat(iRow,"")
+      }
+    }
+  }
+  cat("Done.")
+}
+
 renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test") {
-  ##### tested OK 20151220.
+  ##### Tests OK 20151220.
   ##### Rename all FITS (including in subfolders) from ACP names to serial names.
   
   require(dplyr)
@@ -116,7 +168,7 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201512
 }
 
 prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
-  ##### tested OK 20151220.
+  ##### Tests OK 20151220.
   #####   ALWAYS run renameACP() (or similar renaming fn) on a AN folder before running this.
   
   require(dplyr)
@@ -194,7 +246,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20
 
 
 finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
-  ##### tested OK 20151220.
+  ##### Tests OK 20151220.
   ##### Run this after (1) renameACP() (or similar renaming fn) and prepareForCal(), and then after
   #####   (2) using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
   
