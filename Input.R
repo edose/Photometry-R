@@ -15,7 +15,7 @@
 #####       (Useful when an ACP plan didn't use the best Object name.)
 
 
-prepare_AN_folder0 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-Test") {
+renameFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test") {
   ##### prepare_AN_folder() started 20151216.
   ##### Rename all FITS (including in subfolders) from ACP names to serial names.
   
@@ -36,7 +36,7 @@ prepare_AN_folder0 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
                    stringsAsFactors = FALSE) %>%
     filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
-    mutate(OldRelDir="", NewFilename="", Object="", Filter="", JD_start=NA)
+    mutate(OldRelDir="", NewFilename="", Object="", Filter="", JD_start=NA, Airmass=NA)
 
   # Collect header data from FITS files.
   nErrors <- 0
@@ -56,14 +56,16 @@ prepare_AN_folder0 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
     objectFromFITS <- get_header_value(header, "OBJECT")
     filterFromFITS <- get_header_value(header, "FILTER")
     JD_start       <- get_header_value(header, "JD")
+    airmass        <- get_header_value(header, "AIRMASS")
     errorThisFile <- FALSE
+    # cat(paste(">",objectFromFilename,"< != >",objectFromFITS,"<  ",  relPath,    "\n", sep=""))
     if (objectFromFilename != objectFromFITS) {
       cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
       nErrors <- nErrors + 1
       errorThisFile <- TRUE
     }
-    if (objectFromFilename!=objectFromFITS) {
-      cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
+    if (filterFromFilename!=filterFromFITS) {
+      cat(paste(fullPath,": Filter mismatch, ", filterFromFilename, " vs ", filterFromFITS, sep=""))
       nErrors <- nErrors + 1
       errorThisFile <- TRUE
     }
@@ -72,6 +74,7 @@ prepare_AN_folder0 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
       df$Object[iRow]    <- objectFromFITS
       df$Filter[iRow]    <- filterFromFITS
       df$JD_start[iRow]  <- JD_start
+      df$Airmass[iRow]   <- airmass  # handy for selecting FITS files e.g. for VPhot.
     }
     if (nErrors>0) {
       stop(paste("There were",nErrors,"FITS/filename mismatches in Object or Filter IDs",sep=""))
@@ -93,27 +96,32 @@ prepare_AN_folder0 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
   }
   
   # Rename all FITS files, moving any files in subfolders to main AN_folder.
-  for (iRow in 1:nrow(df)) {
-    oldFullPath <- make_safe_path(AN_folder,df$RelPath[iRow])
-    newFullPath <- make_safe_path(AN_folder,df$NewFilename[iRow]) # all files end up in AN_folder
-    # cat(paste(">",oldFullPath,"< to >",newFullPath,"<\n",sep=""))
-    file.rename(oldFullPath,newFullPath)
-  }
-  
+  oldFullPath <- make_safe_path(AN_folder,df$RelPath)
+  newFullPath <- make_safe_path(AN_folder,df$NewFilename) # all files end up in AN_folder
+  file.rename(oldFullPath,newFullPath)
+
   # Remove all old subdirectories (must now be emptied by previous file.rename() call).
-  dirs <- df %>% select(OldRelDir) %>% filter(nchar(OldRelDir)>0) %>% unique()
-  dirs <- ifelse(stri_endswith_fixed(dirs,"/"),substring(dirs,1,nchar(dirs)-1),dirs)
-  unlink(make_safe_path(AN_folder,dirs), recursive=TRUE)
+  dirsToRemove <- df %>% select(OldRelDir) %>% filter(nchar(OldRelDir)>0) %>% unique()
+  dirsToRemove <- ifelse(stri_endswith_fixed(dirsToRemove,"/"),
+                         substring(dirsToRemove,1,nchar(dirsToRemove)-1),
+                         dirsToRemove)
+  unlink(make_safe_path(AN_folder,dirsToRemove), recursive=TRUE)
   
+  # write data frame as text file and as R object, return data frame.
+  PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
+  if (!dir.exists(PhotometryFolder)) { dir.create(PhotometryFolder) }
+  txtFilename <- make_safe_path(PhotometryFolder, "File-renaming.txt")
+  write.table(df, file=txtFilename, quote=FALSE, row.names=FALSE, sep=" ; ")  # save as text file
+  R_Filename <- make_safe_path(PhotometryFolder, "File-renaming.RData")
+  save(df, file=R_Filename)                                                   # save as .RData file
   return (df)
-  
 }
 
-prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
+prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
   ##### prepare_AN_folder1() tested OK 20151213.
   ##### Current version (20151213) of prepare_AN_folder1() and ...2() do not handle (plan) subfolders 
   #####   of target FITS, thus they also cannot handle duplicate filenames. 
-  #####   Consider renaming and collecting target FITS files in a later version of these two functions.
+  #####   Thus ALWAYS run prepare_AN_folder0() on a AN folder before running this.
   
   require(dplyr)
   source("C:/Dev/Photometry/$Utility.R")
@@ -144,9 +152,9 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
     if (all(CopiedOK)) {
       file.remove(allAutoFlatFiles)
       unlink(AutoFlatFolder,recursive=TRUE)
-      cat(paste("Flats:", length(allAutoFlatFiles), "moved to Calibration folder OK." ))
+      cat(paste("Flats:", length(allAutoFlatFiles), "moved to Calibration folder OK.\n" ))
     } else {
-      cat(paste(">>>>> Problem moving", sum(!CopiedOK), "Flats to Calibration folder."))
+      cat(paste(">>>>> Problem moving", sum(!CopiedOK), "Flats to Calibration folder.\n"))
       scriptCompletedOK <- FALSE
     }
   }
@@ -155,9 +163,9 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
   allCalibrationFiles <- list.files(CalibrationFolder, full.names=TRUE)
   CopiedOK <- file.copy(allCalibrationFiles, CalibrationMastersFolder, copy.date=TRUE)
   if (all(CopiedOK)) {
-    cat(paste("Darks+bias+flats:", length(allCalibrationFiles), "moved to CalibrationMasters folder OK."))
+    cat(paste("Darks+bias+flats:", length(allCalibrationFiles), "moved to CalibrationMasters folder OK.\n"))
   } else {
-    cat(paste(">>>>> Problem moving", sum(!CopiedOK), "Darks+bias+flats to CalibrationMasters folder."))
+    cat(paste(">>>>> Problem moving", sum(!CopiedOK), "Darks+bias+flats to CalibrationMasters folder.\n"))
     scriptCompletedOK <- FALSE
   }
 
@@ -169,27 +177,27 @@ prepare_AN_folder1 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folde
                 file.copy(allTargetFiles, UncalibratedFolder, copy.date=TRUE))
   if (all(CopiedOK)) {
     file.remove(allTargetFiles)
-    cat(paste("Target FITS:", length(allTargetFiles), "moved to Ur and Uncalibrated folders OK."))
+    cat(paste("Target FITS:", length(allTargetFiles), "moved to Ur and Uncalibrated folders OK.\n"))
   } else {
-    cat(paste(">>>>> Problem moving", sum(!CopiedOK), "target FITS to UR and Uncalibrated folders."))
+    cat(paste(">>>>> Problem moving", sum(!CopiedOK), "target FITS to UR and Uncalibrated folders.\n"))
     scriptCompletedOK <- FALSE
   }
   
   if (scriptCompletedOK) {
-    cat("Script #1 completed OK.")
-    cat("Now --> ensure all needed flats+darks (or Masters) are in /CalibrationMasters")
-    cat("   Get Masters from prev ANs if not),")
-    cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters")
-    cat("   then in MaxIm: 'Replace w/Masters'")
-    cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.")
-    cat("   Then in R: prepare_AN_folder2().")
+    cat("Script #1 completed OK.\n")
+    cat("Now --> ensure all needed flats+darks (or Masters) are in /CalibrationMasters\n")
+    cat("   Get Masters from prev ANs if not),\n")
+    cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters\n")
+    cat("   then in MaxIm: 'Replace w/Masters'\n")
+    cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.\n")
+    cat("   Then in R: prepare_AN_folder2().\n")
   } else {
-    cat(paste(">>>>> Problem completing script #1. Check above warnings to correct."))
+    cat(paste(">>>>> Problem completing script #1. Check above warnings to correct.\n"))
   }
 }
 
 
-prepare_AN_folder2 <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
+finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151206-test") {
   ##### prepare_AN_folder2() tested OK 20151213.
   ##### Run this after (1) running prepare_AN_folder1() and
   #####   (2) using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
