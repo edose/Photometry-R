@@ -174,6 +174,7 @@ getAAVSO_Chart <- function(chartID) {
     mutate(ChartID=chartID) %>%
     mutate(RA_deg=NA, Dec_deg=NA, Bmag=NA, Berr=NA, Vmag=NA, Verr=NA, Rmag=NA, Rerr=NA, Imag=NA, Ierr=NA)
   for (iRow in 1:nrow(df)) {
+    # Unfortunately, strsplit() & unlist() don't work with %>%, thus must use loop.
     df$RA_deg[iRow]  <- strsplit(df$RA[iRow],"[",fixed=TRUE) %>% unlist() %>% first() %>% get_RA_deg()
     df$Dec_deg[iRow] <- strsplit(df$Dec[iRow],"[",fixed=TRUE) %>% unlist() %>% first() %>% get_Dec_deg()
     splits <- strsplit(df$B[iRow],"[()]") %>% unlist()
@@ -189,7 +190,7 @@ getAAVSO_Chart <- function(chartID) {
     df$Imag[iRow] <- splits[1] %>% getNumericOrNA()
     df$Ierr[iRow] <- splits[2] %>% getNumericOrNA()
   }
-  return(df %>% select(-RA, -Dec, -Comments, -B, -V, -Rc, -Ic, -matches("B-V")))
+  return(df %>% select(-RA, -Dec, -B, -V, -Rc, -Ic, -matches("B-V")))
 }
 
 getNumericOrNA <- function(string) {
