@@ -158,3 +158,40 @@ get_Dec_deg <- function (Dec_string) {
   if (Dec_deg < -90 | Dec_deg > +90 ) Dec_deg = NA
   return(Dec_deg)
 }
+
+getAAVSO_Chart <- function(chartID) {
+  ##### Tests OK 20151220.
+  require(rvest)
+  require(dplyr)
+  url <- paste("https://www.aavso.org/apps/vsp/photometry/?chartid=", chartID, 
+               "&Ic=on&B=on&Rc=on&maglimit=16", sep="")
+  df_url <- url %>% read_html() %>% html_table() %>% nth(1)
+  if (ncol(df_url)!=10) {
+    stop("Table is corrupt, does not have 10 columns.")
+  }
+  # Convert text in table to more useful quantities.
+  df <- df_url %>% 
+    mutate(ChartID=chartID) %>%
+    mutate(RA_deg=NA, Dec_deg=NA, Bmag=NA, Berr=NA, Vmag=NA, Verr=NA, Rmag=NA, Rerr=NA, Imag=NA, Ierr=NA)
+  for (iRow in 1:nrow(df)) {
+    df$RA_deg[iRow]  <- strsplit(df$RA[iRow],"[",fixed=TRUE) %>% unlist() %>% first() %>% get_RA_deg()
+    df$Dec_deg[iRow] <- strsplit(df$Dec[iRow],"[",fixed=TRUE) %>% unlist() %>% first() %>% get_Dec_deg()
+    splits <- strsplit(df$B[iRow],"[()]") %>% unlist()
+    df$Bmag[iRow] <- splits[1] %>% getNumericOrNA()
+    df$Berr[iRow] <- splits[2] %>% getNumericOrNA()
+    splits <- strsplit(df$V[iRow],"[()]") %>% unlist()
+    df$Vmag[iRow] <- splits[1] %>% getNumericOrNA()
+    df$Verr[iRow] <- splits[2] %>% getNumericOrNA()
+    splits <- strsplit(df$Rc[iRow],"[()]") %>% unlist()
+    df$Rmag[iRow] <- splits[1] %>% getNumericOrNA()
+    df$Rerr[iRow] <- splits[2] %>% getNumericOrNA()
+    splits <- strsplit(df$Ic[iRow],"[()]") %>% unlist()
+    df$Imag[iRow] <- splits[1] %>% getNumericOrNA()
+    df$Ierr[iRow] <- splits[2] %>% getNumericOrNA()
+  }
+  return(df %>% select(-RA, -Dec, -Comments, -B, -V, -Rc, -Ic, -matches("B-V")))
+}
+
+getNumericOrNA <- function(string) {
+  suppressWarnings(as.numeric(string)) # if not numeric, just return NA silently.
+}

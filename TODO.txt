@@ -9,7 +9,7 @@ This should improve interference rejection in sky annulus, FWHM values good enou
 observations, etc.
 * [someday] Write own CalibrationMaster & Calibrate All routines to completely replace MaxIm usage.
 * [someday] use AAVSO chart data directly (reading the HTML), use VPhot *only* to verify star quality &
-possibly to mark interfering sources esp. in sky annulus.
+possibly to mark interfering sources esp. in sky annulus. [getAAVSO_Chart() was written 20151220.]
 
 Transform.R: 
 * [someday] Rewrite this completely into Input.R, to use its normal image processing and to extract
