@@ -13,6 +13,9 @@ read_FOV_file <- function (FOV_name) {
   require(dplyr)
   FOV_folder <- "C:/Dev/Photometry/FOV"
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
+  if (!file.exists(FOV_path)) {
+    return (NA)
+  }
   lines <- readLines(FOV_path, warn=FALSE)   # read last line even without EOL character(s).
   for (iLine in 1:length(lines)) {
     lines[iLine] <- lines[iLine] %>% 
@@ -159,7 +162,7 @@ get_Dec_deg <- function (Dec_string) {
   return(Dec_deg)
 }
 
-getAAVSO_Chart <- function(chartID) {
+read_AAVSO_Chart <- function(chartID) {
   ##### Tests OK 20151220.
   require(rvest)
   require(dplyr)

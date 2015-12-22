@@ -16,6 +16,8 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201
   ## Tests OK 20151220.
   ##### For occasional use in renaming objects (FITS header *and* FITS file name), typically as first step.
   ##### Handles files in subdirectories OK. 
+  ##### Typical usage:  
+  #####      renameObject(AN_rel_folder="20151216", oldObject="Landolt_SA98", newObject="Std_SA98")
   require(dplyr)
   require(stringi)
   source("C:/Dev/Photometry/$Utility.R")
@@ -66,6 +68,7 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201
 
 copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test"){
   ##### Run this before anything, except possibly after renameObject().
+  ##### Typical usage:  copyToUr(AN_rel_folder="20151216")
   ##### Tests OK 20151220.
   require(dplyr)
   require(stringi)
@@ -93,12 +96,13 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015110
   dir.create(make_safe_path(UrFolder,subDirs))
   
   CopiedOK <- file.copy(df$OldFullPath, df$NewFullPath)
-  return(CopiedOK)
+  cat("Copied",sum(CopiedOK),"of",length(CopiedOK),"files to",UrFolder)
 }
 
 renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test") {
   ##### Tests OK 20151220.
   ##### Rename all FITS (including in subfolders) from ACP names to serial names.
+  ##### Typical Usage:  renameACP(AN_rel_folder="20151216")
   
   require(dplyr)
   require(stringi)
@@ -117,6 +121,7 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201512
                    stringsAsFactors = FALSE) %>%
     filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
     mutate(OldRelDir="", NewFilename="", Object="", Filter="", JD_start=NA, Airmass=NA)
 
   # Collect header data from FITS files.
@@ -197,12 +202,13 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201512
   write.table(df, file=txtFilename, quote=FALSE, row.names=FALSE, sep=" ; ")  # save as text file
   R_Filename <- make_safe_path(PhotometryFolder, "File-renaming.RData")
   save(df, file=R_Filename)                                                   # save as .RData file
-  return (df)
+  cat("Renamed", nrow(df), "files. All now reside in top folder", AN_folder)
 }
 
 prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
   ##### Tests OK 20151220.
   #####   ALWAYS run renameACP() (or similar renaming fn) on a AN folder before running this.
+  ##### Typical usage:  prepareForCal(AN_rel_folder="20151216")
   
   require(dplyr)
   source("C:/Dev/Photometry/$Utility.R")
@@ -248,7 +254,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20
     scriptCompletedOK <- FALSE
   }
 
-  # Copy all FITS from top folder to \Ur, then move them all to \Uncalibrated (later renamed \Calibrated).
+  # Move all target files to \Uncalibrated (later renamed \Calibrated).
   allTargetFiles <- setdiff(list.files(AN_folder, full.names=TRUE),
                             list.dirs(AN_folder))  # files only, not subfolders.
   CopiedOK <- file.copy(allTargetFiles, UncalibratedFolder, copy.date=TRUE)
@@ -276,9 +282,8 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20
 
 finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
   ##### Tests OK 20151220.
-  ##### Run this after (1) renameACP() (or similar renaming fn) and prepareForCal(), and then after
-  #####   (2) using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
-  
+  ##### Run this after using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
+  ##### Typical usage:  finishFITS(AN_rel_folder="20151216")
   source("C:/Dev/Photometry/$Utility.R")
   require(dplyr)
   AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -338,7 +343,8 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151
 
 run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
-# Process all FITS files in folder through APT, build & return master df.
+  ##### Process all FITS files in folder through APT, build & return master df.
+  ##### Typical usage:  df <- run_APT_all(AN_rel_folder="20151216")
   require(dplyr)
   source("C:/Dev/Photometry/$Utility.R")
   
@@ -352,30 +358,42 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   print(paste(">>>>> FITS folder=",FITS_folder), quote=FALSE)
   
   # make data frame with all FOV names for this AN, one row per FITS file.
-  pattern<- "^(.+)-" # must use dash alone as FOV/Object terminator, as we prob don't use ACP-format names.
-  # pattern<- "^(.+)-S[[:digit:]]{3}-R" # obsolete: for ACP-format file names.
-  substrings <- regmatches(FITS_files,regexec(pattern,FITS_files))
-  FOVdf <- data.frame(matrix(unlist(substrings), nrow=length(substrings), byrow=T),
-                      stringsAsFactors=FALSE) %>%
-    select(-1)
+  pattern<- "^([^-]+)-{1}[[:digit:]]{4}-{1}[[:alpha:]]" # must use dash alone as FOV/Object terminator, as we prob don't use ACP-format names.
+  substrings <- regmatches(FITS_files,regexec(pattern,FITS_files)) %>% 
+    data.frame(stringsAsFactors=FALSE) %>% 
+    t()
+  rownames(substrings)<- NULL
+  FOVdf <- data.frame(substrings[,2],stringsAsFactors=FALSE)
+  
+  #FOVdf <- data.frame(matrix(substrings, nrow=length(substrings), byrow=T),
+  #                    stringsAsFactors=FALSE) %>%
+  #  select(-1)
   colnames(FOVdf) <- "FOVname"
   FOVdf$FITS_file <- FITS_files
   FOVdf$FITS_path <- FITS_paths
   
-  # for each FOV, (1) read FOV file, (2) make APT source file,
-  #    (3) run_APT_oneFITS() on each FITS file & add to master df.
+  # List FOVs and counts in target FITS files, ask to continue.
   photometry_folder <- make_safe_path(AN_folder,"Photometry")
   if (!dir.exists(photometry_folder)) {
     dir.create(photometry_folder)
   }
-  df_master <- data.frame()  # start with a null data frame and later add rows to it.
-  FOVdf %>% 
-    select(FOVname) %>% 
+  ask_df <- FOVdf %>% 
     group_by(FOVname) %>%
     summarize(nFITS=n()) %>% 
-    as.data.frame() %>% 
+    as.data.frame() %>%
+    mutate(FOV_file_exists= "*NA*")
+  for (iFOV in 1:nrow(ask_df)) {
+    cat("*** Doing ",ask_df$FOVname[iFOV],"\n")
+    ask_df$FOV_file_exists[iFOV] <- 
+     read_FOV_file(ask_df$FOVname[iFOV]) %>% 
+      is.na() %>% 
+      first() %>% 
+     ifelse("MISSING","OK") %>% 
+     paste("   FOV file",.)
+ }
+  ask_df %>%
+    select(FOVname,nFITS,FOV_file_exists) %>% 
     print()
-
   isYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
   if (!isYES) stop("Stopped at user request.")
   
@@ -385,7 +403,10 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
   allAPTstdout <- character(0)
   
-  FOVs <- unique(FOVdf$FOVname)
+  # For each FOV, (1) read FOV file, (2) make APT source file,
+  #    (3) run_APT_oneFITS() on each FITS file & add to master df.
+  df_master <- data.frame()  # start with a null data frame and later add rows to it.
+
   for (thisFOV in FOVs) {
     print(paste("FOV >", thisFOV, "<", sep=""), quote=FALSE)
     FOV_list <- read_FOV_file(thisFOV)  # all static info defining this FOV
@@ -412,12 +433,14 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     }
   }
   
+  # Construct Vignette variable (stars' squared distance in pixels from image center)
   Xcenter = 3*1024/2  # for 3K x 2K chip
   Ycenter = 2*1024/2
   XY2_corner = Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner for normalization.
   df_master <- df_master %>%
     mutate(Vignette=((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner)
   
+  # Write out everything.
   write(allAPTstdout, APTstdout_path)
   save(df_master, 
        file=make_safe_path(AN_folder, "df_master.Rdata")) # may later recover via df <- load(df_master_path).
