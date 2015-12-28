@@ -1,10 +1,10 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
-Immediate TODO list for entire workflow (20151220): 
-1. Chase down residual bias--probably an aperture or noise problem in APT.
-2. Diagnostics & plots: model outliers & model quality (incl. residual plots for bias)
-3. predictOneFilter(): Compute estimated errors, esp. for AAVSO report usage.
+Todo lists moved to TODO.txt 20151227.
+
+##### Dec 27 2015: CCD Linearity exhaustively verified, both in CCD response and in exposure length.
+Now resume building of R workflow.
 
 ##### Dec 20 2015: Input.R functions work, are as good as they need to be for now.
 

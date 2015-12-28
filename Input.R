@@ -144,7 +144,6 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201512
     JD_start       <- get_header_value(header, "JD")
     airmass        <- get_header_value(header, "AIRMASS")
     errorThisFile <- FALSE
-    # cat(paste(">",objectFromFilename,"< != >",objectFromFITS,"<  ",  relPath,    "\n", sep=""))
     if (objectFromFilename != objectFromFITS) {
       cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
       nErrors <- nErrors + 1
@@ -279,7 +278,6 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20
   }
 }
 
-
 finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
   ##### Tests OK 20151220.
   ##### Run this after using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
@@ -340,9 +338,9 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151
   }
 }
 
-
 run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
+  ##### Tested OK, except new columns Vignette4 & MaxADU (from markSaturatedObs()) need verification.
   ##### Process all FITS files in folder through APT, build & return master df.
   ##### Typical usage:  df <- run_APT_all(AN_rel_folder="20151216")
   require(dplyr)
@@ -355,7 +353,7 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
                                     recursive=FALSE, ignore.case=TRUE))
   FITS_paths  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=TRUE, 
                                     recursive=FALSE, ignore.case=TRUE))
-  print(paste(">>>>> FITS folder=",FITS_folder), quote=FALSE)
+  cat(">>>>> FITS folder= ",FITS_folder,"\n")
   
   # make data frame with all FOV names for this AN, one row per FITS file.
   pattern<- "^([^-]+)-{1}[[:digit:]]{4}-{1}[[:alpha:]]" # must use dash alone as FOV/Object terminator, as we prob don't use ACP-format names.
@@ -383,7 +381,6 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     as.data.frame() %>%
     mutate(FOV_file_exists= "*NA*")
   for (iFOV in 1:nrow(ask_df)) {
-    cat("*** Doing ",ask_df$FOVname[iFOV],"\n")
     ask_df$FOV_file_exists[iFOV] <- 
      read_FOV_file(ask_df$FOVname[iFOV]) %>% 
       is.na() %>% 
@@ -408,7 +405,7 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   df_master <- data.frame()  # start with a null data frame and later add rows to it.
 
   for (thisFOV in FOVs) {
-    print(paste("FOV >", thisFOV, "<", sep=""), quote=FALSE)
+    cat("FOV >", thisFOV, "<\n")
     FOV_list <- read_FOV_file(thisFOV)  # all static info defining this FOV
     FOV_FITS_paths <- FOVdf %>%         # list of all full FITS paths under this FOV
       filter(FOVname==thisFOV) %>% 
@@ -436,9 +433,11 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   # Construct Vignette variable (stars' squared distance in pixels from image center)
   Xcenter = 3*1024/2  # for 3K x 2K chip
   Ycenter = 2*1024/2
-  XY2_corner = Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner for normalization.
+  XY2_corner = Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner, for normalization.
+  XY4_corner = Xcenter^4 + Ycenter^4  # 4-power of distance in pixels at image corner, for normalization.
   df_master <- df_master %>%
-    mutate(Vignette=((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner)
+    mutate(Vignette =((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner) %>%
+    mutate(Vignette4=((Xpixels-Xcenter)^4+(Ypixels-Ycenter)^4) / XY4_corner)
   
   # Write out everything.
   write(allAPTstdout, APTstdout_path)
@@ -540,14 +539,20 @@ markSaturatedObs <- function(df_APT, saturatedADU=55000) {
   # TESTED 11/29/2015.
   # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
   # set Saturated=TRUE for that row in df_FITS and return.
-  # We want to use the original (Ur) FITS file for true checking of pixel saturation.
+  # We want to use the original (Ur) FITS file for true checking of pixel saturation --
+  #    unfortunately that means we have to look up the old filename.
   # Note: APT's first pixel is numbered "1", MaxIm's is numbered "0".
   CalFITS_path <- as.character(df_APT$FITSpath[1])
 
-  # make UrFITS_path from CalFITS_path
+  # make UrFITS_path (original file name, prob ACP-format) from CalFITS_path & new file name.
   pattern <- "^(.+)/Calibrated/(.+)"
   substrings <- unlist(regmatches(CalFITS_path, regexec(pattern, CalFITS_path)))
-  UrFITS_path <- paste(substrings[2],"/Ur/",substrings[3],sep="")
+  AN_folder <- substrings[2]
+  renamedFilename <- substrings[3]
+  df_rename <- read.table(make_safe_path(AN_folder, "Photometry/File-renaming.txt"),
+                          header=TRUE, sep=";", stringsAsFactors=FALSE, strip.white=TRUE)
+  UrFilename <- df_rename %>% filter(NewFilename==renamedFilename) %>% select(RelPath) %>% unlist()
+  UrFITS_path <- paste(AN_folder, "/Ur/", UrFilename, sep="")
   
   # grab image matrix from Ur FITS file (not from Calibrated FITS file)
   zz <- file(description=UrFITS_path, open="rb")
@@ -559,6 +564,7 @@ markSaturatedObs <- function(df_APT, saturatedADU=55000) {
   Xsize <- D$axDat$len[1]
   Ysize <- D$axDat$len[2]
   df_APT$Saturated <- FALSE  # add column to data frame with initial values.
+  df_APT$MaxADU <- NA        #  "
 
   # now, mark Saturated=TRUE for any row (Observation) with a saturated pixel within aperture.
   for (iObj in 1:nrow(df_APT)) {
@@ -572,10 +578,11 @@ markSaturatedObs <- function(df_APT, saturatedADU=55000) {
     Yhigh <- min(Ysize, ceiling(Ycenter+testRadius))
     for (X in Xlow:Xhigh) {
       for (Y in Ylow:Yhigh) {
+        ADU <- image[X,Y]
         if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
-          if (image[X,Y] > saturatedADU) {
-            df_APT$Saturated[iObj] <- TRUE
-          } # if
+          if (ADU > saturatedADU)         { df_APT$Saturated[iObj] <- TRUE }
+          if (is.na(df_APT$MaxADU[iObj])) { df_APT$MaxADU[iObj] <- ADU }
+          if (ADU > df_APT$MaxADU)        { df_APT$MaxADU <- ADU }
         } # if
       } # for Y
     } # for X
@@ -600,7 +607,7 @@ getFITSheaderInfo <- function (FITS_path) {
   df$Object   <- get_header_value(header, "OBJECT")
   df$JD_start <- as.numeric(get_header_value(header, "JD"))
   df$Exposure <- as.numeric(get_header_value(header, "EXPOSURE"))
-  df$JD_mid   <- df$JD_start + (df$Exposure / (24*3600) / 2)
+  df$JD_mid   <- df$JD_start + ((df$Exposure/2) / (24*3600))
   df$Filter   <- get_header_value(header, "FILTER")
   df$Airmass  <- as.numeric(get_header_value(header, "AIRMASS"))
   return (df)

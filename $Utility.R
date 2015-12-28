@@ -128,7 +128,7 @@ read_FOV_file <- function (FOV_name) {
   df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
   
   if (sum(df_star$StarType=="Check")<=0) {
-    print(paste(">>>>> Warning: FOV file",FOV_name,"has NO CHECK STAR."))
+    cat(">>>>> Warning: FOV file ",FOV_name," has NO CHECK STAR.\n")
   }
   return(list(FOV_data=FOV_data, star_data=df_star))
 }

@@ -16,7 +16,7 @@ modelAll <- function(df_master, maxMagUncertainty=0.02,
 ################################################################################################
 ##### Below are test or support-only functions, rarely or not typically called by user. ########
 
-modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, 
+modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxColorIndex=2,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Input is the Astronight's master data frame.
   # Returns lmer model object (of class merMod) of fit to comparison stars only.
@@ -30,7 +30,7 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02,
     filter(Saturated==FALSE) %>%
     filter(!is.na(CatMag)) %>%
     filter(!is.na(CI)) %>%
-    filter(CI<=1.6)
+    filter(CI<=maxColorIndex)
   
   formula_string <- "InstMag ~ offset(CatMag) + Vignette + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
