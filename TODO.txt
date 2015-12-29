@@ -3,10 +3,9 @@ TODO list: as of 20151226.
 Immediate/showstopper (20151221): 
 [None.]
 
-Soon (20151227):
+Soon / normal development (20151227):
 * Test Input.R::markSaturatedObs(): Test new MaxADU (max pixel value) column (not just a Saturated column)
-added 20151227 to df_APT. 
-* Edit Model.R::modelAll(): Do/allow for per-AN saturation checking in Model.R.
+added 20151227 to df_APT. Seems to have fractional MaxADU, which from raw image is hard to understand.
 * Finish Predict.R::PredictOneFilter(): runs model to give (possibly untransformed) predicted target mags,
 writes data frame df_model.
 * Write Predict.R::InferColors(): infers color index or each observation (possibly using Akima spline),

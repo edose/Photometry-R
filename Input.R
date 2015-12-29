@@ -394,9 +394,9 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   isYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
   if (!isYES) stop("Stopped at user request.")
   
-  APTstdout_path  <- make_safe_path(AN_folder, "APTstdout.txt")
-  APTsourcelist_path <- make_safe_path(AN_folder,"APTsource.txt")
-  APToutput_path  <- make_safe_path(AN_folder, "APToutput.txt")
+  APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
+  APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
+  APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
   unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
   allAPTstdout <- character(0)
   
@@ -430,7 +430,8 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     }
   }
   
-  # Construct Vignette variable (stars' squared distance in pixels from image center)
+  # Construct Vignette variables (stars' squared or 4th-power distance in pixels from image center)
+  # (Do it here, not in Model.R, so that they are available for predicting check and target stars.)
   Xcenter = 3*1024/2  # for 3K x 2K chip
   Ycenter = 2*1024/2
   XY2_corner = Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner, for normalization.
@@ -439,8 +440,14 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
     mutate(Vignette =((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner) %>%
     mutate(Vignette4=((Xpixels-Xcenter)^4+(Ypixels-Ycenter)^4) / XY4_corner)
   
-  # Write out everything.
+  # Write out entire APT text log (all runs).
   write(allAPTstdout, APTstdout_path)
+  # Sort by JD_mid then Number, add Serial number column & move it to left end.
+  # Serial numbers mostly used to omit specific data points from models.
+  df_master <- df_master %>%
+    arrange(JD_mid, Number) %>%
+    mutate(Serial=1:nrow(df_master)) %>%
+    select(Serial, UseInModel, ModelStarID, Residuals, everything())
   save(df_master, 
        file=make_safe_path(AN_folder, "df_master.Rdata")) # may later recover via df <- load(df_master_path).
   return(df_master)  # one row per observation, for every FITS file.
@@ -535,7 +542,7 @@ parse_APToutput <- function (APToutput_path) {
   return(df_APT %>% arrange(Number))
   }
 
-markSaturatedObs <- function(df_APT, saturatedADU=55000) {
+markSaturatedObs <- function(df_APT, saturatedADU=54000) {
   # TESTED 11/29/2015.
   # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
   # set Saturated=TRUE for that row in df_FITS and return.
@@ -582,7 +589,7 @@ markSaturatedObs <- function(df_APT, saturatedADU=55000) {
         if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
           if (ADU > saturatedADU)         { df_APT$Saturated[iObj] <- TRUE }
           if (is.na(df_APT$MaxADU[iObj])) { df_APT$MaxADU[iObj] <- ADU }
-          if (ADU > df_APT$MaxADU)        { df_APT$MaxADU <- ADU }
+          if (ADU > df_APT$MaxADU[iObj])  { df_APT$MaxADU[iObj] <- ADU }
         } # if
       } # for Y
     } # for X

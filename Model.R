@@ -1,12 +1,16 @@
 ##### Model.R   Get model (via mixed-model regression) for one Astronight's Comp and other standard stars.
+#####  In testing 20151228.
+##### Typical usage: m <- modelAll(df_master)
 
-modelAll <- function(df_master, maxMagUncertainty=0.02, 
+modelAll <- function(df_master, maxMagUncertainty=0.02, maxColorIndex=2,
+                     vignette=TRUE, vignette4=FALSE,
                      fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   require(dplyr)
   filters <- df_master$Filter %>% unique()
   masterModelList <- list()
   for (filter in filters) {
-    filterList <- modelOneFilter(df_master, filter, maxMagUncertainty, 
+    filterList <- modelOneFilter(df_master, filter, maxMagUncertainty, maxColorIndex,
+                                 vignette, vignette4,
                                  fit_transform, fit_extinction, fit_starID)
     masterModelList[[filter]] <- filterList
   }
@@ -17,6 +21,7 @@ modelAll <- function(df_master, maxMagUncertainty=0.02,
 ##### Below are test or support-only functions, rarely or not typically called by user. ########
 
 modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxColorIndex=2,
+                            vignette=TRUE, vignette4=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Input is the Astronight's master data frame.
   # Returns lmer model object (of class merMod) of fit to comparison stars only.
@@ -32,7 +37,7 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxCo
     filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex)
   
-  formula_string <- "InstMag ~ offset(CatMag) + Vignette + (1|JD_mid)"
+  formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
     transform <- NA
@@ -48,6 +53,12 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxCo
     extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # default (not fit) value.
     thisOffset <- thisOffset + extinction * df_model$Airmass
   }
+  if (vignette) {
+    formula_string <- paste0(formula_string, " + Vignette")
+  }
+  if (vignette4) {
+    formula_string <- paste0(formula_string, " + Vignette4")
+  } 
   if (fit_starID) {
     formula_string <- paste0(formula_string, " + (1|ModelStarID)")
   }
