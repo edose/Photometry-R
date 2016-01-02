@@ -6,10 +6,13 @@
 #####             data frame (AN) of that Astronight's photometric data. 
 #####             This master data frame is to be used by Model.R to build a mixed-model regression.
 #####             and finally to predict unknown 
-#####      APT was adopted to replace PI (PixInsight), which has proven unreliable in its
-#####         identification of source signals, and is in any case too tied to catalogs, 
-#####         when all we want is fast, accurate AP of our comp, check, and target stars.
-
+#####
+##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
+#####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
+#####    beforeCal(AN_rel_folder="20151216")
+#####    Make calibration masters and calibrate all FITS in /Uncalibrated with MaxIm DL.
+#####    afterCal(AN_rel_folder="200151216")
+##### then start modeling with Model.R functions.
 
 renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test", 
                          oldObject, newObject) {
@@ -66,7 +69,26 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201
   cat("Done.")
 }
 
-copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test"){
+beforeCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  ##### Calls everything (except renameObject()) that's needed before image calibration.
+  ##### Typical usage: beforeCal(AN_rel_folder="20151216")
+  copyToUr(AN_rel_folder=AN_rel_folder)
+  renameACP(AN_rel_folder=AN_rel_folder)
+  prepareForCal(AN_rel_folder=AN_rel_folder)
+}
+
+afterCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  ##### Calls everything that's needed after image calibration and before Model.R functions.
+  ##### Typical usage: df <- afterCal(AN_rel_folder="20151216")
+  finishFITS(AN_rel_folder=AN_rel_folder)
+  df <- run_APT_all(AN_rel_folder=AN_rel_folder)
+  return (df)
+}
+
+################################################################################
+##### The following can be called directly, but normally call instead: beforeCal() and afterCal().
+
+copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder){
   ##### Run this before anything, except possibly after renameObject().
   ##### Typical usage:  copyToUr(AN_rel_folder="20151216")
   ##### Tests OK 20151220.
@@ -99,7 +121,7 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015110
   cat("Copied",sum(CopiedOK),"of",length(CopiedOK),"files to",UrFolder)
 }
 
-renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test") {
+renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Tests OK 20151220.
   ##### Rename all FITS (including in subfolders) from ACP names to serial names.
   ##### Typical Usage:  renameACP(AN_rel_folder="20151216")
@@ -204,7 +226,7 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201512
   cat("Renamed", nrow(df), "files. All now reside in top folder", AN_folder)
 }
 
-prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
+prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Tests OK 20151220.
   #####   ALWAYS run renameACP() (or similar renaming fn) on a AN folder before running this.
   ##### Typical usage:  prepareForCal(AN_rel_folder="20151216")
@@ -278,7 +300,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20
   }
 }
 
-finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-test") {
+finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Tests OK 20151220.
   ##### Run this after using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
   ##### Typical usage:  finishFITS(AN_rel_folder="20151216")
@@ -338,7 +360,7 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151
   }
 }
 
-run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151101-test",
+run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
   ##### Tested OK, except new columns Vignette4 & MaxADU (from markSaturatedObs()) need verification.
   ##### Process all FITS files in folder through APT, build & return master df.
@@ -432,10 +454,10 @@ run_APT_all <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="2015
   
   # Construct Vignette variables (stars' squared or 4th-power distance in pixels from image center)
   # (Do it here, not in Model.R, so that they are available for predicting check and target stars.)
-  Xcenter = 3*1024/2  # for 3K x 2K chip
-  Ycenter = 2*1024/2
-  XY2_corner = Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner, for normalization.
-  XY4_corner = Xcenter^4 + Ycenter^4  # 4-power of distance in pixels at image corner, for normalization.
+  Xcenter <- 3*1024/2  # for 3K x 2K chip
+  Ycenter <- 2*1024/2
+  XY2_corner <- Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner, for normalization.
+  XY4_corner <- Xcenter^4 + Ycenter^4  # 4-power of distance in pixels at image corner, for normalization.
   df_master <- df_master %>%
     mutate(Vignette =((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner) %>%
     mutate(Vignette4=((Xpixels-Xcenter)^4+(Ypixels-Ycenter)^4) / XY4_corner)

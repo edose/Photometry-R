@@ -89,7 +89,15 @@ read_FOV_file <- function (FOV_name) {
     FOV_data$Stare     <- NA
     FOV_data$StareUnit <- NA
   }
-
+  ACP_strs <- directive_value("#ACP") %>% strsplit("|",fixed=TRUE) %>% unlist() %>% trimws()
+  if(length(ACP_strs) < 4) {
+    FOV_data$ACP <- NA
+  } else {
+    ACP_strs[length(ACP_strs)] <- paste0(FOV_data$Sequence,"\t", FOV_data$RA_center,"\t", 
+                                         FOV_data$Dec_center," ; ", ACP_strs[length(ACP_strs)])  
+    FOV_data$ACP <- paste0( paste(ACP_strs,collapse="\n"), "\n")
+  }
+  
   # Parse STAR LINES (embedded lines from VPhot sequence):
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=0, fill=TRUE, strip.white=TRUE, 
                         comment.char="#", stringsAsFactors = FALSE, 
@@ -127,6 +135,7 @@ read_FOV_file <- function (FOV_name) {
   df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
   df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
   
+  # Diagnostic checks & messages before returning results.
   if (sum(df_star$StarType=="Check")<=0) {
     cat(">>>>> Warning: FOV file ",FOV_name," has NO CHECK STAR.\n")
   }

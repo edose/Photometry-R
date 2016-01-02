@@ -4,8 +4,6 @@ Immediate/showstopper (20151221):
 [None.]
 
 Soon / normal development (20151227):
-* Test Input.R::markSaturatedObs(): Test new MaxADU (max pixel value) column (not just a Saturated column)
-added 20151227 to df_APT. Seems to have fractional MaxADU, which from raw image is hard to understand.
 * Finish Predict.R::PredictOneFilter(): runs model to give (possibly untransformed) predicted target mags,
 writes data frame df_model.
 * Write Predict.R::InferColors(): infers color index or each observation (possibly using Akima spline),
@@ -13,20 +11,30 @@ applies transforms*color correction, writes df_transformed.
 * Finish Predict.R::WriteAAVSO(). Requires complete df_transformed, curated by user. Then it must run
 initial diagnostics and then write text file ready to send to AAVSO.
 
-Input.R:
-* [someday] FOV file: new per-star notation to mark interfering stars, esp by direction (& arcsec dist?) 
+---------------------------
+Someday development:
+
+ANplanner.R (& FOV files before run):
+* New fn ACP() to extract new #ACP directive info from FOV file, e.g., ACP(c("AX Per","AY Aur")),
+to help write ACP plans quickly and without transcription error.
+
+Input.R (& FOV files during reduction):
+* FOV file: new per-star notation to mark interfering stars, esp by direction (& arcsec dist?) 
 (or by RA Dec). --> OR possibly this can be automated in the aperture math alone (median-of-medians?) so
 that we avoid this effort to make FOV files (and avoid complicating them as well).
-* [someday] Rewrite aperture math (InstMag, FWHM, Sky), then using APT only to get pixel coordinates for targets. 
+* Rewrite aperture math (InstMag, FWHM, Sky), then using APT only to get pixel coordinates for targets. 
 This should improve interference rejection in sky annulus, FWHM values good enough to use in curating
 observations, etc.
-* [someday] Write own CalibrationMaster & Calibrate All routines to completely replace MaxIm usage.
-
-Transform.R: 
-* [someday] Rewrite this completely into Input.R, to use its normal image processing and to extract
-transforms by Model.R, rather than via this separate transform-extraction workflow.
+* Write own CalibrationMaster & Calibrate All routines to completely replace MaxIm usage.
+* FOV file: Add new directive "#AAVSONAME" to give AAVSO-report target name when not compatible with
+Windows file names, e.g., #AAVSONAME "1RXS J064434.5+334451" (which would otherwise require hand-editing
+the AAVSO report). Probably best to get this into the master data frame from the outset & carry through.
 
 Model.R: 
+
+Transform.R: 
+* Rewrite this completely into Input.R, to use its normal image processing and to extract
+transforms by Model.R, rather than via this separate transform-extraction workflow.
 
 FOVs, diagnostics etc:
 * Make list of all (1) summary statistics and (2) summary/curation plots, especially just after running

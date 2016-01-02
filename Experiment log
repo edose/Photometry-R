@@ -1,7 +1,9 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
-Todo lists moved to TODO.txt 20151227.
+##### Dec 29 2015: markSaturatedObs() is working fine, but 20151216/Ur has non-integer ADUs(!). Found to be
+caused by renameObject() calling FITSio::writeFITSim16i(). Corruptions are very small (~20 ppm), probably 
+less in the aggregate (like aperture sums), and only when renaming objects (rare). Let it go; live with it.
 
 ##### Dec 27 2015: CCD Linearity exhaustively verified, both in CCD response and in exposure length.
 Now resume building of R workflow.
