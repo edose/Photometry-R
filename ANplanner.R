@@ -3,7 +3,9 @@
 
 ##### USER FUNCTIONS in this file:
 #####    obsPlanner: get VS data from AAVSO Observation Planner; to rationally select a night's targets.
-#####    eveningMiras: wrapper for obsPlanner() for evening Miras.
+#####    eveningMiras: list evening Miras.
+#####    eveningEclipsers: list evening eclipsers.
+#####    ACP: read FOV files and return ACP-plan-ready text for each target.
 
 obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursEW=2,
                         decLimitS=0, decLimitN=60, selectBest=75) {
@@ -80,4 +82,21 @@ eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLi
     filter(Max > 9.8) %>%
     filter(Min > 10.5) %>%
     filter(Period > 0)
+}
+
+ACP <- function (FOVs) {
+  ##### Test OK 20160101.
+  ##### Typical usage: ACP(c("SU Lac","IK Peg"))
+  source("C:/Dev/Photometry/$Utility.R")
+  lines <- ""
+  for (FOV in FOVs) {
+    f <- read_FOV_file(FOV)
+#    if (anyNA(f)) {
+#      print(paste0(">>>>> Cannot open FOV file for: ", FOV))
+#    } else {
+      acp <- f$FOV_data$ACP
+      if (!is.na(acp)) { lines <- paste0(lines, ";\n", f$FOV_data$ACP) }
+#    }
+  }
+  cat(lines)
 }

@@ -15,8 +15,6 @@ initial diagnostics and then write text file ready to send to AAVSO.
 Someday development:
 
 ANplanner.R (& FOV files before run):
-* New fn ACP() to extract new #ACP directive info from FOV file, e.g., ACP(c("AX Per","AY Aur")),
-to help write ACP plans quickly and without transcription error.
 
 Input.R (& FOV files during reduction):
 * FOV file: new per-star notation to mark interfering stars, esp by direction (& arcsec dist?) 

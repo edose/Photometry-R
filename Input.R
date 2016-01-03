@@ -294,7 +294,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters\n")
     cat("   then in MaxIm: 'Replace w/Masters'\n")
     cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.\n")
-    cat("   Then in R: finishFITS().\n")
+    cat("   Then in R: afterCal().\n")
   } else {
     cat(paste(">>>>> Problem completing script #1. Check above warnings to correct.\n"))
   }
