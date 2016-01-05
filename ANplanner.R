@@ -85,18 +85,22 @@ eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLi
 }
 
 ACP <- function (FOVs) {
-  ##### Test OK 20160101.
-  ##### Typical usage: ACP(c("SU Lac","IK Peg"))
+  ##### Test OK 20160103.
+  ##### Typical usage: ACP(c("SU Lac","IK Peg")) or ACP(df$FOVs)
   source("C:/Dev/Photometry/$Utility.R")
   lines <- ""
   for (FOV in FOVs) {
     f <- read_FOV_file(FOV)
-#    if (anyNA(f)) {
-#      print(paste0(">>>>> Cannot open FOV file for: ", FOV))
-#    } else {
+    if (!is.na(f[[1]][[1]])) {
       acp <- f$FOV_data$ACP
-      if (!is.na(acp)) { lines <- paste0(lines, ";\n", f$FOV_data$ACP) }
-#    }
+      if (!is.na(acp)) {
+        lines <- paste0(lines, ";\n", acp)
+      } else{
+        lines <- paste0(lines, "; >>>>> FOV file '", FOV, "' exists, but it has no #ACP directive.\n;\n")
+      }
+    } else{
+      lines <- paste0(lines, "; >>>>> FOV file '", FOV, "' not found.\n;\n")
+    }
   }
   cat(lines)
 }

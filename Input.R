@@ -189,7 +189,7 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   }
 
   # Make new filenames.
-  df <- df %>% arrange(Object, JD_start)
+  df <- df %>% arrange(Object, as.numeric(JD_start))
   iObjectFile <- 1
   for (iRow in 1:nrow(df)) {
     if (iRow >= 2) {
@@ -633,12 +633,13 @@ getFITSheaderInfo <- function (FITS_path) {
   close(fileHandle)
 
   df <- data.frame(Object=NA)
-  df$Object   <- get_header_value(header, "OBJECT")
-  df$JD_start <- as.numeric(get_header_value(header, "JD"))
-  df$Exposure <- as.numeric(get_header_value(header, "EXPOSURE"))
-  df$JD_mid   <- df$JD_start + ((df$Exposure/2) / (24*3600))
-  df$Filter   <- get_header_value(header, "FILTER")
-  df$Airmass  <- as.numeric(get_header_value(header, "AIRMASS"))
+  df$Object    <- get_header_value(header, "OBJECT")
+  df$JD_start  <- get_header_value(header, "JD")
+  df$UTC_start <- get_header_value(header, "DATE-OBS")
+  df$Exposure  <- as.numeric(get_header_value(header, "EXPOSURE"))
+  df$JD_mid    <- as.character(as.numeric(df$JD_start) + ((df$Exposure/2) / (24*3600)))
+  df$Filter    <- get_header_value(header, "FILTER")
+  df$Airmass   <- as.numeric(get_header_value(header, "AIRMASS"))
   return (df)
 }
 

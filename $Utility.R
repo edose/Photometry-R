@@ -179,6 +179,7 @@ get_Dec_deg <- function (Dec_string) {
 }
 
 get_RA_hours <- function (RA_deg) {
+  require(stringi)
   deg <- RA_deg %% 360
   hours <- floor(deg/15.0)
   minutes <- floor(4 * (deg-15*hours))

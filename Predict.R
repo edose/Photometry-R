@@ -55,7 +55,6 @@ predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertai
   return (df)
 }
 
-
 writeAAVSO <- function (AN_folder) {
   #####    Writes AAVSO-ready text file.
   require(dplyr)
@@ -102,3 +101,5 @@ writeAAVSO <- function (AN_folder) {
 
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
+
+
