@@ -20,7 +20,7 @@ This is in development 2015-early 2016. As of now, I process a new AN (Astronigh
 **Input.R (post-calibration):**
 
  1. **finishFITS()**  ---  Deletes all non-master files from /CalibrationMasters, verifies via FITS headers that all calibrations happened OK, moves target FITS files from /Uncalibrated to /Calibrated, cleans up directory structure.
- 1. **run_APT_all()**  ---  Prepares inputs for and invokes APT software to build R data frame suitable for later use in photometric model building and AAVSO. APT is a bit limited in its aperture math, and I may later write my own aperture math in R, but for now APT is very reliable in its star marking in images. This function draws heavily on previously prepared FOV (field-of-view), one text file per field of view, which roughly corresponds to a VPhot "sequence" (badly named by AAVSO) of all the relevant target, check, and standard comp stars; my FOV file includes some additional metadata that might as well be bundled with the VPhot data, right in the same files.
+ 1. **make_df_master()**  ---  Prepares inputs for and invokes APT software to build R data frame suitable for later use in photometric model building and AAVSO. APT is a bit limited in its aperture math, and I may later write my own aperture math in R, but for now APT is very reliable in its star marking in images. This function draws heavily on previously prepared FOV (field-of-view), one text file per field of view, which roughly corresponds to a VPhot "sequence" (badly named by AAVSO) of all the relevant target, check, and standard comp stars; my FOV file includes some additional metadata that might as well be bundled with the VPhot data, right in the same files.
 
 **Model.R**
 
