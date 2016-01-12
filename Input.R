@@ -15,7 +15,7 @@
 #####    df_master <- make_df_master(AN_rel_folder="200151216")
 ##### ...then start modeling with Model.R functions.
 
-renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="20151218-Test", 
+renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, 
                          oldObject, newObject) {
   ## Tests OK 20151220.
   ##### For occasional use in renaming objects (FITS header *and* FITS file name), typically as first step.
@@ -40,6 +40,11 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
     mutate(RelDir="", OldFilename="", NewFilename="")
+  if (nrow(df)<=0) {
+    cat("Stopping: folder'", AN_folder, "' does not exist or is empty.\n", sep="")
+    return()
+  }
+  
   for (iRow in 1:nrow(df)) {
     df$OldFilename[iRow]=strsplit(df$RelPath[iRow],"/")[[1]] %>% last() # doesn't work with %>%filter()
   }
@@ -51,7 +56,11 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder="201
     mutate(RelDir=substring(RelPath, 1, nchar(RelPath)-nchar(OldFilename))) %>%
     mutate(newRelPath=make_safe_path(RelDir,NewFilename)) %>%
     mutate(oldFullPath=make_safe_path(AN_folder,RelPath), newFullPath=make_safe_path(AN_folder, newRelPath))
-
+  if (nrow(df)<=0) {
+    cat("Stopping: no file object '", oldObject, "' in folder '", AN_folder, "'.\n", sep="")
+    return()
+  }
+  
   # Update FITS Object in header, write new file, & if successful then delete old file.
   cat("Renaming",nrow(df),"files: ")
   for (iRow in 1:nrow(df)) {
@@ -94,8 +103,9 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   # Delete non-master calibration files from \CalibrationMasters.
   allCalibrationMasterFiles <- list.files(CalibrationMastersFolder, full.names=FALSE)
   nonMasterFiles <- allCalibrationMasterFiles[!substr(allCalibrationMasterFiles,1,7)=="Master_"]
-  nonMasterPaths <- make_safe_path(CalibrationMastersFolder, nonMasterFiles)
-  file.remove(nonMasterPaths)
+  if (length(nonMasterFiles)>0) {
+    file.remove(make_safe_path(CalibrationMastersFolder, nonMasterFiles))
+  }
   
   # Verify (via FITS headers) all files in \Uncalibrated were calibrated, then rename folder to \Calibrated.
   require(FITSio)
@@ -254,11 +264,22 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     arrange(JD_mid, Number) %>%
     mutate(Serial=1:nrow(df_master)) %>%
     select(Serial, UseInModel, ModelStarID, FITSfile, everything())
-  df_master_path <- make_safe_path(AN_folder, "df_master.Rdata")
-  save(df_master, file=df_master_path) # may later recover via df <- load(df_master_path).
+  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
+  save(df_master, file=df_master_path, precheck=FALSE) # recover via: load_df_master(AN_rel_folder="201..").
   cat("make_df_master() has saved df_master to", df_master_path, "\n   now returning df_master.\n")
   return(df_master)  # one row per observation, for every FITS file.
 }
+
+load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(df_master_path, envir=globalenv(), verbose=TRUE)
+  cat(AN_folder, "::df_master now available in current workspace (global envir.).\n",sep="")
+}
+
+
 
 ##################################################################################################
 ##### The following can be called directly, but normally call instead: beforeCal().
@@ -290,10 +311,11 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder){
     df$RelDir[iRow] <- substring(df$RelPath[iRow],1,nchar(df$RelPath[iRow])-nchar(filename)-1)
   }
   subDirs <- df %>% filter(RelDir!="") %>% select(RelDir) %>% unique() %>% unlist()
-  dir.create(make_safe_path(UrFolder,subDirs))
-  
+  if (length(subDirs>=1)) {
+      dir.create(make_safe_path(UrFolder,subDirs))
+  }
   CopiedOK <- file.copy(df$OldFullPath, df$NewFullPath)
-  cat("CopyToUr() has copied",sum(CopiedOK),"of",length(CopiedOK),"files to",UrFolder)
+  cat("CopyToUr() has copied",sum(CopiedOK),"of",length(CopiedOK),"files to",UrFolder,"\n")
 }
 
 renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
@@ -386,10 +408,12 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   dirsToRemove <- df %>% select(OldRelDir) %>% filter(nchar(OldRelDir)>0) %>% unique() %>% unlist()
   dirsToRemove <- ifelse(stri_endswith_fixed(dirsToRemove,"/"),
                          substring(dirsToRemove,1,nchar(dirsToRemove)-1),
-                         dirsToRemove)
-  cat("Deleting", length(dirsToRemove), "directories:\n")
-  write.table(dirsToRemove, file="", row.names=FALSE, col.names=FALSE) 
-  unlink(make_safe_path(AN_folder,dirsToRemove), recursive=TRUE, force=TRUE)
+                         dirsToRemove) # remove any trailing "/"
+  if (length(dirsToRemove>=1)) {
+    cat("Deleting", length(dirsToRemove), "directories:\n")
+    write.table(dirsToRemove, file="", row.names=FALSE, col.names=FALSE) 
+    unlink(make_safe_path(AN_folder,dirsToRemove), recursive=TRUE, force=TRUE)
+  }
   
   # write data frame as text file and as R object, return data frame.
   PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
@@ -469,7 +493,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters\n")
     cat("   then in MaxIm: 'Replace w/Masters'\n")
     cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.\n")
-    cat("   Then in R: afterCal().\n")
+    cat("   Then in R: finishFITS(), then df_master<-make_df_master().\n")
   } else {
     cat(paste(">>>>> Problem completing script #1. Check above warnings to correct.\n"))
   }

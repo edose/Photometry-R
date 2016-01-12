@@ -17,6 +17,68 @@ modelAll <- function(df_master, maxMagUncertainty=0.02, maxColorIndex=2,
   return (masterModelList)
 }
 
+omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  ##### Reads AN folder's df_master and omit.txt, loads df_omit with requested observations omitted.
+  ##### Needs to account for filter as well (probably as an optional parameter in relevant directives).
+  ##### Needs to be completed and tested (20160111).
+  ##### Typical usage: omitObs(AN_rel_folder="20151216")
+  require(stringi)
+  require(dplyr)
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  
+  # Get df_master data frame for this AN folder.
+  df_master_file <- make_safe_path(photometry_folder, "df_master.Rdata")
+  if (!file.exists(df_master_file)) {
+    cat("df_master file", df_master_file, "does not exist.")
+    return (NA)
+  } else {
+    load(df_master_file)
+  }
+  
+  # Get omit file for this AN folder.
+  omit_file <- make_safe_path(photometry_folder, "omit.txt")
+  if (!file.exists(omit_file)) {
+    cat("Omit file", omit_file, "does not exist.")
+    return (NA)
+  } else {
+    lines <- readLines(omit_file, warn=FALSE)   # read last line even without EOL character(s).
+    for (iLine in 1:length(lines)) {
+      lines[iLine] <- lines[iLine] %>% 
+        strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
+    }
+    directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
+  }
+  
+  # Process directive lines to edit df_master (i.e., to omit observations etc as requested).
+  for (line in directiveLines) {
+    directive <- line %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% first() %>% trimws() %>% toupper()
+    value     <- line %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
+    if (directive=="#OBS") {
+      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
+      if (length(parms)>=2) {
+        FITSname <- parms[1]
+        starID <- parms[2]
+        cat(directive, FITSname, starID)
+      }
+    }
+    if (directive=="#STAR") {
+      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
+      if (length(parms) %in% 2:3) {
+      FITSname <- parms[1]
+      starID <- parms[2]
+      filter <- ifelse(length(parms)==3, parms[3], NA)
+      cat(directive, FITSname, starID, filter)
+      }
+    }
+    if (directive=="#IMAGE") {
+      FITSname <- value %>% trimws()
+      cat(directive, FITSname)
+    }
+  }
+}
+
+
 ################################################################################################
 ##### Below are test or support-only functions, rarely or not typically called by user. ########
 
