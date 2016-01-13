@@ -57,23 +57,31 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     if (directive=="#OBS") {
       parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
       if (length(parms)>=2) {
-        FITSname <- parms[1]
+        FITSname <- paste0(parms[1], ".fts")
         starID <- parms[2]
-        cat(directive, FITSname, starID)
+        #cat(directive, FITSname, starID, "\n", sep="//")
+        cat(paste0("filter(FITSfile=='", FITSname, "' & StarID=='", starID, "')\n"))
       }
     }
     if (directive=="#STAR") {
       parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
       if (length(parms) %in% 2:3) {
-      FITSname <- parms[1]
-      starID <- parms[2]
-      filter <- ifelse(length(parms)==3, parms[3], NA)
-      cat(directive, FITSname, starID, filter)
+        object <- parms[1]
+        starID <- parms[2]
+        filter <- ifelse(length(parms)==3, parms[3], NA)
+        #cat(directive, FITSname, starID, filter, "\n", sep="//")
+        if (is.na(filter)) {
+          cat(paste0("filter(Object=='", object, "' & StarID=='", starID, "')\n"))
+        } else {
+          cat(paste0("filter(Object=='", object, "' & StarID=='", starID, "' & Filter=='",
+            filter, "')\n"))
+        }
       }
     }
     if (directive=="#IMAGE") {
-      FITSname <- value %>% trimws()
-      cat(directive, FITSname)
+      FITSname <- paste0(value, ".fts")
+      #cat(directive, FITSname, "\n", sep="//")
+      cat("filter(FITSfile=='", FITSname, "')\n", sep="")
     }
   }
 }
