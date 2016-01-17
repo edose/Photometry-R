@@ -18,6 +18,40 @@ modelAll <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   return (masterModelList)
 }
 
+omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, serial=NA) {
+  ##### User utility to quickly add lines to omit.txt from Serial numbers (df_master) only.
+  ##### Tested OK 20160117.
+  ##### Typical usage: omitSerial(AN_rel_folder="20151216", serial=c(1220,923,88,727))
+  
+  if (anyNA(serial)) {
+    stop(">>>>> parm 'serial' is NA.")
+  }
+  require(stringi, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master <- get_df_master(AN_top_folder, AN_rel_folder)
+  if(any(!(serial %in% df_master$Serial))) {
+    stop(">>>>> at least one serial number given is not in df_master for ", AN_rel_folder)
+  }
+  lines <- paste0("\nNext ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
+  for (thisSerial in serial) {
+    thisFITS <- df_master$FITSfile[df_master$Serial==thisSerial] %>%
+      strsplit(".f", fixed=TRUE) %>% unlist() %>% first() %>% trimws()
+    thisStarID <- df_master$StarID[df_master$Serial==thisSerial]
+    lines <- c(lines, paste0("#OBS   ", thisFITS, ", ", thisStarID, "  ;  Serial=", thisSerial, "\n"))
+  }
+  omitPath <- make_safe_path(photometry_folder, "omit.txt")
+  cat(lines, file=omitPath, sep="", append=TRUE)
+  cat(lines) # output to Console
+}
+
+
+
+
+################################################################################################
+##### Below are test or support-only functions, rarely or not typically called by user. ########
+
 omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Reads AN folder's df_master and omit.txt, returns df_filtered with requested observations omitted.
   ##### Typically called by Model.R::modelOneFilter() and Predict.R::predictOneFilter().
@@ -30,8 +64,8 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   
   df_master <- get_df_master(AN_top_folder, AN_rel_folder) # begin with df_master, all rows.
   df_filtered <- df_master
-  cat("omitObs() begins with", nrow(df_filtered), "rows.\n")
-
+  cat("omitObs() begins with", nrow(df_filtered), "rows, ")
+  
   # Get omit file for this AN folder, then parse directive lines.
   omit_file <- make_safe_path(photometry_folder, "omit.txt")
   if (!file.exists(omit_file)) {
@@ -78,19 +112,15 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
       df_filtered <- df_filtered %>% filter(!FITSfile==FITSname)
     }
   }
-  cat("omitObs() ends with", nrow(df_filtered), "rows.\n")
+  cat("ends with", nrow(df_filtered), "rows.\n")
   if (TRUE) {  # set to FALSE (or remove) when testing has been completed.
     thisDiff <- setdiff(df_master, df_filtered)
-    cat(nrow(thisDiff), "rows were removed:\n")
-    print(thisDiff %>% select(Serial, FITSfile, StarID))
+    cat("omitObs() removed", nrow(thisDiff), "observations.\n")
+    if (nrow(thisDiff)>=1) { print(thisDiff %>% select(Serial, FITSfile, StarID)) }
   }
   
   return (df_filtered)
 }
-
-
-################################################################################################
-##### Below are test or support-only functions, rarely or not typically called by user. ########
 
 get_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   source("C:/Dev/Photometry/$Utility.R")
@@ -164,33 +194,46 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     mutate(Fitted=fitted(thisModel))
 
   # Construct output data frame "image" (one row per image included in model).
-  # image <- ranef(thisModel)$"JD_mid"   # extract from lmer::ranef() list. 
   image <- ranef(thisModel)$"JD_mid"
   image$JD_mid <- row.names(image)        # dplyr drops row names silently (and too greedily).
   row.names(image) <- NULL
-  names(image)[names(image)=="(Intercept)"] <- "Cirrus"  # rename column (dplyr fails on this).
+  names(image)[names(image)=="(Intercept)"] <- "CirrusEffect"  # rename column (dplyr fails on this).
   image <- image %>% select(JD_mid, everything())
-  # Also need to capture (from df_model) per-image: the image name, airmass, #obs used, object, exposure.
 
-  
-  # Construct output data frame "star" (one row per comp star included in model).
+  # Construct output data frame "star" (one row per comp star included in model, zeroes otherwise).
   # ... need an included observation count per star, too.
+    df_starCount <- data.frame(ModelStarID=df_model$ModelStarID, stringsAsFactors=FALSE) %>%
+      group_by(ModelStarID) %>%
+      summarize(nObs=n()) %>%
+      as.data.frame()  
+  if (fit_starID) {
+    star <- ranef(thisModel)$"ModelStarID"
+    star$ModelStarID <- row.names(star)  # dplyr drops row names silently (and too greedily).
+    row.names(star) <- NULL
+    names(star)[names(star)=="(Intercept)"] <- "CatalogEffect"  # rename column (dplyr fails on this).
+    star <- star %>% 
+      left_join(df_starCount, by="ModelStarID") %>%
+      select(ModelStarID, CatalogEffect, everything())
+  } else {
+    star <- df_starCount %>% 
+      mutate(CatalogEffect=0) %>%
+      select(ModelStarID, CatalogEffect, everything())
+  }
   
-  
-  # Extract scalars & parameter values.
+  # Extract scalar results.
   sigma <- sigma(thisModel)
-  ZeroPoint  <- fixef$"(Intercept)"
-  extinction <- ifelse(fit_extinction, fixef$Airmass,   extinction)
-  transform  <- ifelse(fit_transform,  fixef$CI,        transform)
-  vignette   <- ifelse(fit_vignette,   fixef$Vignette,  0)
-  vignette4  <- ifelse(fit_vignette4,  fixef$Vignette4, 0)
+  ZeroPoint  <- fixef(thisModel)["(Intercept)"]
+  extinction <- ifelse(fit_extinction, fixef(thisModel)["Airmass"],   extinction)
+  transform  <- ifelse(fit_transform,  fixef(thisModel)["CI"],        transform)
+  vignette   <- ifelse(fit_vignette,   fixef(thisModel)["Vignette"],  0)
+  vignette4  <- ifelse(fit_vignette4,  fixef(thisModel)["Vignette4"], 0)
   
   # Initial stats & diagnostics.
   
   
   
-  
-  return (list(model=thisModel, obs=obs, image=image, star=star, 
+  cat("modelOneFilter('", filter, "') completed on ", nrow(df_model), " observations.\n", sep="")
+  return (list(model=thisModel, obs=obs, image=image, # star=star, 
                filter=filter, transform=transform, extinction=extinction))
   
   # return (list(model=thisModel, obs=df_model, filter=filter, transform=transform, extinction=extinction))
