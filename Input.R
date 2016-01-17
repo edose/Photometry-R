@@ -22,10 +22,10 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   ##### Handles files in subdirectories OK. 
   ##### Typical usage:  
   #####      renameObject(AN_rel_folder="20151216", oldObject="Landolt_SA98", newObject="Std_SA98")
-  require(dplyr)
-  require(stringi)
+  require(dplyr, quietly=TRUE)
+  require(stringi, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
-  require(FITSio)
+  require(FITSio, quietly=TRUE)
   get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
@@ -92,7 +92,7 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Run this after using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
   ##### Typical usage:  finishFITS(AN_rel_folder="20151216")
   source("C:/Dev/Photometry/$Utility.R")
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
   CalibrationFolder         <- make_safe_path(AN_folder, "Calibration")
   CalibrationMastersFolder  <- make_safe_path(AN_folder, "CalibrationMasters")
@@ -108,7 +108,7 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   }
   
   # Verify (via FITS headers) all files in \Uncalibrated were calibrated, then rename folder to \Calibrated.
-  require(FITSio)
+  require(FITSio, quietly=TRUE)
   get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
@@ -142,9 +142,9 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   if (all(CopiedOK)) {
     file.remove(allegedlyCalibrated)
     unlink(UncalibratedFolder,recursive=TRUE)
-    print(paste("Calibrated FITS:", length(allegedlyCalibrated), "moved to new Calibrated folder OK."))
+    cat("Calibrated FITS:", length(allegedlyCalibrated), "moved to new Calibrated folder OK.")
   } else {
-    print(paste(">>>>> Problem moving", sum(!CopiedOK), "calibrated FITS to Calibrated folder."))
+    cat(">>>>> Problem moving", sum(!CopiedOK), "calibrated FITS to Calibrated folder.")
   }
   
   # Make a template-only omit.txt file if omit.txt doesn't already exist.
@@ -156,7 +156,8 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
       paste0(";#OBS   Obj-0000-V, 132 ; to omit star 132 from FITS image Obj-0000-V.fts"),
       paste0(";#STAR  Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
       paste0(";#STAR  Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
-      paste0(";#IMAGE Obj-0000-V      ; to omit FITS image Obj-0000-V specifically")
+      paste0(";#IMAGE Obj-0000-V      ; to omit FITS image Obj-0000-V specifically"),
+      paste0(";\n;----- Add your directive lines:\n;\n\n")
       )
     writeLines(lines, con=omitPath)
   }
@@ -164,10 +165,10 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
-  ##### Tested OK, except new columns Vignette4 & MaxADU (from markSaturatedObs()) need verification.
+  ##### Tests OK.
   ##### Process all FITS files in folder through APT, build & return master df.
   ##### Typical usage:  df_master <- run_APT_all(AN_rel_folder="20151216")
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   
@@ -242,7 +243,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
                                    APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
                                    APToutput_path)
-      df_APT <- parse_APToutput(APToutput_path) %>% markSaturatedObs()
+      df_APT <- parse_APToutput(APToutput_path) %>% getMaxADUs()
       df_APT$FITSfile <- substring(df_APT$FITSpath, nchar(FITS_folder)+2)
       df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
       df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
@@ -294,7 +295,6 @@ load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 }
 
 
-
 ##################################################################################################
 ##### The following can be called directly, but normally call instead: beforeCal().
 
@@ -302,8 +302,8 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder){
   ##### Run this before anything, except possibly after renameObject().
   ##### Typical usage:  copyToUr(AN_rel_folder="20151216")
   ##### Tests OK 20151220.
-  require(dplyr)
-  require(stringi)
+  require(dplyr, quietly=TRUE)
+  require(stringi, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   
   AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -337,10 +337,10 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Rename all FITS (including in subfolders) from ACP names to serial names.
   ##### Typical Usage:  renameACP(AN_rel_folder="20151216")
   
-  require(dplyr)
-  require(stringi)
+  require(dplyr, quietly=TRUE)
+  require(stringi, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
-  require(FITSio)
+  require(FITSio, quietly=TRUE)
   get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
@@ -444,7 +444,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   #####   ALWAYS run renameACP() (or similar renaming fn) on a AN folder before running this.
   ##### Typical usage:  prepareForCal(AN_rel_folder="20151216")
   
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
   CalibrationFolder         <- make_safe_path(AN_folder, "Calibration")
@@ -564,7 +564,7 @@ parse_APToutput <- function (APToutput_path) {
   lines <- readLines(APToutput_path)
   
   # Parse APT output header, set up a column range for each key.
-  require(stringi)
+  require(stringi, quietly=TRUE)
   header <- lines[3]
   headerKeys <- c("Number", "CentroidX", "CentroidY",
                   "Magnitude", "MagUncertainty", "SkyMedian", "SkySigma",
@@ -604,7 +604,7 @@ parse_APToutput <- function (APToutput_path) {
   return(df_APT %>% arrange(Number))
   }
 
-markSaturatedObs <- function(df_APT, saturatedADU=54000) {
+getMaxADUs <- function(df_APT, saturatedADU=54000) {
   # TESTED 11/29/2015.
   # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
   # set Saturated=TRUE for that row in df_FITS and return.
@@ -625,7 +625,7 @@ markSaturatedObs <- function(df_APT, saturatedADU=54000) {
   
   # grab image matrix from Ur FITS file (not from Calibrated FITS file)
   zz <- file(description=UrFITS_path, open="rb")
-  require(FITSio)
+  require(FITSio, quietly=TRUE)
   header <- readFITSheader(zz)
   D <- readFITSarray(zz, header)
   close(zz)
@@ -661,8 +661,8 @@ markSaturatedObs <- function(df_APT, saturatedADU=54000) {
 
 getFITSheaderInfo <- function (FITS_path) {
   source('C:/Dev/Photometry/$Utility.R')
-  require(FITSio)
-  require(dplyr)
+  require(FITSio, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA

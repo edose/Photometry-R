@@ -13,8 +13,8 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
 # Returns a data frame sorted by RA. 
 # Parameter "selectBest" gives the maximum number of targets, the best currently assumed to be 
 #    the maximum number of previous AAVSO observations; if selectBest <= 0, return all targets found.
-  require(rvest)
-  require(dplyr)
+  require(rvest, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   session <- html_session("https://www.aavso.org/observation-planner-tool")
   form_in <- (session %>% read_html() %>% html_form()) [[2]]
   form_out <- set_values(form_in, vartype=VStype, faintlim=trimws(as.character(faintMagLimit)), 
@@ -65,7 +65,7 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
 }
 
 eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=85, selectBest=150) {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   obsPlanner(VStype="M%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
     select(-RA_deg, -Dec_deg) %>%
@@ -75,7 +75,7 @@ eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=
 }
 
 eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=85, selectBest=150) {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   obsPlanner(VStype="E%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
     select(-RA_deg, -Dec_deg) %>%
@@ -86,7 +86,7 @@ eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLi
 
 ACP <- function (FOVs) {
   ##### Test OK 20160103.
-  ##### Typical usage: ACP(c("SU Lac","IK Peg")) or ACP(df$FOVs)
+  ##### Typical usage: ACP(c("SU Lac","IK Peg")) or ACP(df_miras$Name)
   source("C:/Dev/Photometry/$Utility.R")
   lines <- ""
   for (FOV in FOVs) {

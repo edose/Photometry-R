@@ -2,7 +2,7 @@
 #####    Uses this Astronight's lmer() model object etc from Model.R::modelAll().
 
 predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty=0.05) {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   filtersModelList <- names(masterModelList)
   filtersDfMaster  <- df_master$Filter %>% unique()
   filters <- intersect(filtersModelList, filtersDfMaster)
@@ -15,8 +15,9 @@ predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty
   return (df_targets)
 }
 
-predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertainty) {
-  require(dplyr)
+predictOneFilter <- function (filterModelList, df_master, filter, saturatedADU=54000,
+                              maxMagUncertainty) {
+  require(dplyr, quietly=TRUE)
   # Unpack input model list.
   model      <- filterModelList$model
   transform  <- filterModelList$transform
@@ -28,9 +29,9 @@ predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertai
     filter(StarType %in% c("Check","Target")) %>%
     filter(Filter==filter) %>%
     filter(UseInModel==TRUE) %>%
-    filter(Saturated==FALSE) %>%
+    filter(MaxADU<=saturatedADU) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
-    filter(JD_mid %in% JD_mid_model_levels) %>%
+    filter(JD_mid %in% JD_mid_model_levels) %>% # remove images not represented in this filter's model.
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # zero Targets' (but not Checks') color index (adjust later).
     mutate(CatMagSaved=CatMag) %>%
     mutate(CatMag=0, PredictedMag=NA, estimError=NA)
@@ -57,7 +58,7 @@ predictOneFilter <- function (filterModelList, df_master, filter, maxMagUncertai
 
 writeAAVSO <- function (AN_folder) {
   #####    Writes AAVSO-ready text file.
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   out <- "#TYPE=EXTENDED" %>%
     c("#OBSCODE=DERA") %>% #       DERA = Eric Dose's observer code @ AAVSO
     c("#SOFTWARE=custom R Scripts, github/edose") %>%

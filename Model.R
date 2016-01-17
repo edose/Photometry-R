@@ -2,10 +2,11 @@
 #####  In testing 20151228.
 ##### Typical usage: m <- modelAll(df_master)
 
-modelAll <- function(df_master, maxMagUncertainty=0.02, maxColorIndex=2,
+modelAll <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, 
+                     maxMagUncertainty=0.02, maxColorIndex=2,
                      vignette=TRUE, vignette4=FALSE,
                      fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   filters <- df_master$Filter %>% unique()
   masterModelList <- list()
   for (filter in filters) {
@@ -18,25 +19,20 @@ modelAll <- function(df_master, maxMagUncertainty=0.02, maxColorIndex=2,
 }
 
 omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
-  ##### Reads AN folder's df_master and omit.txt, loads df_omit with requested observations omitted.
-  ##### Needs to account for filter as well (probably as an optional parameter in relevant directives).
-  ##### Needs to be completed and tested (20160111).
+  ##### Reads AN folder's df_master and omit.txt, returns df_filtered with requested observations omitted.
+  ##### Typically called by Model.R::modelOneFilter() and Predict.R::predictOneFilter().
+  ##### Tested OK 20160117.
   ##### Typical usage: omitObs(AN_rel_folder="20151216")
-  require(stringi)
-  require(dplyr)
+  require(stringi, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
   
-  # Get df_master data frame for this AN folder.
-  df_master_file <- make_safe_path(photometry_folder, "df_master.Rdata")
-  if (!file.exists(df_master_file)) {
-    cat("df_master file", df_master_file, "does not exist.")
-    return (NA)
-  } else {
-    load(df_master_file)
-  }
-  
-  # Get omit file for this AN folder.
+  df_master <- get_df_master(AN_top_folder, AN_rel_folder) # begin with df_master, all rows.
+  df_filtered <- df_master
+  cat("omitObs() begins with", nrow(df_filtered), "rows.\n")
+
+  # Get omit file for this AN folder, then parse directive lines.
   omit_file <- make_safe_path(photometry_folder, "omit.txt")
   if (!file.exists(omit_file)) {
     cat("Omit file", omit_file, "does not exist.")
@@ -50,17 +46,18 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
   }
   
-  # Process directive lines to edit df_master (i.e., to omit observations etc as requested).
-  for (line in directiveLines) {
-    directive <- line %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% first() %>% trimws() %>% toupper()
-    value     <- line %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
+  # Process directive lines to curate df_omitted (i.e., to omit observations etc as requested).
+  for (thisLine in directiveLines) {
+    directive <- thisLine %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% 
+      first() %>% trimws() %>% toupper()
+    value     <- thisLine %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
+    if (is.na(directive)) {directive <- ""}
     if (directive=="#OBS") {
       parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
       if (length(parms)>=2) {
         FITSname <- paste0(parms[1], ".fts")
         starID <- parms[2]
-        #cat(directive, FITSname, starID, "\n", sep="//")
-        cat(paste0("filter(FITSfile=='", FITSname, "' & StarID=='", starID, "')\n"))
+        df_filtered <- df_filtered %>% filter(!(FITSfile==FITSname & StarID==starID))
       }
     }
     if (directive=="#STAR") {
@@ -69,44 +66,60 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
         object <- parms[1]
         starID <- parms[2]
         filter <- ifelse(length(parms)==3, parms[3], NA)
-        #cat(directive, FITSname, starID, filter, "\n", sep="//")
         if (is.na(filter)) {
-          cat(paste0("filter(Object=='", object, "' & StarID=='", starID, "')\n"))
+          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID))
         } else {
-          cat(paste0("filter(Object=='", object, "' & StarID=='", starID, "' & Filter=='",
-            filter, "')\n"))
+          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID & Filter==filter))
         }
       }
     }
     if (directive=="#IMAGE") {
       FITSname <- paste0(value, ".fts")
-      #cat(directive, FITSname, "\n", sep="//")
-      cat("filter(FITSfile=='", FITSname, "')\n", sep="")
+      df_filtered <- df_filtered %>% filter(!FITSfile==FITSname)
     }
   }
+  cat("omitObs() ends with", nrow(df_filtered), "rows.\n")
+  if (TRUE) {  # set to FALSE (or remove) when testing has been completed.
+    thisDiff <- setdiff(df_master, df_filtered)
+    cat(nrow(thisDiff), "rows were removed:\n")
+    print(thisDiff %>% select(Serial, FITSfile, StarID))
+  }
+  
+  return (df_filtered)
 }
 
 
 ################################################################################################
 ##### Below are test or support-only functions, rarely or not typically called by user. ########
 
-modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxColorIndex=2,
+get_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(df_master_path, verbose=TRUE)
+  return (df_master)
+}
+
+modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, 
+                            filter, maxMagUncertainty=0.02, maxColorIndex=2, saturatedADU=54000,
                             fit_vignette=TRUE, fit_vignette4=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Input is the Astronight's master data frame.
   # Returns lmer model object (of class merMod) of fit to comparison stars only.
-  require(dplyr)
-  require(magrittr)
-  df_model <- df_master %>%
+  require(dplyr, quietly=TRUE)
+  require(magrittr, quietly=TRUE)
+
+  df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # omitObs() returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
     filter(UseInModel==TRUE) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
-    filter(Saturated==FALSE) %>%
-    filter(!is.na(Airmass)) %>%
-    filter(!is.na(CatMag)) %>%
     filter(!is.na(CI)) %>%
-    filter(CI<=maxColorIndex)
+    filter(CI<=maxColorIndex) %>%
+    filter(MaxADU<=saturatedADU) %>%
+    filter(!is.na(Airmass)) %>%
+    filter(!is.na(CatMag))
   
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
@@ -117,7 +130,7 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxCo
     transform <- list(V=-0.0259,R=+0.0319,I=+0.0064)[filter] %>% unlist() # user-given (not fitted) value.
     thisOffset <- thisOffset + transform * df_model$CI
   }
-  if (fit_extinction) {
+  if (fit_extinction) { 
     extinction <- NA
     formula_string <- paste0(formula_string, " + Airmass")
   } else {
@@ -146,7 +159,7 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxCo
     mutate(ModelStarID=as.character(ModelStarID))  # undo the factoring done just before running model.
   
   # Construct output data frame "obs" (one row per observation included in model).
-  obs <- df_model %>% 
+  obs <- df_model %>%
     mutate(Residual=residuals(thisModel)) %>%
     mutate(Fitted=fitted(thisModel))
 
@@ -184,7 +197,7 @@ modelOneFilter <- function (df_master, filter="V", maxMagUncertainty=0.02, maxCo
 }
 
 mock_df_master <- function (df_master, stdevMag=0.01) {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   ZeroPoint  <- list(I=-19,R=-20,V=-21)             %>% unlist() # arbitrary but realistic.
   Extinction <- list(I=0.08,R=0.1,V=0.2)            %>% unlist() # same as modelAll() defaults.
   Transform  <- list(V=-0.0259,R=+0.0319,I=+0.0064) %>% unlist() # same as modelAll() defaults.

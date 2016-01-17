@@ -9,8 +9,8 @@ make_safe_path <- function (folder, filename, extension="") {
 }
 
 read_FOV_file <- function (FOV_name) {
-  require(stringi)
-  require(dplyr)
+  require(stringi, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   FOV_folder <- "C:/Dev/Photometry/FOV"
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
   if (!file.exists(FOV_path)) {
@@ -179,7 +179,7 @@ get_Dec_deg <- function (Dec_string) {
 }
 
 get_RA_hours <- function (RA_deg) {
-  require(stringi)
+  require(stringi, quietly=TRUE)
   deg <- RA_deg %% 360
   hours <- floor(deg/15.0)
   minutes <- floor(4 * (deg-15*hours))
@@ -191,8 +191,8 @@ get_RA_hours <- function (RA_deg) {
 
 read_AAVSO_Chart <- function(chartID) {
   ##### Tests OK 20151220.
-  require(rvest)
-  require(dplyr)
+  require(rvest, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   url <- paste("https://www.aavso.org/apps/vsp/photometry/?chartid=", chartID, 
                "&Ic=on&B=on&Rc=on&maglimit=16", sep="")
   df_url <- url %>% read_html() %>% html_table() %>% nth(1)

@@ -1,6 +1,9 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
+##### Jan 17 2016: getMaxADUs() is new name for markSaturatedObs(), Model.R and Predict.R now do their
+own saturation checking.
+
 ##### Dec 29 2015: markSaturatedObs() is working fine, but 20151216/Ur has non-integer ADUs(!). Found to be
 caused by renameObject() calling FITSio::writeFITSim16i(). Corruptions are very small (~20 ppm), probably 
 less in the aggregate (like aperture sums), and only when renaming objects (rare). Let it go; live with it.
