@@ -34,7 +34,7 @@ omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, seri
   if(any(!(serial %in% df_master$Serial))) {
     stop(">>>>> at least one serial number given is not in df_master for ", AN_rel_folder)
   }
-  lines <- paste0("\nNext ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
+  lines <- paste0("\n;Next ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
   for (thisSerial in serial) {
     thisFITS <- df_master$FITSfile[df_master$Serial==thisSerial] %>%
       strsplit(".f", fixed=TRUE) %>% unlist() %>% first() %>% trimws()
@@ -152,8 +152,11 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     filter(MaxADU<=saturatedADU) %>%
     filter(!is.na(Airmass)) %>%
     filter(!is.na(CatMag))
+  df_model <- df_model %>%
+    mutate(X=(Xpixels-1536)/1536, Y=(Ypixels-1024)/1024)
   
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
+  formula_string <- paste0(formula_string, " + X + Y")
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
     transform <- NA
