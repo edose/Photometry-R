@@ -59,6 +59,8 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Typical usage: omitObs(AN_rel_folder="20151216")
   require(stringi, quietly=TRUE)
   require(dplyr, quietly=TRUE)
+  source('C:/Dev/Photometry/$Utility.R')
+  
   AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
   
@@ -140,7 +142,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   require(dplyr, quietly=TRUE)
   require(magrittr, quietly=TRUE)
 
-  df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # omitObs() returns df w/user-requested obs removed.
+  df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
     filter(UseInModel==TRUE) %>%
@@ -198,14 +200,16 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   image$JD_mid <- row.names(image)        # dplyr drops row names silently (and too greedily).
   row.names(image) <- NULL
   names(image)[names(image)=="(Intercept)"] <- "CirrusEffect"  # rename column (dplyr fails on this).
-  image <- image %>% select(JD_mid, everything())
+  image <- image %>%
+    left_join(df_model[,c("FITSfile","JD_mid")] %>% unique(), by="JD_mid") %>%
+    select(JD_mid, everything())
 
   # Construct output data frame "star" (one row per comp star included in model, zeroes otherwise).
   # ... need an included observation count per star, too.
-    df_starCount <- data.frame(ModelStarID=df_model$ModelStarID, stringsAsFactors=FALSE) %>%
-      group_by(ModelStarID) %>%
-      summarize(nObs=n()) %>%
-      as.data.frame()  
+  df_starCount <- data.frame(ModelStarID=df_model$ModelStarID, stringsAsFactors=FALSE) %>%
+    group_by(ModelStarID) %>%
+    summarize(nObs=n()) %>%
+    as.data.frame()  
   if (fit_starID) {
     star <- ranef(thisModel)$"ModelStarID"
     star$ModelStarID <- row.names(star)  # dplyr drops row names silently (and too greedily).
@@ -221,22 +225,19 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   }
   
   # Extract scalar results.
-  sigma <- sigma(thisModel)
-  ZeroPoint  <- fixef(thisModel)["(Intercept)"]
   extinction <- ifelse(fit_extinction, fixef(thisModel)["Airmass"],   extinction)
   transform  <- ifelse(fit_transform,  fixef(thisModel)["CI"],        transform)
   vignette   <- ifelse(fit_vignette,   fixef(thisModel)["Vignette"],  0)
   vignette4  <- ifelse(fit_vignette4,  fixef(thisModel)["Vignette4"], 0)
   
-  # Initial stats & diagnostics.
-  
-  
-  
+  modelList <- list(model=thisModel, obs=obs, AN=AN_rel_folder, image=image, star=star, 
+                    filter=filter, transform=transform, extinction=extinction,
+                    vignette=vignette, vignette4=vignette4)
   cat("modelOneFilter('", filter, "') completed on ", nrow(df_model), " observations.\n", sep="")
-  return (list(model=thisModel, obs=obs, image=image, # star=star, 
-               filter=filter, transform=transform, extinction=extinction))
-  
-  # return (list(model=thisModel, obs=df_model, filter=filter, transform=transform, extinction=extinction))
+  cat("sigma =", format(sigma(thisModel), nsmall=4, digits=3), "Mag")
+  # source('C:/Dev/Photometry/Plots.R')
+  # diagnostics(modelList)
+  return (modelList)
 }
 
 mock_df_master <- function (df_master, stdevMag=0.01) {
