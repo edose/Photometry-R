@@ -18,11 +18,36 @@ modelAll <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   return (masterModelList)
 }
 
-omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, serial=NA) {
+saveAllModels <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, modelLists=NA) {
+  ##### The last stage in modeling, run once all comp models are OK. 
+  #####    Saves to AN's Photometry folder, in one list of lists (the "masterModelList"). Nothing returned.
+  ##### Needs testing (20160119).
+  ##### Typical usage: saveAllModels(AN_rel_folder="20151216", modelLists=c(listV,listI))
+  
+  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
+  if (is.na(modelLists)) {stop(">>>>> You must provide a vector of modelLists, ",
+                                       "e.g., vectorOfModelLists=c(listV,listI).")}
+  masterModelList <- list()
+  for (modelList in modelLists) {
+    filter <- modelList$filter
+    masterModelList[[filter]] <- modelList
+  }
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
+  save(masterModelList, file=masterModelList_path, precheck=FALSE)
+  cat("saveAllModels() has saved this AN's masterModelList to", masterModelList_path, 
+      "\n   Now ready for predictAll().\n")
+}
+
+omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, serial=NA) {
   ##### User utility to quickly add lines to omit.txt from Serial numbers (df_master) only.
   ##### Tested OK 20160117.
   ##### Typical usage: omitSerial(AN_rel_folder="20151216", serial=c(1220,923,88,727))
   
+  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
   if (anyNA(serial)) {
     stop(">>>>> parm 'serial' is NA.")
   }
@@ -34,7 +59,7 @@ omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, seri
   if(any(!(serial %in% df_master$Serial))) {
     stop(">>>>> at least one serial number given is not in df_master for ", AN_rel_folder)
   }
-  lines <- paste0("\n;Next ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
+  lines <- paste0(";\n;Next ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
   for (thisSerial in serial) {
     thisFITS <- df_master$FITSfile[df_master$Serial==thisSerial] %>%
       strsplit(".f", fixed=TRUE) %>% unlist() %>% first() %>% trimws()
@@ -118,7 +143,7 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   if (TRUE) {  # set to FALSE (or remove) when testing has been completed.
     thisDiff <- setdiff(df_master, df_filtered)
     cat("omitObs() removed", nrow(thisDiff), "observations.\n")
-    if (nrow(thisDiff)>=1) { print(thisDiff %>% select(Serial, FITSfile, StarID)) }
+    # if (nrow(thisDiff)>=1) { print(thisDiff %>% select(Serial, FITSfile, StarID)) }
   }
   
   return (df_filtered)
@@ -133,15 +158,21 @@ get_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   return (df_master)
 }
 
-modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, 
-                            filter, maxMagUncertainty=0.02, maxColorIndex=2, saturatedADU=54000,
-                            fit_vignette=TRUE, fit_vignette4=FALSE,
+modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, 
+                            filter=NA, maxMagUncertainty=0.03, maxColorIndex=2.5, saturatedADU=54000,
+                            fit_vignette=TRUE, fit_vignette4=FALSE, fit_XY=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
-  # Input is the Astronight's master data frame.
-  # Returns lmer model object (of class merMod) of fit to comparison stars only.
+  # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
+  #             (2) the omit.txt file of observations to omit (also stored in /Photometry).
+  # Returns model list, including: lmer model, df_obs, df_image, scalar results.
+  # Usage if run manually: listV <- modelOneFilter(AN_rel_folder="20151216", filter="V")
   require(dplyr, quietly=TRUE)
   require(magrittr, quietly=TRUE)
 
+  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
+  if (is.na(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
+  df_model <- omitObs(AN_top_folder, AN_rel_folder)
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
@@ -156,7 +187,6 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     mutate(X=(Xpixels-1536)/1536, Y=(Ypixels-1024)/1024)
   
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
-  formula_string <- paste0(formula_string, " + X + Y")
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
     transform <- NA
@@ -178,6 +208,9 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   if (fit_vignette4) {
     formula_string <- paste0(formula_string, " + Vignette4")
   } 
+  if (fit_XY) {
+    formula_string <- paste0(formula_string, " + X + Y")
+  }
   if (fit_starID) {
     formula_string <- paste0(formula_string, " + (1|ModelStarID)")
   }
@@ -237,9 +270,10 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                     filter=filter, transform=transform, extinction=extinction,
                     vignette=vignette, vignette4=vignette4)
   cat("modelOneFilter('", filter, "') completed on ", nrow(df_model), " observations.\n", sep="")
-  cat("sigma =", format(sigma(thisModel), nsmall=4, digits=3), "Mag")
   # source('C:/Dev/Photometry/Plots.R')
-  # diagnostics(modelList)
+  # modelPlots(modelList)
+  print(summary(thisModel))
+  cat("sigma =", format(1000*sigma(thisModel), nsmall=1, digits=3), "mMag,", nrow(df_model), "observations.")
   return (modelList)
 }
 

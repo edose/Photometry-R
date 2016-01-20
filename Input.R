@@ -167,7 +167,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
   ##### Tests OK.
   ##### Process all FITS files in folder through APT, build & return master df.
-  ##### Typical usage:  df_master <- run_APT_all(AN_rel_folder="20151216")
+  ##### Typical usage:  df_master <- make_df_master(AN_rel_folder="20151216")
   require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -181,7 +181,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   cat(">>>>> FITS folder= ",FITS_folder,"\n")
   
   # make data frame with all FOV names for this AN, one row per FITS file.
-  pattern<- "^([^-]+)-{1}[[:digit:]]{4}-{1}[[:alpha:]]" # must use dash alone as FOV/Object terminator, as we prob don't use ACP-format names.
+  pattern<- "^([^-]+)-{1}[[:digit:]]{4}-{1}[[:alpha:]]" # must use dash alone as FOV/Object terminator, 
+                                                        # as we don't use ACP-format names.
   substrings <- regmatches(FITS_files,regexec(pattern,FITS_files)) %>% 
     data.frame(stringsAsFactors=FALSE) %>% 
     t()

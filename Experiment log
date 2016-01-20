@@ -1,6 +1,11 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
+##### Jan 19 2016: Vignette parameter is alarmingly large in value (~0.4 mag), for AN 20151216 data. The sky
+background looks like residual vignetting of not more than 0.05 mag. Could be the optical system, or could
+be some peculiarity of this data set itself. So, our next step is at the scope--perform a mosaic of 
+one comp star across the ccd (to the corners, too). Can't solve this at the computer.
+
 ##### Jan 17 2016: getMaxADUs() is new name for markSaturatedObs(), Model.R and Predict.R now do their
 own saturation checking.
 

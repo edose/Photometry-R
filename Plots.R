@@ -4,12 +4,12 @@
 ##### Eric Dose, Bois d'Arc Observatory, Kansas
 
 
-diagnostics <- function(modelList) {
+modelPlots <- function(modelList) {
   ##### Reads modelList from modelOneFilter() run, then performs diagnostics.
   ##### Testing needed.
-  ##### Typical usage: diagnostics(listV) where listV is output of modelOneFilter() for one filter (e.g. V).
+  ##### Typical usage: modelPlots(listV) where listV is output of modelOneFilter() for one filter (e.g. V).
   require(dplyr, quietly=TRUE)
-  require(lme4, quietly=TRUE)
+  # require(lme4, quietly=TRUE)
   require(ggplot2, quietly=TRUE)
   
   model      <- modelList$model
@@ -22,6 +22,7 @@ diagnostics <- function(modelList) {
   extinction <- modelList$extinction
   
   plotList <- list()
+  sigmaResidual <- sd(obs$Residual)
   
   ##### Plots looking for outlier individual observations.
   
@@ -29,7 +30,7 @@ diagnostics <- function(modelList) {
   x <- obs$Fitted
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -45,7 +46,7 @@ diagnostics <- function(modelList) {
   x <- obs$InstMag
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -58,20 +59,26 @@ diagnostics <- function(modelList) {
   plotList$ResidualsInstMag <- p
   
   # Q-Q plot.
-  y <- obs$Residual %>% sort()
+  y=obs$Residual
+  ptLabels <- obs$Serial # get this now, before sorted on Residuals
+  df_plot <- data.frame(y=y, ptLabels=ptLabels) %>% arrange(y)
   prob <- ((1:length(y)-0.5)/length(y))
   x <- qnorm(prob)
+  df_plot <- df_plot %>%
+    mutate(x=x) %>%
+    mutate(ptLabels=ifelse((abs(y)>=2*sd(y))|(abs(x)>=2), ptLabels, ""))
+  # ptLabels <- ifelse((abs(y)>=2*sd(y))|(abs(x)>=2), ptLabels, "")
   xRange <- max(x) - min(x)
-  ptLabels <- ifelse((abs(y)>=2*sd(y))|(abs(x)>=2), obs$Serial, "")
-  df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels, stringsAsFactors=FALSE)
   p <- ggplot(data = df_plot, aes(x=x, y=y*1000)) + 
     geom_point() + 
     geom_text(aes(hjust=0.1,label=ptLabels)) +
     xlim(min(x)-0.03*xRange, max(x)+0.05*xRange) +
-    ggtitle(paste0("Q-Q Plot of Residuals ", AN, "     ", filter, " filter ")) +
+    ggtitle(paste0("Q-Q Plot of Residuals: ", AN, "     ", filter, " filter ")) +
     geom_abline(slope=sd(y*1000)) +
-    xlab(paste0("t  (sigma.residuals = ", format(sd(y),nsmall=4,digits=3), ")")) +
+    xlab(paste0("t  (sigma.residuals = ", format(sd(1000*y),nsmall=1,digits=3), " mMag)")) +
     ylab("Residual\n(mMag)") +
+    annotate("text", x=mean(range(df_plot$x)), y=+Inf, label=paste0(length(x)," observations in model."), 
+             hjust=+0.5, vjust=+2) +
     Photometry.bw.theme()
   plotList$QQ <- p
   
@@ -79,7 +86,7 @@ diagnostics <- function(modelList) {
   x <- obs$SkyMedian
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y*1000, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y)) +
     geom_point() +
@@ -98,7 +105,7 @@ diagnostics <- function(modelList) {
   x <- JD_mid_num - JD_mid_floor
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -118,7 +125,6 @@ diagnostics <- function(modelList) {
   y <- obs$SkyMedian
   sigmaSky <- (y-mean(y))/sd(y)
   ptLabels <- ifelse(abs(sigmaSky)>=2, obs$Serial, "")
-  ptLabels <- 
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y)) +
     geom_point() +
@@ -134,14 +140,14 @@ diagnostics <- function(modelList) {
   x <- obs$X
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
     geom_text(aes(label=ptLabels), hjust=-0.1) +
     xlim(min(x)-0.03*xRange, max(x)+0.1*xRange) +
     ggtitle(paste0("Residuals vs X: ", AN, "     ", filter, " filter ")) +
-    xlab(paste0("X (fraction)")) +
+    xlab(paste0("X (fraction from image center)")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
   plotList$ResidualsX <- p
@@ -150,14 +156,14 @@ diagnostics <- function(modelList) {
   x <- obs$Y
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
     geom_text(aes(label=ptLabels), hjust=-0.1) +
     xlim(min(x)-0.03*xRange, max(x)+0.1*xRange) +
     ggtitle(paste0("Residuals vs Y: ", AN, "     ", filter, " filter ")) +
-    xlab(paste0("Y (fraction)")) +
+    xlab(paste0("Y (fraction from image center)")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
   plotList$ResidualsY <- p
@@ -166,14 +172,14 @@ diagnostics <- function(modelList) {
   x <- obs$Vignette
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
     geom_text(aes(label=ptLabels), hjust=-0.1) +
     xlim(min(x)-0.03*xRange, max(x)+0.1*xRange) +
     ggtitle(paste0("Residuals vs Vignette: ", AN, "     ", filter, " filter ")) +
-    xlab(paste0("Vignette (squared fraction of distance from center to corner)")) +
+    xlab(paste0("Vignette (squared fraction of distance from image center to corner)")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
   plotList$ResidualsVignette <- p
@@ -182,7 +188,7 @@ diagnostics <- function(modelList) {
   x <- obs$CI
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -198,7 +204,7 @@ diagnostics <- function(modelList) {
   x <- obs$Airmass
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -214,7 +220,7 @@ diagnostics <- function(modelList) {
   x <- obs$Exposure
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -231,7 +237,7 @@ diagnostics <- function(modelList) {
   x <- obs$MaxADU
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=0.05, obs$Serial, "")
+  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -252,8 +258,8 @@ diagnostics <- function(modelList) {
   x <- JD_mid_num - JD_mid_floor
   xRange <- max(x) - min(x)
   y <- image$CirrusEffect
-  ptLabels <- ifelse(abs(y)>=0.02, image$FITSfile, "")
-  df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels, stringsAsFactors=FALSE)
+  ptLabels <- ifelse(abs(y)>=2*sd(image$CirrusEffect), image$FITSfile, "")
+  df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
     geom_text(aes(label=ptLabels), hjust=-0.05) +
@@ -261,6 +267,8 @@ diagnostics <- function(modelList) {
     ggtitle(paste0("Image Cirrus Plot: ", AN, "     ", filter, " filter ")) +
     xlab(paste0("JD(mid) - ", JD_mid_floor, "   of images")) +
     ylab("Cirrus Effect\n(mMag)") +
+    annotate("text", x=mean(range(df_plot$x)), y=+Inf, label=paste0(length(x)," images in model."), 
+             hjust=-0, vjust=+2) +
     Photometry.bw.theme()
   plotList$Cirrus <- p
   
@@ -270,18 +278,20 @@ diagnostics <- function(modelList) {
   print(plotList$ResidualsMaxADU)
   print(plotList$ResidualsFitted)
   print(plotList$ResidualsInstMag)
-  print(plotList$ResidualsAirmass)
   print(plotList$ResidualsExposure)
+  
+  # Check for non-linearity of included model parameters.
+  print(plotList$ResidualsAirmass)
+  print(plotList$ResidualsX)
+  print(plotList$ResidualsY)
+  print(plotList$ResidualsCI)
   
   # Find additional sources of problems.
   print(plotList$ResidualsSky)
   print(plotList$ResidualsJD)
   print(plotList$SkyJD)
   print(plotList$ResidualsVignette)
-  print(plotList$ResidualsX)
-  print(plotList$ResidualsY)
-  print(plotList$ResidualsCI)
-  
+
   # Find outlier images.
   print(plotList$Cirrus)
 }

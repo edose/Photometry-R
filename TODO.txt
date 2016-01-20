@@ -4,8 +4,6 @@ Immediate/showstopper (20151221):
 [None.]
 
 Soon / normal development (20151227):
-* Finish Predict.R::PredictOneFilter(): runs model to give (possibly untransformed) predicted target mags,
-writes data frame df_model.
 * Write Predict.R::InferColors(): infers color index or each observation (possibly using Akima spline),
 applies transforms*color correction, writes df_transformed.
 * Finish Predict.R::WriteAAVSO(). Requires complete df_transformed, curated by user. Then it must run
@@ -35,8 +33,6 @@ Transform.R:
 transforms by Model.R, rather than via this separate transform-extraction workflow.
 
 FOVs, diagnostics etc:
-* Make list of all (1) summary statistics and (2) summary/curation plots, especially just after running
-Model.R::modelAll(). Point-rejection etc should be done in Shiny (to be interactive w/ immed stat updates)?
 * Diagnostic routine to verify all FOV files for consistency, e.g., all Target FOVs lacking check star, 
 missing required directives, out-of-scope values, etc.
 * New directive for FOV type: Target, Standard (etc?)

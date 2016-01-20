@@ -1,22 +1,30 @@
 ##### PredictTargets.R   Predict magnitudes of Target (unknown) stars in Astronight's master data frame.
 #####    Uses this Astronight's lmer() model object etc from Model.R::modelAll().
 
-predictAll <- function (masterModelList, df_master, AN_folder, maxMagUncertainty=0.05) {
+predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, maxMagUncertainty=0.05) {
+  ##### Calls predictOneFilter for each modelList in the masterModelList stored in AN's Photometry folder.
+  ##### Returns big data frame df_predict (which is ready for transformation by applyTransforms()).
+  ##### Typical usage: df_predict <- predictAll(AN_rel_folder="20151216")
+  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
   require(dplyr, quietly=TRUE)
-  filtersModelList <- names(masterModelList)
-  filtersDfMaster  <- df_master$Filter %>% unique()
-  filters <- intersect(filtersModelList, filtersDfMaster)
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(df_master_path, verbose=TRUE)
+  masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
+  load(masterModelList_path, verbose=TRUE)
   
-  df_targets <- data.frame()
-  for (filter in filters) {
-    df_targets <- df_targets %>%
-      rbind(predictOneFilter(masterModelList[[filter]], df_master, filter, maxMagUncertainty))
+  df_predict <- data.frame()
+  for (modelList in masterModelList) {
+    df_predict <- df_predict %>%
+      rbind(predictOneFilter(modelList=modelList, df_master=df_master, maxMagUncertainty=maxMagUncertainty))
   }
   return (df_targets)
 }
 
-predictOneFilter <- function (filterModelList, df_master, filter, saturatedADU=54000,
-                              maxMagUncertainty) {
+predictOneFilter <- function (filterModelList, df_master, saturatedADU=54000, maxMagUncertainty) {
   require(dplyr, quietly=TRUE)
   # Unpack input model list.
   model      <- filterModelList$model
@@ -34,7 +42,7 @@ predictOneFilter <- function (filterModelList, df_master, filter, saturatedADU=5
     filter(JD_mid %in% JD_mid_model_levels) %>% # remove images not represented in this filter's model.
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # zero Targets' (but not Checks') color index (adjust later).
     mutate(CatMagSaved=CatMag) %>%
-    mutate(CatMag=0, PredictedMag=NA, estimError=NA)
+    mutate(CatMag=0, PredictedMag=NA, estimError=NA) # CatMag must be zero to do prediction properly.
   modelMag <- predict(model, df, re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
   df <- df %>%
     mutate(CatMag=CatMagSaved) %>%   # restore CatMag (which needed to be zero to do predictions).
@@ -56,9 +64,12 @@ predictOneFilter <- function (filterModelList, df_master, filter, saturatedADU=5
   return (df)
 }
 
-writeAAVSO <- function (AN_folder) {
+writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
   #####    Writes AAVSO-ready text file.
   require(dplyr, quietly=TRUE)
+  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
+  
   out <- "#TYPE=EXTENDED" %>%
     c("#OBSCODE=DERA") %>% #       DERA = Eric Dose's observer code @ AAVSO
     c("#SOFTWARE=custom R Scripts, github/edose") %>%
