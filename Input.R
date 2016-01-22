@@ -10,7 +10,8 @@
 ##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
 #####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
 #####    beforeCal(AN_rel_folder="20151216")
-#####    Make calibration masters and calibrate all FITS in /Uncalibrated with MaxIm DL.
+#####    MaximDL: (1) Make calibration masters in /CalibrationMasters.
+#####             (2) Calibrate via Batch w/ Cal, from /Uncalibrated to /Calibrated.
 #####    finishFITS(AN_rel_folder="200151216")
 #####    df_master <- make_df_master(AN_rel_folder="200151216")
 ##### ...then start modeling with Model.R functions.
@@ -88,8 +89,9 @@ beforeCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 }
 
 finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
-  ##### Tests OK 20151220.
-  ##### Run this after using MaxIm to make Calibration masters and calibrating FITS in \Uncalibrated.
+  ##### Tests OK 20151220; mods of 20160121 test OK.
+  ##### Run this after using MaxIm to make Calibration masters and using Batch Save & Convert to
+  #####    calibrate all FITS from \Uncalibrated to \Calibrated.
   ##### Typical usage:  finishFITS(AN_rel_folder="20151216")
   source("C:/Dev/Photometry/$Utility.R")
   require(dplyr, quietly=TRUE)
@@ -115,8 +117,8 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     trimws(value)
   }
   
-  allegedlyCalibrated <- setdiff(list.files(UncalibratedFolder, full.names=TRUE), 
-                                 list.dirs(UncalibratedFolder))
+  allegedlyCalibrated <- setdiff(list.files(CalibratedFolder, full.names=TRUE), 
+                                 list.dirs(CalibratedFolder))
   nUncalibrated <- 0
   for (thisFile in allegedlyCalibrated) {
     fileHandle <- file(description=thisFile, open="rb")
@@ -135,18 +137,32 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     stop(paste(">>>>> STOP: of", length(allegedlyCalibrated), "FITS files,", 
                nUncalibrated, "have not been calibrated."))
   }
-    
-  # Here, all FITS were verified to be fully calibrated, e.g., in MaxIm.
-  if (!dir.exists(CalibratedFolder)) { dir.create(CalibratedFolder) }
-  CopiedOK <- file.copy(allegedlyCalibrated, CalibratedFolder, copy.date=TRUE)
-  if (all(CopiedOK)) {
-    file.remove(allegedlyCalibrated)
-    unlink(UncalibratedFolder,recursive=TRUE)
-    cat("Calibrated FITS:", length(allegedlyCalibrated), "moved to new Calibrated folder OK.")
-  } else {
-    cat(">>>>> Problem moving", sum(!CopiedOK), "calibrated FITS to Calibrated folder.")
+  preCalibration <- setdiff(list.files(UncalibratedFolder, full.names=TRUE), 
+                             list.dirs(UncalibratedFolder))
+  if (!(length(allegedlyCalibrated) == length(preCalibration))) {
+    stop(paste(">>>>> STOP: only", length(allegedlyCalibrated), "FITS were calibrated of",
+               length(preCalibration), "FITS in folder /Uncalibrated."))
   }
+  # Here, all FITS in /Calibrated folder were verified to be fully calibrated, e.g., by MaxIm.
   
+  # Now, change .fit file extension from MaxIm calibration back to .fts.
+  require(stringi, quietly=TRUE)
+  pathsCalibrated <- setdiff(list.files(CalibratedFolder, full.names=TRUE), 
+                             list.dirs(CalibratedFolder))
+  fts_paths <- pathsCalibrated[stri_endswith_fixed(pathsCalibrated,".fts")]
+  fit_paths <- pathsCalibrated[stri_endswith_fixed(pathsCalibrated,".fit")]
+  new_fts_paths <- stri_replace_last_fixed(fit_paths, ".fit", ".fts")
+  RenamedOK <- file.rename(fit_paths, new_fts_paths)
+  if(all(RenamedOK)) {
+    cat("In /Calibrated, renamed", length(fit_paths), ".fit file extensions to .fts extensions",
+      paste0("(",ifelse(length(fts_paths)==0,"no",length(fts_paths))), ".fts file extensions already existed).")
+  } else {
+    stop(paste(">>>>> Problem renaming some or all of .fit files to .fts, in folder /Calibrated."))
+  }
+  # Now it's safe to delete /Uncalibrated and all files in it.
+  file.remove(preCalibration)
+  unlink(UncalibratedFolder,recursive=TRUE)
+
   # Make a template-only omit.txt file if omit.txt doesn't already exist.
   PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
   omitPath <- make_safe_path(PhotometryFolder, "omit.txt")
@@ -453,6 +469,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   AutoFlatFolder            <- make_safe_path(AN_folder, "AutoFlat")
   UncalibratedFolder        <- make_safe_path(AN_folder, "Uncalibrated")
   PhotometryFolder          <- make_safe_path(AN_folder, "Photometry")
+  CalibratedFolder          <- make_safe_path(AN_folder, "Calibrated")
   scriptCompletedOK <- TRUE  # default until negated by problem.  
   
   # Make new folders as needed.
@@ -464,6 +481,14 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   if (!dir.exists(CalibrationMastersFolder)) { dir.create(CalibrationMastersFolder) }
   if (!dir.exists(UncalibratedFolder))       { dir.create(UncalibratedFolder) }
   if (!dir.exists(PhotometryFolder))         { dir.create(PhotometryFolder) }
+  if (!dir.exists(CalibratedFolder)) { 
+    dir.create(CalibratedFolder)
+  } else {
+    fileList <- list.files(path=CalibratedFolder, all.files=TRUE, full.names=TRUE)
+    if (length(fileList)>=1) {
+      file.remove(fileList)
+    }
+  }
   
   # Move flats to \Calibration, remove \AutoFlat.
   if (dir.exists(AutoFlatFolder)) {

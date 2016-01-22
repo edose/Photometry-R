@@ -172,7 +172,7 @@ modelPlots <- function(modelList) {
   x <- obs$Vignette
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
+  ptLabels <- ifelse((x>0.64)|(abs(y)>=2*sigmaResidual), obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
@@ -284,13 +284,13 @@ modelPlots <- function(modelList) {
   print(plotList$ResidualsAirmass)
   print(plotList$ResidualsX)
   print(plotList$ResidualsY)
+  print(plotList$ResidualsVignette)
   print(plotList$ResidualsCI)
   
   # Find additional sources of problems.
   print(plotList$ResidualsSky)
   print(plotList$ResidualsJD)
   print(plotList$SkyJD)
-  print(plotList$ResidualsVignette)
 
   # Find outlier images.
   print(plotList$Cirrus)

@@ -197,7 +197,8 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   }
   if (fit_extinction) { 
     extinction <- NA
-    formula_string <- paste0(formula_string, " + Airmass")
+    formula_string <- paste0(formula_string, " + I(Airmass-1.3)")
+    # formula_string <- paste0(formula_string, " + Airmass")
   } else {
     extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # user-given (not fitted) value.
     thisOffset <- thisOffset + extinction * df_model$Airmass
