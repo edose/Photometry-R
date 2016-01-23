@@ -1,13 +1,15 @@
 ##### PredictTargets.R   Predict magnitudes of Target (unknown) stars in Astronight's master data frame.
 #####    Uses this Astronight's lmer() model object etc from Model.R::modelAll().
 
-predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, maxMagUncertainty=0.05) {
-  ##### Calls predictOneFilter for each modelList in the masterModelList stored in AN's Photometry folder.
-  ##### Returns big data frame df_predict (which is ready for transformation by applyTransforms()).
+predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, 
+                        maxMagUncertainty=0.05, CI_filters=c("V","I")) {
+  ##### Performs ALL steps to get transformed magnitudes for Check and Target observations in df_master.
+  ##### Returns big data frame df_predict (which is transformed).
+  ##### Requires that AN folder contain R files df_master.Rdata (from Input.R::make_df_master()) and 
+  #####    masterModelList.Rdata (from Model.R::make_masterModelList()).
   ##### Typical usage: df_predict <- predictAll(AN_rel_folder="20151216")
-  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
                                   "e.g., AN_rel_folder='20151216'.")}
-  require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
@@ -16,12 +18,60 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, m
   masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
   load(masterModelList_path, verbose=TRUE)
   
-  df_predict <- data.frame()
-  for (modelList in masterModelList) {
-    df_predict <- df_predict %>%
-      rbind(predictOneFilter(modelList=modelList, df_master=df_master, maxMagUncertainty=maxMagUncertainty))
+  # Select Target and Check rows for which CatMag to be predicted (all filters).
+  require(dplyr, quietly=TRUE)
+  df_targets <- df_master %>%
+    filter(StarType %in% c("Check","Target")) %>%
+    filter(UseInModel==TRUE) %>%
+    filter(MaxADU<=saturatedADU) %>%
+    filter(MagUncertainty<=maxMagUncertainty) %>%
+    mutate(CI=ifelse(is.na(CI),0,CI))
+  
+  # Make df of all needed inputs (newdata) for all filters & all (untransformed) lme4::predict() calls.
+  df_predict_input <- df_targets %>%
+    select(Serial, ModelStarID, XPixels, YPixels, InstMag, MagUncertainty, StarType,
+           JD_mid, Filter, Airmass, CI, Vignette, Vignette4) %>%
+    mutate(CatMag=0) # arbitrarily chosen, to complete model.
+
+  # Run predict() & collect all results, which are untransformed predicted instrument magnitudes.
+  df_predictions <- data.frame()
+  require(lme4, quietly = TRUE)
+  for (thisModelList in masterModelList) {
+    df_newdata <- df_predict_input %>%
+      filter(Filter==thisModelList$filter)
+    predictOutput <- predict(thisModelList$model, newdata=df_newdata, re.form=~(1|JD_mid))
+    # Correct for extinction if extinction was not fit ("Airmass") in model.
+    if (!thisModelList$fit_extinction) {
+      predictOutput <- predictOutput + extinction * df_newdata$Airmass
+    }
+    this_df_predictions <- df_newdata %>%
+      mutate(PredictedInstMag <- predictOutput)
+    df_predictions <- rbind(df_predictions, this_df_predictions)
   }
-  return (df_targets)
+
+  # Get UntransformedMags from PredictedInstMag, InstMag (and CatMag=0).
+  df_predictions <- df_predictions %>%
+    mutate(UntransformedMag = InstMag - PredictedInstMag)
+  
+  # Impute Color Index values for target observations by interpolation.
+  df_predictions <- imputeTargetCIs(df_predictions, CI_filters) # Fill in CI values for target obs.
+  
+  # Perform transformations.
+  df_xref_transform <- data.frame() # build a lookup table to fill in Transforms for each filter.
+  for (thisModelList in masterModelList) {
+    df_xref_transform <- df_xref_transform %>%
+      rbind(data.frame(Filter=modelList$filter, Transform=modelList$transform))
+  }
+  df_predictions <- df_predictions %>%
+    left_join(df_xref_transform) %>%
+    mutate(TransformedMag = UntransformedMag - Transform * CI) # unsure of sign, here.
+  
+  # Save df_predictions as .Rdata file (but do not return the data frame).
+  predictions_path <- make_safe_path(photometry_folder, "df_predictions.Rdata")
+  save(df_predictions, file=predictions_path, precheck=FALSE)
+  cat("predictAll() has saved this AN's predictions to", predictions_path, 
+      "\n   Now ready to:\n   (1) predictionPlots(),\n   (2) group/select target observations to report,\n",
+      "   (3) run AAVSO() to make report,\n   and (4) submit report to AAVSO.")
 }
 
 predictOneFilter <- function (filterModelList, df_master, saturatedADU=54000, maxMagUncertainty) {
@@ -49,9 +99,6 @@ predictOneFilter <- function (filterModelList, df_master, saturatedADU=54000, ma
     select(-CatMagSaved)            
   
   # Adjust for terms not included in model's formula.
-  if (!is.na(transform)) {
-    modelMag <- modelMag + transform * df$CI
-  }
   if (!is.na(extinction)) {
     modelMag <- modelMag + extinction * df$Airmass
   }

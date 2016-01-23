@@ -3,7 +3,6 @@
 ##### Initiated Jan 17 2016.
 ##### Eric Dose, Bois d'Arc Observatory, Kansas
 
-
 modelPlots <- function(modelList) {
   ##### Reads modelList from modelOneFilter() run, then performs diagnostics.
   ##### Testing needed.

@@ -18,7 +18,7 @@ modelAll <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   return (masterModelList)
 }
 
-saveAllModels <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, modelLists=NA) {
+make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, modelLists=NA) {
   ##### The last stage in modeling, run once all comp models are OK. 
   #####    Saves to AN's Photometry folder, in one list of lists (the "masterModelList"). Nothing returned.
   ##### Needs testing (20160119).
@@ -183,9 +183,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     filter(MaxADU<=saturatedADU) %>%
     filter(!is.na(Airmass)) %>%
     filter(!is.na(CatMag))
-  df_model <- df_model %>%
-    mutate(X=(Xpixels-1536)/1536, Y=(Ypixels-1024)/1024)
-  
+
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
@@ -197,8 +195,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   }
   if (fit_extinction) { 
     extinction <- NA
-    formula_string <- paste0(formula_string, " + I(Airmass-1.3)")
-    # formula_string <- paste0(formula_string, " + Airmass")
+    formula_string <- paste0(formula_string, " + Airmass")
   } else {
     extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # user-given (not fitted) value.
     thisOffset <- thisOffset + extinction * df_model$Airmass
@@ -210,7 +207,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     formula_string <- paste0(formula_string, " + Vignette4")
   } 
   if (fit_XY) {
-    formula_string <- paste0(formula_string, " + X + Y")
+    formula_string <- paste0(formula_string, " + X1024 + Y1024")
   }
   if (fit_starID) {
     formula_string <- paste0(formula_string, " + (1|ModelStarID)")
@@ -267,8 +264,9 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   vignette   <- ifelse(fit_vignette,   fixef(thisModel)["Vignette"],  0)
   vignette4  <- ifelse(fit_vignette4,  fixef(thisModel)["Vignette4"], 0)
   
-  modelList <- list(model=thisModel, obs=obs, AN=AN_rel_folder, image=image, star=star, 
-                    filter=filter, transform=transform, extinction=extinction,
+  modelList <- list(model=thisModel, obs=obs, AN=AN_rel_folder, image=image, star=star, filter=filter, 
+                    transform=transform, fit_transform=fit_transform,
+                    extinction=extinction, fit_extinction=fit_extinction,
                     vignette=vignette, vignette4=vignette4)
   cat("modelOneFilter('", filter, "') completed on ", nrow(df_model), " observations.\n", sep="")
   # source('C:/Dev/Photometry/Plots.R')

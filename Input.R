@@ -180,7 +180,8 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 }
 
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
-                        APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref") {
+                        APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
+                        CCDcenterX=1536, CCDcenterY=1024) {
   ##### Tests OK.
   ##### Process all FITS files in folder through APT, build & return master df.
   ##### Typical usage:  df_master <- make_df_master(AN_rel_folder="20151216")
@@ -272,13 +273,10 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
 
   # Construct Vignette variables (stars' squared or 4th-power distance in pixels from image center)
   # (Do it here, not in Model.R, so that they are available for predicting check and target stars.)
-  Xcenter <- 3*1024/2  # for 3K x 2K chip
-  Ycenter <- 2*1024/2
-  XY2_corner <- Xcenter^2 + Ycenter^2  # squared distance in pixels at image corner, for normalization.
-  XY4_corner <- Xcenter^4 + Ycenter^4  # 4-power of distance in pixels at image corner, for normalization.
   df_master <- df_master %>%
-    mutate(Vignette =((Xpixels-Xcenter)^2+(Ypixels-Ycenter)^2) / XY2_corner) %>%
-    mutate(Vignette4=((Xpixels-Xcenter)^4+(Ypixels-Ycenter)^4) / XY4_corner)
+    mutate(X1024=(Xpixels-CCDcenterX)/1024, Y1024=(Ypixels-CCDcenterY)/1024) %>%
+    mutate(Vignette =(X1024^2 + Y1024^2)) %>%
+    mutate(Vignette4=(X1024^4 + Y1024^4))
   
   # Write out entire APT text log (all runs).
   write(allAPTstdout, APTstdout_path)
