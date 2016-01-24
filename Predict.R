@@ -1,14 +1,14 @@
 ##### PredictTargets.R   Predict magnitudes of Target (unknown) stars in Astronight's master data frame.
 #####    Uses this Astronight's lmer() model object etc from Model.R::modelAll().
 
-predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, 
+predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                         maxMagUncertainty=0.05, CI_filters=c("V","I")) {
   ##### Performs ALL steps to get transformed magnitudes for Check and Target observations in df_master.
   ##### Returns big data frame df_predict (which is transformed).
   ##### Requires that AN folder contain R files df_master.Rdata (from Input.R::make_df_master()) and 
   #####    masterModelList.Rdata (from Model.R::make_masterModelList()).
   ##### Typical usage: df_predict <- predictAll(AN_rel_folder="20151216")
-  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
                                   "e.g., AN_rel_folder='20151216'.")}
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)

@@ -276,7 +276,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   df_master <- df_master %>%
     mutate(X1024=(Xpixels-CCDcenterX)/1024, Y1024=(Ypixels-CCDcenterY)/1024) %>%
     mutate(Vignette =(X1024^2 + Y1024^2)) %>%
-    mutate(Vignette4=(X1024^4 + Y1024^4))
+    mutate(Vignette4=Vignette^2) # corrected definition
   
   # Write out entire APT text log (all runs).
   write(allAPTstdout, APTstdout_path)

@@ -136,7 +136,7 @@ modelPlots <- function(modelList) {
   plotList$SkyJD <- p
   
   # Residuals vs X-pixel plot.
-  x <- obs$X
+  x <- obs$X1024*1024
   xRange <- max(x) - min(x)
   y <- obs$Residual
   ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
@@ -146,13 +146,13 @@ modelPlots <- function(modelList) {
     geom_text(aes(label=ptLabels), hjust=-0.1) +
     xlim(min(x)-0.03*xRange, max(x)+0.1*xRange) +
     ggtitle(paste0("Residuals vs X: ", AN, "     ", filter, " filter ")) +
-    xlab(paste0("X (fraction from image center)")) +
+    xlab(paste0("X (pixels from image center)")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
   plotList$ResidualsX <- p
   
   # Residuals vs Y-pixel plot.
-  x <- obs$Y
+  x <- obs$Y1024*1024
   xRange <- max(x) - min(x)
   y <- obs$Residual
   ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
@@ -162,23 +162,23 @@ modelPlots <- function(modelList) {
     geom_text(aes(label=ptLabels), hjust=-0.1) +
     xlim(min(x)-0.03*xRange, max(x)+0.1*xRange) +
     ggtitle(paste0("Residuals vs Y: ", AN, "     ", filter, " filter ")) +
-    xlab(paste0("Y (fraction from image center)")) +
+    xlab(paste0("Y (pixels from image center)")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
   plotList$ResidualsY <- p
   
   # Residuals vs vignette plot.
-  x <- obs$Vignette
+  x <- sqrt(obs$Vignette)*1024
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse((x>0.64)|(abs(y)>=2*sigmaResidual), obs$Serial, "")
+  ptLabels <- ifelse((x>0.8)|(abs(y)>=2*sigmaResidual), obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
     geom_text(aes(label=ptLabels), hjust=-0.1) +
     xlim(min(x)-0.03*xRange, max(x)+0.1*xRange) +
     ggtitle(paste0("Residuals vs Vignette: ", AN, "     ", filter, " filter ")) +
-    xlab(paste0("Vignette (squared fraction of distance from image center to corner)")) +
+    xlab(paste0("Vignette (pixels from image center)")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
   plotList$ResidualsVignette <- p

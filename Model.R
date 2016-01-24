@@ -1,165 +1,11 @@
 ##### Model.R   Get model (via mixed-model regression) for one Astronight's Comp and other standard stars.
-#####  In testing 20151228.
-##### Typical usage: m <- modelAll(df_master)
+#####  Tests OK 20160124.
+##### Typical usages: listV <- modelOneFilter(AN_rel_folder="20151216", filter="V")
+#####                 omitSerial(AN_rel_folder="20151216", serial=c(123,32))
+#####                 make_masterModelList(AN_rel_folder="20151216", modelLists=c(listV, listR, listI))
 
-modelAll <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, 
-                     maxMagUncertainty=0.02, maxColorIndex=2,
-                     vignette=TRUE, vignette4=FALSE,
-                     fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
-  require(dplyr, quietly=TRUE)
-  filters <- df_master$Filter %>% unique()
-  masterModelList <- list()
-  for (filter in filters) {
-    filterList <- modelOneFilter(df_master, filter, maxMagUncertainty, maxColorIndex,
-                                 vignette, vignette4,
-                                 fit_transform, fit_extinction, fit_starID)
-    masterModelList[[filter]] <- filterList
-  }
-  return (masterModelList)
-}
-
-make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, modelLists=NA) {
-  ##### The last stage in modeling, run once all comp models are OK. 
-  #####    Saves to AN's Photometry folder, in one list of lists (the "masterModelList"). Nothing returned.
-  ##### Needs testing (20160119).
-  ##### Typical usage: saveAllModels(AN_rel_folder="20151216", modelLists=c(listV,listI))
-  
-  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
-                                  "e.g., AN_rel_folder='20151216'.")}
-  if (is.na(modelLists)) {stop(">>>>> You must provide a vector of modelLists, ",
-                                       "e.g., vectorOfModelLists=c(listV,listI).")}
-  masterModelList <- list()
-  for (modelList in modelLists) {
-    filter <- modelList$filter
-    masterModelList[[filter]] <- modelList
-  }
-  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
-  photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
-  save(masterModelList, file=masterModelList_path, precheck=FALSE)
-  cat("saveAllModels() has saved this AN's masterModelList to", masterModelList_path, 
-      "\n   Now ready for predictAll().\n")
-}
-
-omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, serial=NA) {
-  ##### User utility to quickly add lines to omit.txt from Serial numbers (df_master) only.
-  ##### Tested OK 20160117.
-  ##### Typical usage: omitSerial(AN_rel_folder="20151216", serial=c(1220,923,88,727))
-  
-  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
-                                  "e.g., AN_rel_folder='20151216'.")}
-  if (anyNA(serial)) {
-    stop(">>>>> parm 'serial' is NA.")
-  }
-  require(stringi, quietly=TRUE)
-  require(dplyr, quietly=TRUE)
-  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
-  photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  df_master <- get_df_master(AN_top_folder, AN_rel_folder)
-  if(any(!(serial %in% df_master$Serial))) {
-    stop(">>>>> at least one serial number given is not in df_master for ", AN_rel_folder)
-  }
-  lines <- paste0(";\n;Next ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
-  for (thisSerial in serial) {
-    thisFITS <- df_master$FITSfile[df_master$Serial==thisSerial] %>%
-      strsplit(".f", fixed=TRUE) %>% unlist() %>% first() %>% trimws()
-    thisStarID <- df_master$StarID[df_master$Serial==thisSerial]
-    lines <- c(lines, paste0("#OBS   ", thisFITS, ", ", thisStarID, "  ;  Serial=", thisSerial, "\n"))
-  }
-  omitPath <- make_safe_path(photometry_folder, "omit.txt")
-  cat(lines, file=omitPath, sep="", append=TRUE)
-  cat(lines) # output to Console
-}
-
-
-
-
-################################################################################################
-##### Below are test or support-only functions, rarely or not typically called by user. ########
-
-omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
-  ##### Reads AN folder's df_master and omit.txt, returns df_filtered with requested observations omitted.
-  ##### Typically called by Model.R::modelOneFilter() and Predict.R::predictOneFilter().
-  ##### Tested OK 20160117.
-  ##### Typical usage: omitObs(AN_rel_folder="20151216")
-  require(stringi, quietly=TRUE)
-  require(dplyr, quietly=TRUE)
-  source('C:/Dev/Photometry/$Utility.R')
-  
-  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
-  photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  
-  df_master <- get_df_master(AN_top_folder, AN_rel_folder) # begin with df_master, all rows.
-  df_filtered <- df_master
-  cat("omitObs() begins with", nrow(df_filtered), "rows, ")
-  
-  # Get omit file for this AN folder, then parse directive lines.
-  omit_file <- make_safe_path(photometry_folder, "omit.txt")
-  if (!file.exists(omit_file)) {
-    cat("Omit file", omit_file, "does not exist.")
-    return (NA)
-  } else {
-    lines <- readLines(omit_file, warn=FALSE)   # read last line even without EOL character(s).
-    for (iLine in 1:length(lines)) {
-      lines[iLine] <- lines[iLine] %>% 
-        strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
-    }
-    directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
-  }
-  
-  # Process directive lines to curate df_omitted (i.e., to omit observations etc as requested).
-  for (thisLine in directiveLines) {
-    directive <- thisLine %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% 
-      first() %>% trimws() %>% toupper()
-    value     <- thisLine %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
-    if (is.na(directive)) {directive <- ""}
-    if (directive=="#OBS") {
-      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
-      if (length(parms)>=2) {
-        FITSname <- paste0(parms[1], ".fts")
-        starID <- parms[2]
-        df_filtered <- df_filtered %>% filter(!(FITSfile==FITSname & StarID==starID))
-      }
-    }
-    if (directive=="#STAR") {
-      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
-      if (length(parms) %in% 2:3) {
-        object <- parms[1]
-        starID <- parms[2]
-        filter <- ifelse(length(parms)==3, parms[3], NA)
-        if (is.na(filter)) {
-          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID))
-        } else {
-          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID & Filter==filter))
-        }
-      }
-    }
-    if (directive=="#IMAGE") {
-      FITSname <- paste0(value, ".fts")
-      df_filtered <- df_filtered %>% filter(!FITSfile==FITSname)
-    }
-  }
-  cat("ends with", nrow(df_filtered), "rows.\n")
-  if (TRUE) {  # set to FALSE (or remove) when testing has been completed.
-    thisDiff <- setdiff(df_master, df_filtered)
-    cat("omitObs() removed", nrow(thisDiff), "observations.\n")
-    # if (nrow(thisDiff)>=1) { print(thisDiff %>% select(Serial, FITSfile, StarID)) }
-  }
-  
-  return (df_filtered)
-}
-
-get_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
-  source("C:/Dev/Photometry/$Utility.R")
-  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
-  photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
-  load(df_master_path, verbose=TRUE)
-  return (df_master)
-}
-
-modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA, 
-                            filter=NA, maxMagUncertainty=0.03, maxColorIndex=2.5, saturatedADU=54000,
+modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
+                            filter=NULL, maxMagUncertainty=0.03, maxColorIndex=2.5, saturatedADU=54000,
                             fit_vignette=TRUE, fit_vignette4=FALSE, fit_XY=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
@@ -169,9 +15,9 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   require(dplyr, quietly=TRUE)
   require(magrittr, quietly=TRUE)
 
-  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
-  if (is.na(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
+  if (is.null(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
   df_model <- omitObs(AN_top_folder, AN_rel_folder)
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
@@ -272,8 +118,149 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   # source('C:/Dev/Photometry/Plots.R')
   # modelPlots(modelList)
   print(summary(thisModel))
-  cat("sigma =", format(1000*sigma(thisModel), nsmall=1, digits=3), "mMag,", nrow(df_model), "observations.")
+  cat(nrow(df_model), "observations -->", 
+      "sigma =", format(1000*sigma(thisModel), nsmall=1, digits=3), "mMag.")
   return (modelList)
+}
+
+omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, serial=NULL) {
+  ##### User utility to quickly add lines to omit.txt from Serial numbers (df_master) only.
+  ##### Tested OK 20160117.
+  ##### Typical usage: omitSerial(AN_rel_folder="20151216", serial=c(1220,923,88,727))
+  
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
+  if (is.null(serial)) {
+    stop(">>>>> No serial values given.")
+  }
+  require(stringi, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master <- get_df_master(AN_top_folder, AN_rel_folder)
+  if(any(!(serial %in% df_master$Serial))) {
+    stop(">>>>> at least one serial number given is not in df_master for ", AN_rel_folder)
+  }
+  lines <- paste0(";\n;Next ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
+  for (thisSerial in serial) {
+    thisFITS <- df_master$FITSfile[df_master$Serial==thisSerial] %>%
+      strsplit(".f", fixed=TRUE) %>% unlist() %>% first() %>% trimws()
+    thisStarID <- df_master$StarID[df_master$Serial==thisSerial]
+    lines <- c(lines, paste0("#OBS   ", thisFITS, ", ", thisStarID, "  ;  Serial=", thisSerial, "\n"))
+  }
+  omitPath <- make_safe_path(photometry_folder, "omit.txt")
+  cat(lines, file=omitPath, sep="", append=TRUE)
+  cat(lines) # output to Console
+}
+
+make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, modelLists=NULL) {
+  ##### The last stage in modeling, run once all comp models are OK. 
+  #####    Saves to AN's Photometry folder, in one list of lists (the "masterModelList"). Nothing returned.
+  ##### Needs testing (20160119).
+  ##### Typical usage: saveAllModels(AN_rel_folder="20151216", modelLists=list(listV,listI))
+  
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                  "e.g., AN_rel_folder='20151216'.")}
+  if (is.null(modelLists)) {stop(">>>>> You must provide a vector of modelLists, ",
+                                       "e.g., vectorOfModelLists=list(listV,listI).")}
+  if (class(modelLists[[1]])!="list") {stop(">>>>> You must enter modelLists as =list() and NOT =c().")}
+  
+  masterModelList <- list()
+  for (modelList in modelLists) {
+    filter <- modelList$filter
+    masterModelList[[filter]] <- modelList
+  }
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
+  save(masterModelList, file=masterModelList_path, precheck=FALSE)
+  cat("saveAllModels() has saved this AN's masterModelList to:\n   ", masterModelList_path, 
+      "\n   Now ready for predictAll().\n")
+}
+
+
+################################################################################################
+##### Below are test or support-only functions, rarely or not typically called by user. ########
+
+omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  ##### Reads AN folder's df_master and omit.txt, returns df_filtered with requested observations omitted.
+  ##### Typically called by Model.R::modelOneFilter() and Predict.R::predictOneFilter().
+  ##### Tested OK 20160117.
+  ##### Typical usage: omitObs(AN_rel_folder="20151216")
+  require(stringi, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  source('C:/Dev/Photometry/$Utility.R')
+  
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  
+  df_master <- get_df_master(AN_top_folder, AN_rel_folder) # begin with df_master, all rows.
+  df_filtered <- df_master
+  cat("omitObs() begins with", nrow(df_filtered), "rows, ")
+  
+  # Get omit file for this AN folder, then parse directive lines.
+  omit_file <- make_safe_path(photometry_folder, "omit.txt")
+  if (!file.exists(omit_file)) {
+    cat("Omit file", omit_file, "does not exist.")
+    return (NA)
+  } else {
+    lines <- readLines(omit_file, warn=FALSE)   # read last line even without EOL character(s).
+    for (iLine in 1:length(lines)) {
+      lines[iLine] <- lines[iLine] %>% 
+        strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
+    }
+    directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
+  }
+  
+  # Process directive lines to curate df_omitted (i.e., to omit observations etc as requested).
+  for (thisLine in directiveLines) {
+    directive <- thisLine %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% 
+      first() %>% trimws() %>% toupper()
+    value     <- thisLine %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
+    if (is.na(directive)) {directive <- ""}
+    if (directive=="#OBS") {
+      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
+      if (length(parms)>=2) {
+        FITSname <- paste0(parms[1], ".fts")
+        starID <- parms[2]
+        df_filtered <- df_filtered %>% filter(!(FITSfile==FITSname & StarID==starID))
+      }
+    }
+    if (directive=="#STAR") {
+      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
+      if (length(parms) %in% 2:3) {
+        object <- parms[1]
+        starID <- parms[2]
+        filter <- ifelse(length(parms)==3, parms[3], NA)
+        if (is.na(filter)) {
+          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID))
+        } else {
+          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID & Filter==filter))
+        }
+      }
+    }
+    if (directive=="#IMAGE") {
+      FITSname <- paste0(value, ".fts")
+      df_filtered <- df_filtered %>% filter(!FITSfile==FITSname)
+    }
+  }
+  cat("ends with", nrow(df_filtered), "rows.\n")
+  if (TRUE) {  # set to FALSE (or remove) when testing has been completed.
+    thisDiff <- setdiff(df_master, df_filtered)
+    cat("omitObs() removed", nrow(thisDiff), "observations.\n")
+    # if (nrow(thisDiff)>=1) { print(thisDiff %>% select(Serial, FITSfile, StarID)) }
+  }
+  
+  return (df_filtered)
+}
+
+get_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(df_master_path, verbose=TRUE)
+  return (df_master)
 }
 
 mock_df_master <- function (df_master, stdevMag=0.01) {
