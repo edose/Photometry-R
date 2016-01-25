@@ -171,7 +171,7 @@ modelPlots <- function(modelList) {
   x <- sqrt(obs$Vignette)*1024
   xRange <- max(x) - min(x)
   y <- obs$Residual
-  ptLabels <- ifelse((x>0.8)|(abs(y)>=2*sigmaResidual), obs$Serial, "")
+  ptLabels <- ifelse((x>0.8*1024)|(abs(y)>=2*sigmaResidual), obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
   p <- ggplot(df_plot, aes(x,y*1000)) +
     geom_point() +
