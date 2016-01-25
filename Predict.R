@@ -169,56 +169,70 @@ writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
 
 imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {
   require(dplyr, quietly=TRUE)
-  JD_floor <- floor(min(df_predictions$JD_mid))
-  df_predictions <- df_predictions %>% mutate(JD_mid=JD_mid-JD_floor) # avoid scaling problems herein.
+  JD_floor <- floor(min(as.numeric(df_predictions$JD_mid)))
+  df_predictions <- df_predictions %>% mutate(JD_num=as.numeric(JD_mid)-JD_floor) # avoid scaling problems.
   
   modelStarIDs <- unique(df_predictions$ModelStarID)
   for (thisModelStarID in modelStarIDs) {
-    df_ModelStarID <- df_predictions %>% filter(ModelStarID==thisModelStarID)
-    df_CI_points <- extractCI_points(df_ModelStarID, CI_filters, transforms) %>% arrange(JD_mid)
+    df_ModelStarID <- df_predictions %>% 
+      filter(ModelStarID==thisModelStarID) %>%
+      select(Serial, ModelStarID, Filter, JD_num, CI, UntransformedMag) %>%
+      arrange(JD_num)
+    df_CI_points <- extractCI_points(df_ModelStarID, CI_filters, transforms) %>% 
+      arrange(JD_num)
 
     # loop through df_modelStarID point: for each, interpolate CI and put it in df_predictions.
-    if (nrow(df_CI_point) == 1) {
-      df_ModelStarID$CI <- df_CI_point$CI[1] # set all CI to the same value
-      next
+    if (nrow(df_CI_points) == 0) {
+      df_ModelStarID$CI <- NA  # because there are no color index values to apply.
+      cat(">>>>> ModelStarID=", thisModelStarID, ": no CI points returned by imputeTargetCIs()\n", sep="")
     }
-    if (nrow(df_CI_point %in% 2:3)) { # linear interpolation (with residuals if 3 points)
-      m <- lm (CI ~ JD_mid, data=df_CI_points)
-      df_ModelStarID$CI <- predict.lm(m, data.frame(JD_mid=df_ModelStarID$JD_mid))
+    if (nrow(df_CI_points) == 1) {
+      df_ModelStarID$CI <- df_CI_points$CI[1] # set all CI to the same value
     }
-    # Here, number of CI point >= 4 ... use smoothing spline.
-    spline <- smooth.spline(df_CI_point$JD_mid, df_CI_point$CI)
-    df_ModelStarID$CI <- predict(spline, df_ModelStarID$JD_mid)
+    if (nrow(df_CI_points) %in% 2:3) { # linear interpolation (with residuals if 3 points)
+      m <- lm (CI ~ JD_num, data=df_CI_points)
+      df_ModelStarID$CI <- predict.lm(m, data.frame(JD_num=df_ModelStarID$JD_num))
+    }
+    if (nrow(df_CI_points) >= 4) { # make and apply Akima spline.
+      require(akima, quietly=TRUE)
+      df_ModelStarID$CI <- aspline(df_CI_points$JD_num, df_CI_points$CI, df_ModelStarID$JD_num)$y
+      # spline <- smooth.spline(df_CI_points$JD_num, df_CI_points$CI)
+      # df_ModelStarID$CI <- predict(spline, df_ModelStarID$JD_num)
+    }
     
     # In any case, NO Extrapolation. Clip to end CI values of interpolation-basis points.
-    df_ModelStarID$CI[df_ModelStarID$JD_mid < df_CI_points$JD_mid[1]] <- 
+    df_ModelStarID$CI[df_ModelStarID$JD_num < df_CI_points$JD_num[1]] <- 
       df_CI_points$CI[1]
-    df_ModelStarID$CI[df_ModelStarID$JD_mid > df_CI_points$JD_mid[nrow(df_CI_points)]] <- 
+    df_ModelStarID$CI[df_ModelStarID$JD_num > df_CI_points$JD_num[nrow(df_CI_points)]] <- 
       df_CI_points$CI[nrow(df_CI_points)]
+    
+    df_join <- df_ModelStarID %>% select(Serial, CI)
+    df_predictions$CI[match(df_ModelStarID$Serial, df_predictions$Serial)] <- df_join$CI # pseudo-left-join
+    cat()
   }
-  return (df_predictions %>% mutate(JD_mid=JD_mid+JD_floor))
+
+  
+  # return (df_predictions) # which now includes filled-in CI values and new column JD_num.
 }
 
 extractCI_points <- function (df, CI_filters, transforms) {
   ##### df must be a data frame from df_predictions, subset holding one ModelStarID.
   require(dplyr, quietly=TRUE)
-  maxDiffJD <- (0.25/24) # max time between paired obs, in (Julian) days, typically 15 minutes.
-  df <- df %>% filter(Filter %in% CI_filters) %>% mutate(JD_mid=as.numeric(JD_mid)) %>% arrange(JD_mid)
+  maxDiffJD <- 15 / (24*60) # max time between paired obs, in (Julian) days, typically 15 minutes.
+  df <- df %>% filter(Filter %in% CI_filters) %>% arrange(JD_num)
   
   df_CI_point <- data.frame()
   for (iStart in 1:(nrow(df)-1)) {
-    if (df$JD_mid[iStart+1]-df$JD_mid[iStart] > maxDiffJD) {
-      next  # because we won't get any more pairs with this iStart value.
-    }
     if (df$Filter[iStart+1] != df$Filter[iStart]) {
-      this_JD_mid <- (df$JD_mid[iStart+1] + df$JD_mid[iStart]) / 2
-      # CI_predicted is color index from naive, predicted, untransformed (not catalog-basis) mags.
-      CI_predicted <- ifelse(df$Filter[iStart]==CI_filters[1],
-                             df$UntransformedMag[iStart]-df$UntransformedMag[iStart+1],
-                             df$UntransformedMag[iStart+1]-df$UntransformedMag[iStart])
-      this_CI <- CI_predicted / (1 + transforms[1] - transforms[2]) # transforms -> catalog-basis CI.
-      df_CI_point <- df_CI_point %>% rbind(data.frame(JD_mid=this_JD_mid, CI=this_CI))
-      next # we want only this shorest-time pair per starting point.
+      if (df$JD_num[iStart+1]-df$JD_num[iStart] <= maxDiffJD) {
+        this_JD_num <- (df$JD_num[iStart+1] + df$JD_num[iStart]) / 2
+        # CI_predicted is color index from naive, predicted, untransformed (not catalog-basis) mags.
+        CI_predicted <- ifelse(df$Filter[iStart]==CI_filters[1],
+                               df$UntransformedMag[iStart]-df$UntransformedMag[iStart+1],
+                               df$UntransformedMag[iStart+1]-df$UntransformedMag[iStart])
+        this_CI <- CI_predicted / (1 + transforms[1] - transforms[2]) # transforms -> catalog-basis CI.
+        df_CI_point <- df_CI_point %>% rbind(data.frame(JD_num=this_JD_num, CI=this_CI))
+      } 
     }
   }
   return (df_CI_point)

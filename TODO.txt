@@ -1,12 +1,18 @@
-TODO list: as of 20151226.
+TODO list: as of 20160124.
 
-Immediate/showstopper (20151221): 
+Immediate/showstopper (20160124): 
 [None.]
 
-Soon / normal development (20151227):
-* Write Predict.R::InferColors(): infers color index or each observation (possibly using Akima spline),
-applies transforms*color correction, writes df_transformed.
-* Finish Predict.R::WriteAAVSO(). Requires complete df_transformed, curated by user. Then it must run
+Soon / normal development (20160124):
+* Finish Color Index inference and application. Test.
+* Write, apply, test transform color correction.
+* Ensure that df_predictions is appropriate to WriteAAVSO(), especially in columns contained.
+* Go back (even into Input.R) and make both columns JD_mid (factor/character) and 
+     JD_num (numeric minus floor value). They should both be in df_master and df_predictions.
+     They are redundant, but JD_mid is important for random-effect and other factor uses, whereas
+     JD_num ensures numerical stability.
+* Some kind of facility for combining & selecting Target observations for WriteAAVSO().
+* Finish Predict.R::WriteAAVSO(). Requires complete df_predictions (), curated by user. Then it must run
 initial diagnostics and then write text file ready to send to AAVSO.
 
 ---------------------------
