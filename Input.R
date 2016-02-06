@@ -10,8 +10,10 @@
 ##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
 #####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
 #####    beforeCal(AN_rel_folder="20151216")
-#####    MaximDL: (1) Make calibration masters in /CalibrationMasters.
-#####             (2) Calibrate via Batch w/ Cal, from /Uncalibrated to /Calibrated.
+#####    (get any missing Masters from prev ANs),
+#####    In MaxIm: (1) 'Set Calibration' to this /CalibrationMasters, 'Replace w/Masters'
+#####              (2) Edit/File Batch and Convert, Select All /Uncalibrated, Destination Path=/Calibrated, 
+#####                     check the 'Perform Calibration' box, click 'OK'.
 #####    finishFITS(AN_rel_folder="200151216")
 #####    df_master <- make_df_master(AN_rel_folder="200151216")
 ##### ...then start modeling with Model.R functions.
@@ -313,7 +315,7 @@ load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 ##################################################################################################
 ##### The following can be called directly, but normally call instead: beforeCal().
 
-copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder){
+copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL){
   ##### Run this before anything, except possibly after renameObject().
   ##### Typical usage:  copyToUr(AN_rel_folder="20151216")
   ##### Tests OK 20151220.
@@ -321,6 +323,7 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder){
   require(stringi, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   
+  if (is.null(AN_rel_folder)) { stop("AN_rel_folder may not be null.") }
   AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
   UrFolder <- make_safe_path(AN_folder, "Ur")
   if (!dir.exists(UrFolder)) { dir.create(UrFolder) }
@@ -454,11 +457,12 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   cat("RenameACP() has renamed",nrow(df), "files, all of which now reside in top folder", AN_folder, "\n")
 }
 
-prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
+prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   ##### Tests OK 20151220.
   #####   ALWAYS run renameACP() (or similar renaming fn) on a AN folder before running this.
   ##### Typical usage:  prepareForCal(AN_rel_folder="20151216")
   
+  if (is.null(AN_rel_folder)) { stop("AN_rel_folder may not be null.") }
   require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder                 <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -530,7 +534,8 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     cat("   (get any missing Masters from prev ANs),\n")
     cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters\n")
     cat("   then in MaxIm: 'Replace w/Masters'\n")
-    cat("   then in MaxIm: load all FITS from /Uncalibrated, 'Calibrate All', 'Close All/Save All'.\n")
+    cat("   then in MaxIm: Edit/File Batch and Convert, select all in /Uncalibrated,\n",
+        "        Destination Path=/Calibrated, check the Perform Calibration box, click OK.\n", sep="")
     cat("   Then in R: finishFITS(), then df_master<-make_df_master().\n")
   } else {
     cat(paste(">>>>> Problem completing script #1. Check above warnings to correct.\n"))

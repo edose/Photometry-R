@@ -13,43 +13,40 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
-  load(df_master_path, verbose=TRUE)
-  masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
-  load(masterModelList_path, verbose=TRUE)
+  path_df_master <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(path_df_master, verbose=TRUE)
+  path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
+  load(path_masterModelList, verbose=TRUE)
   
   # Select Target and Check rows for which CatMag to be predicted (all filters).
+  # Make df of all needed inputs (newdata) for all filters & all (untransformed) lme4::predict() calls.
   require(dplyr, quietly=TRUE)
-  df_targets <- df_master %>%
+  df_predict_input <- df_master %>%
     filter(StarType %in% c("Check","Target")) %>%
     filter(UseInModel==TRUE) %>%
     filter(MaxADU<=saturatedADU) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
-    mutate(CI=ifelse(is.na(CI),0,CI))
-  
-  # Make df of all needed inputs (newdata) for all filters & all (untransformed) lme4::predict() calls.
-  df_predict_input <- df_targets %>%
+    mutate(CI=ifelse(is.na(CI),0,CI)) %>%
     select(Serial, ModelStarID, Xpixels, Ypixels, InstMag, MagUncertainty, StarType,
            JD_mid, Filter, Airmass, CI, Vignette, Vignette4) %>%
     mutate(CatMag=0) # arbitrarily chosen, to complete model.
 
-  # Run predict() & collect all results, which are untransformed predicted instrument magnitudes.
+  # Get untransformed predicted Inst Mags (via running predict(), collecting all results).
   df_predictions <- data.frame()
   require(lme4, quietly = TRUE)
   for (thisModelList in masterModelList) {
-    df_newdata <- df_predict_input %>%
-      filter(Filter==thisModelList$filter)
-    predictOutput <- predict(thisModelList$model, newdata=df_newdata, re.form=~(1|JD_mid))
+    df_thisFilter <- df_predict_input %>% filter(Filter==thisModelList$filter)
+    predictOutput <- predict(thisModelList$model, newdata=df_thisFilter, re.form=~(1|JD_mid))
     # Correct for extinction if extinction was not fit ("Airmass") in model.
     if (!thisModelList$fit_extinction) {
-      predictOutput <- predictOutput + extinction * df_newdata$Airmass
+      predictOutput <- predictOutput + extinction * df_thisFilter$Airmass
     }
-    this_df_predictions <- df_newdata %>%
+    df_predictions_thisFilter <- df_thisFilter %>%
       mutate(PredictedInstMag = predictOutput)
-    df_predictions <- rbind(df_predictions, this_df_predictions)
+    df_predictions <- rbind(df_predictions, df_predictions_thisFilter)
   }
 
-  # Get UntransformedMags from PredictedInstMag, InstMag (and CatMag=0).
+  # Impute UntransformedMags from PredictedInstMag and InstMag (and CatMag=0).
   df_predictions <- df_predictions %>%
     mutate(UntransformedMag = InstMag - PredictedInstMag)
   
@@ -58,8 +55,6 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   for (i in 1:2) {
     transforms[i] <- masterModelList[[CI_filters[i]]]$transform
   }
-  return (df_predictions)
-  # stop(">>>>> Function imputeTargetCIs() is not yet written, so stop here.")
   df_predictions <- imputeTargetCIs(df_predictions, CI_filters, transforms) # Fill in CI values for target obs.
   
   # Perform transformations.
@@ -78,43 +73,6 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   cat("predictAll() has saved this AN's predictions to", predictions_path, 
       "\n   Now ready to:\n   (1) predictionPlots(),\n   (2) group/select target observations to report,\n",
       "   (3) run AAVSO() to make report,\n   and (4) submit report to AAVSO.")
-}
-
-predictOneFilter <- function (filterModelList, df_master, saturatedADU=54000, maxMagUncertainty) {
-  require(dplyr, quietly=TRUE)
-  # Unpack input model list.
-  model      <- filterModelList$model
-  transform  <- filterModelList$transform
-  extinction <- filterModelList$extinction
-  JD_mid_model_levels <- model.frame(model) %>% select(JD_mid) %>% unique() %>% unlist() %>% levels()
-  
-  # Make working data frame and perform raw prediction.
-  df <- df_master %>%
-    filter(StarType %in% c("Check","Target")) %>%
-    filter(Filter==filter) %>%
-    filter(UseInModel==TRUE) %>%
-    filter(MaxADU<=saturatedADU) %>%
-    filter(MagUncertainty<=maxMagUncertainty) %>%
-    filter(JD_mid %in% JD_mid_model_levels) %>% # remove images not represented in this filter's model.
-    mutate(CI=ifelse(is.na(CI),0,CI)) %>%     # zero Targets' (but not Checks') color index (adjust later).
-    mutate(CatMagSaved=CatMag) %>%
-    mutate(CatMag=0, PredictedMag=NA, estimError=NA) # CatMag must be zero to do prediction properly.
-  modelMag <- predict(model, df, re.form=~(1|JD_mid)) # re.form to omit modelStarID from formula.
-  df <- df %>%
-    mutate(CatMag=CatMagSaved) %>%   # restore CatMag (which needed to be zero to do predictions).
-    select(-CatMagSaved)            
-  
-  # Adjust for terms not included in model's formula.
-  if (!is.na(extinction)) {
-    modelMag <- modelMag + extinction * df$Airmass
-  }
-
-  # Compute and store predicted magnitude.
-  df <- df %>% mutate(PredictedMag = df$InstMag - modelMag)
-  
-  ##### Compute & store estimated errors.
-
-  return (df)
 }
 
 writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
@@ -168,51 +126,57 @@ writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
 ##### Below are support-only functions, not called by user. ####################################
 
 imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {
+  # Impute Color Index CI (=true V Mag - true I Mag) from untransformed mags.
   require(dplyr, quietly=TRUE)
   JD_floor <- floor(min(as.numeric(df_predictions$JD_mid)))
   df_predictions <- df_predictions %>% mutate(JD_num=as.numeric(JD_mid)-JD_floor) # avoid scaling problems.
   
-  modelStarIDs <- unique(df_predictions$ModelStarID)
-  for (thisModelStarID in modelStarIDs) {
-    df_ModelStarID <- df_predictions %>% 
-      filter(ModelStarID==thisModelStarID) %>%
+  targetStarIDs <- (df_predictions %>%
+    filter(StarType=="Target"))$ModelStarID %>%
+    unique()
+  
+  for (thisTargetStarID in targetStarIDs) { # handle one target's ModelStarID at a time.
+    df_targetStarID <- df_predictions %>% 
+      filter(ModelStarID==thisTargetStarID) %>%
       select(Serial, ModelStarID, Filter, JD_num, CI, UntransformedMag) %>%
       arrange(JD_num)
-    df_CI_points <- extractCI_points(df_ModelStarID, CI_filters, transforms) %>% 
+    df_CI_points <- extractCI_points(df_targetStarID, CI_filters, transforms) %>% 
       arrange(JD_num)
 
-    # loop through df_modelStarID point: for each, interpolate CI and put it in df_predictions.
+    # Interpolate CI and put it in df_targetStarID
+    i <- 0
     if (nrow(df_CI_points) == 0) {
-      df_ModelStarID$CI <- NA  # because there are no color index values to apply.
-      cat(">>>>> ModelStarID=", thisModelStarID, ": no CI points returned by imputeTargetCIs()\n", sep="")
+      df_targetStarID$CI <- NA  # because there are no color index values to apply.
+      cat(">>>>> ModelStarID=", thisTargetStarID, ": no CI points returned by imputeTargetCIs()\n", sep="")
     }
     if (nrow(df_CI_points) == 1) {
-      df_ModelStarID$CI <- df_CI_points$CI[1] # set all CI to the same value
+      df_targetStarID$CI <- df_CI_points$CI[1] # set all CI to the same value
     }
     if (nrow(df_CI_points) %in% 2:3) { # linear interpolation (with residuals if 3 points)
       m <- lm (CI ~ JD_num, data=df_CI_points)
-      df_ModelStarID$CI <- predict.lm(m, data.frame(JD_num=df_ModelStarID$JD_num))
+      df_targetStarID$CI <- predict.lm(m, data.frame(JD_num=df_targetStarID$JD_num))
+      # Enforce no extrapolation.
+      df_targetStarID$CI[df_targetStarID$JD_num < df_CI_points$JD_num[1]] <- 
+        predict.lm(m,data.frame(JD_num=df_CI_points$JD_num[1]))
+      df_targetStarID$CI[df_targetStarID$JD_num > df_CI_points$JD_num[nrow(df_CI_points)]] <-
+        predict.lm(m,data.frame(JD_num=df_CI_points$JD_num[nrow(df_CI_points)]))
     }
     if (nrow(df_CI_points) >= 4) { # make and apply Akima spline.
-      require(akima, quietly=TRUE)
-      df_ModelStarID$CI <- aspline(df_CI_points$JD_num, df_CI_points$CI, df_ModelStarID$JD_num)$y
-      # spline <- smooth.spline(df_CI_points$JD_num, df_CI_points$CI)
-      # df_ModelStarID$CI <- predict(spline, df_ModelStarID$JD_num)
+      degrees_freedom <- round(nrow(df_CI_points)/6) %>% max(4) %>% min(nrow(df_CI_points))
+      thisSpline <- smooth.spline(df_CI_points$JD_num, df_CI_points$CI, df=degrees_freedom)
+      df_targetStarID$CI <- predict(thisSpline, df_targetStarID$JD_num)$y
+      # Enforce no extrapolation.
+      df_targetStarID$CI[df_targetStarID$JD_num < df_CI_points$JD_num[1]] <- 
+        predict(thisSpline, df_CI_points$JD_num[1])$y
+      df_targetStarID$CI[df_targetStarID$JD_num > df_CI_points$JD_num[nrow(df_CI_points)]] <-
+        predict(thisSpline, df_CI_points$JD_num[nrow(df_CI_points)])$y
     }
-    
-    # In any case, NO Extrapolation. Clip to end CI values of interpolation-basis points.
-    df_ModelStarID$CI[df_ModelStarID$JD_num < df_CI_points$JD_num[1]] <- 
-      df_CI_points$CI[1]
-    df_ModelStarID$CI[df_ModelStarID$JD_num > df_CI_points$JD_num[nrow(df_CI_points)]] <- 
-      df_CI_points$CI[nrow(df_CI_points)]
-    
-    df_join <- df_ModelStarID %>% select(Serial, CI)
-    df_predictions$CI[match(df_ModelStarID$Serial, df_predictions$Serial)] <- df_join$CI # pseudo-left-join
-    cat()
-  }
 
-  
-  # return (df_predictions) # which now includes filled-in CI values and new column JD_num.
+    # Do the CI value replacements.
+    df_predictions$CI[match(df_targetStarID$Serial, df_predictions$Serial)] <- df_targetStarID$CI
+    i <- 0
+  }
+  return (df_predictions) # which now includes filled-in CI values and new column JD_num.
 }
 
 extractCI_points <- function (df, CI_filters, transforms) {
