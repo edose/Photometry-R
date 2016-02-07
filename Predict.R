@@ -27,7 +27,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     filter(MaxADU<=saturatedADU) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%
-    select(Serial, ModelStarID, Xpixels, Ypixels, InstMag, MagUncertainty, StarType,
+    select(Serial, ModelStarID, StarID, Chart, Xpixels, Ypixels, InstMag, MagUncertainty, StarType,
            JD_mid, Filter, Airmass, CI, Vignette, Vignette4) %>%
     mutate(CatMag=0) # arbitrarily chosen, to complete model.
 
@@ -60,23 +60,25 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     df_xref_transform <- df_xref_transform %>%
       rbind(data.frame(Filter=thisModelList$filter, Transform=thisModelList$transform))
   }
+  df_xref_transform$Filter <- as.character(df_xref_transform$Filter)
   df_transformed <- df_predictions %>%
     left_join(df_xref_transform, by="Filter") %>%
     mutate(TransformedMag = UntransformedMag - Transform * CI) # minus is the correct sign: 20160206.
 
-  # Compute MagErr (for AAVSO) as greater of observation's MagUncertainty and model's Sigma.
+  # Compute MagErr (for AAVSO).
   df_xref_modelSigma <- data.frame(stringsAsFactors=FALSE) # build a lookup table to get model mag errs
   for (thisModelList in masterModelList) {
     df_xref_modelSigma <- df_xref_modelSigma %>%
       rbind(data.frame(Filter=thisModelList$filter, ModelSigma=sigma(thisModelList$model)))
   }
+  df_xref_modelSigma$Filter <- as.character(df_xref_modelSigma$Filter)
   df_transformed <- df_transformed %>%
     left_join(df_xref_modelSigma, by="Filter") %>%
     mutate(MagErr = pmax(ModelSigma, MagUncertainty)) # pmax = "parallel" element-wise max of 2 vectors
   
   df_transformed <- df_transformed %>% arrange(ModelStarID, JD_num)
   
-  # Save df_transformed as .Rdata file (but do not return the data frame).
+  # Save df_transformed as .Rdata file (but do not return it).
   path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
   save(df_transformed, file=path_transformed, precheck=FALSE)
   
@@ -105,17 +107,20 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       paste(Filters,collapse=" ","\n"))
   cat("   and ", nCheckObs, " Check observations.\n")
 
-  cat("predictAll() has saved this AN's transformed predictions to", path_transformed, "\n",
-      "   and has ensured a report_map.txt is available in the same folder\n",
+  cat("Transformed predictions saved to", path_transformed, "\n",
+      "   and report_map.txt is ensured available in the same folder\n",
       "Now you are ready to:\n",
       "   1. run targetPlots(),\n",
       "   2. group/select target observations in report_map.txt, repeat 1 & 2 as needed\n",
       "   3. run AAVSO() to make report, and\n",
       "   4. submit report to AAVSO.")
+  return(df_transformed)
 }
   
 AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
-  #####    Writes AAVSO-ready text file.
+  ##### Writes AAVSO-ready text file.
+  ##### No return value.
+  ##### First testing 20160207.
   require(dplyr, quietly=TRUE)
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
@@ -128,45 +133,121 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     c("#OBSTYPE=CCD") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
 
-  # Read in all required data (should only need df_transformed.Rdata and report_map.txt).
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  df_report <- make_df_report(photometry_folder)
   
-  # Format rows of df_report as a character vector and append them to character vector "out".
+  # Get and reformat df_report.
+  df_report <- make_df_report(photometry_folder)
+  df_report <- make_df_report(photometry_folder) %>%
+    mutate(TargetName = TargetName %>% trimws() %>% toupper()) %>%
+    mutate(JD         = JD         %>% as.numeric() %>% round(5) %>% format(nsmall=5)) %>%
+    mutate(Mag        = Mag        %>% round(3) %>% format()) %>%
+    mutate(MagErr     = MagErr     %>% round(3) %>% format()) %>%
+    mutate(Filter     = Filter     %>% trimws() %>% toupper()) %>%
+    mutate(CompName   = CompName   %>% trimws() %>% toupper()) %>%
+    mutate(CompMag    = ifelse(CompMag=="na","na",CompMag      %>% round(3) %>% format())) %>%
+    mutate(CheckName  = ifelse(is.na(CheckName),"na",CheckName %>% trimws() %>% toupper())) %>%
+    mutate(CheckMag   = ifelse(is.na(CheckMag), "na",CheckMag  %>% round(3) %>% format())) %>%
+    mutate(Airmass    = Airmass    %>% round(4) %>% format()) %>%
+    mutate(Chart      = Chart      %>% trimws() %>% toupper()) %>%
+    mutate(Notes      = ifelse(trimws(Notes)=="","na",trimws(Notes)))
+  
+  # Append rows of df_report to character vector "out".
   obs_lines <- paste(
-    df_report$target,
-    df_report$JD_mid,
-    df_report$mag,
-    df_report$mag_error,
-    df_report$filter,
-    df_report$isTransformed, # always TRUE for full model.
+    df_report$TargetName,
+    df_report$JD,
+    df_report$Mag,
+    df_report$MagErr,
+    df_report$Filter,
+    "YES",                   # always Transformed for full model.
     "STD",                   # we use standard comp stars, not "differential" mode.
-    df_report$CNAME,         # ="ENSEMBLE" when more than one comp star for this observation.
-    "na",                    # CMAG
-    df_report$check_star,
-    df_report$check_mag,
-    df_report$airmass,
+    df_report$CompName,      # ="ENSEMBLE" when more than one comp star for this observation.
+    df_report$CompMag,       # "na" if Ensemble comp, else instrument comp mag (or maybe "na" even so).
+    df_report$CheckName,
+    df_report$CheckMag,
+    df_report$Airmass,
     "na",                   # GROUP, not used here.
-    df_report$chart,
-    df_report$notes,        # usually "na"
+    df_report$Chart,
+    df_report$Notes,
     sep=",")
   out <- out %>% c(obs_lines)
 
   # Now dump the char vector "out" to a text file.
-  out_folder <- make_safe_path(AN_folder,"Photometry")
-  out_path   <- make_safe_path(out_folder,"AAVSOreport.txt")
-  print(out_path)
-  write(out,file=out_path)
-  print(paste("AAVSO report for folder ",AN_folder," written: ",length(obs_lines)," observations."))
+  filename_report <- "AAVSOreport.txt"
+  path_report   <- make_safe_path(photometry_folder, filename_report)
+  write(out,file=path_report)
+  cat(paste0("AAVSO report for AN ",AN_rel_folder," written to: ", path_report, "\n   = ",
+    length(obs_lines)," observations."))
 }
 
 
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
 
-make_df_report <- function() {
+make_df_report <- function(photometry_folder) {
+  ##### Inputs: df_transformed, masterModelList.
+  ##### Returns: df_report for AAVSO().
+  ##### In development EVD Feb 6, 2016.
+  require(dplyr, quietly=TRUE)
   
+  path_df_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
+  load(path_df_transformed, verbose=TRUE)
+  path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
+  load(path_masterModelList, verbose=TRUE)
+  
+  df_report <- df_transformed %>%
+    select(Serial, StarType, TargetName=StarID, JD=JD_mid, Mag=TransformedMag, MagErr, Filter) %>%
+    mutate(CompName=NA, CompMag=NA, CheckName=NA, CheckMag=NA) %>%
+    mutate(Airmass=df_transformed$Airmass, Chart=df_transformed$Chart, Notes="") %>%
+    filter(StarType=="Target") %>% # need to do this late to keep df_report & df_transformed aligned.
+    select(-StarType)
+           
+  # Read report_map.txt and arrange actions.
+  # POSTPONE.
+  
+  # Apply report_map.txt omissions before any other manipulations.
+  # POSTPONE.
+  
+  # Apply check-star names and mags (lookup from df_transformed, then insert column in-place).
+  df_checks <- df_transformed %>% filter(StarType=="Check") %>% select(JD_mid, StarID, TransformedMag)
+  df_joined <- df_report      %>% left_join(df_checks, by=c("JD"="JD_mid"))
+  df_report <- df_report      %>% mutate(CheckName=df_joined$StarID, CheckMag=df_joined$TransformedMag)
+  
+  # Apply comp-star names and mags.
+  # Make df_comps by rbind() all $obs from masterModelList
+  df_comps <- data.frame(stringsAsFactors=FALSE)
+  for (thisModelList in masterModelList) {
+    df_thisComp <- thisModelList$obs %>% filter(StarType=="Comp") %>% select(Serial,JD_mid,StarID,Filter)
+    df_comps <- df_comps %>% rbind(df_thisComp)
+  }
+  # Now insert comp info.
+  reportJDs <- (df_report %>% arrange(JD))$JD %>% unique()
+  for (thisJD in reportJDs) {
+    df_compsThisJD <- df_comps %>% filter(JD_mid==thisJD)
+    if (nrow(df_compsThisJD)<=0) {
+      stop(">>>>> No comp stars in model for JD = ", thisJD)
+    }
+    if(nrow(df_compsThisJD) > 1) { 
+      # the ensemble case.
+      df_report$CompName[df_report$JD==thisJD] <- "ENSEMBLE"
+      df_report$CompMag[df_report$JD==thisJD]  <- "na"
+      df_report$Notes[df_report$JD==thisJD]    <- paste0(nrow(df_compsThisJD)," comps")
+    } else { 
+      # the single-comp-star case.
+      df_report$CompName[df_report$JD==thisJD] <- df_compsThisJD$StarID[1]
+      df_report$CompMag[df$reportJD==thisJD]  <- "na" # unsure what AAVSO's "Inst Mag of Comp Star" means.
+    }
+    i <- 1 # to look at df_report
+  }
+  
+
+  # Apply report_map.txt #COMBINE directive lines (careful with the check and comp stars associated).
+  # POSTPONE.
+  
+  
+  
+  
+  return(df_report) # return without final formatting for AAVSO report (leave that to AAVSO() function).
 }
 
 imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {
