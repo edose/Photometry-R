@@ -64,23 +64,25 @@ obsPlanner <- function (VStype="%", faintMagLimit=15, localStdTime=22, maxHoursE
   return(table)
 }
 
-eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=85, selectBest=150) {
+eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=85, selectBest=150,
+                          brightestVMax=10.5, brightestVMin=11) {
   require(dplyr, quietly=TRUE)
   obsPlanner(VStype="M%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
     select(-RA_deg, -Dec_deg) %>%
-    filter(Max > 9.8) %>%
-    filter(Min > 10.5) %>%
+    filter(Max > brightestVMax) %>%
+    filter(Min > brightestVMin) %>%
     filter(Period > 0)
 }
 
-eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=85, selectBest=150) {
+eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=85, selectBest=150,
+                              brightestVMax=10.5, brightestVMin=10.8) {
   require(dplyr, quietly=TRUE)
   obsPlanner(VStype="E%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
     select(-RA_deg, -Dec_deg) %>%
-    filter(Max > 9.8) %>%
-    filter(Min > 10.5) %>%
+    filter(Max > brightestVMax) %>%
+    filter(Min > brightestVMin) %>%
     filter(Period > 0)
 }
 

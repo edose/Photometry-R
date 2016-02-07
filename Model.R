@@ -18,7 +18,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
   if (is.null(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
-  df_model <- omitObs(AN_top_folder, AN_rel_folder)
+
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%

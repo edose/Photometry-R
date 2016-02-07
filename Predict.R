@@ -37,7 +37,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   for (thisModelList in masterModelList) {
     df_thisFilter <- df_predict_input %>% filter(Filter==thisModelList$filter)
     predictOutput <- predict(thisModelList$model, newdata=df_thisFilter, re.form=~(1|JD_mid))
-    # Correct for extinction if extinction was not fit ("Airmass") in model.
+    # Add extinction*airmass term if not included in model (as formula term "Airmass").
     if (!thisModelList$fit_extinction) {
       predictOutput <- predictOutput + extinction * df_thisFilter$Airmass
     }
@@ -51,34 +51,73 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     mutate(UntransformedMag = InstMag - PredictedInstMag)
   
   # Impute Color Index values for target observations by interpolation.
-  transforms <- c(0,0)
-  for (i in 1:2) {
-    transforms[i] <- masterModelList[[CI_filters[i]]]$transform
-  }
-  df_predictions <- imputeTargetCIs(df_predictions, CI_filters, transforms) # Fill in CI values for target obs.
+  transforms <- c(masterModelList[[CI_filters[1]]]$transform, masterModelList[[CI_filters[2]]]$transform)
+  df_predictions <- imputeTargetCIs(df_predictions, CI_filters, transforms) # Fill in CI values for targets.
   
-  # Perform transformations.
-  df_xref_transform <- data.frame() # build a lookup table to fill in Transforms for each filter.
+  # Perform color transformations.
+  df_xref_transform <- data.frame(stringsAsFactors=FALSE) # build a lookup table to get Transforms.
   for (thisModelList in masterModelList) {
     df_xref_transform <- df_xref_transform %>%
-      rbind(data.frame(Filter=modelList$filter, Transform=modelList$transform))
+      rbind(data.frame(Filter=thisModelList$filter, Transform=thisModelList$transform))
   }
-  df_predictions <- df_predictions %>%
-    left_join(df_xref_transform) %>%
-    mutate(TransformedMag = UntransformedMag - Transform * CI) # unsure of sign, here.
-  
-  # Save df_predictions as .Rdata file (but do not return the data frame).
-  predictions_path <- make_safe_path(photometry_folder, "df_predictions.Rdata")
-  save(df_predictions, file=predictions_path, precheck=FALSE)
-  cat("predictAll() has saved this AN's predictions to", predictions_path, 
-      "\n   Now ready to:\n   (1) predictionPlots(),\n   (2) group/select target observations to report,\n",
-      "   (3) run AAVSO() to make report,\n   and (4) submit report to AAVSO.")
-}
+  df_transformed <- df_predictions %>%
+    left_join(df_xref_transform, by="Filter") %>%
+    mutate(TransformedMag = UntransformedMag - Transform * CI) # minus is the correct sign: 20160206.
 
-writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
+  # Compute MagErr (for AAVSO) as greater of observation's MagUncertainty and model's Sigma.
+  df_xref_modelSigma <- data.frame(stringsAsFactors=FALSE) # build a lookup table to get model mag errs
+  for (thisModelList in masterModelList) {
+    df_xref_modelSigma <- df_xref_modelSigma %>%
+      rbind(data.frame(Filter=thisModelList$filter, ModelSigma=sigma(thisModelList$model)))
+  }
+  df_transformed <- df_transformed %>%
+    left_join(df_xref_modelSigma, by="Filter") %>%
+    mutate(MagErr = pmax(ModelSigma, MagUncertainty)) # pmax = "parallel" element-wise max of 2 vectors
+  
+  df_transformed <- df_transformed %>% arrange(ModelStarID, JD_num)
+  
+  # Save df_transformed as .Rdata file (but do not return the data frame).
+  path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
+  save(df_transformed, file=path_transformed, precheck=FALSE)
+  
+  # Make a template-only report_map.txt file if report_map.txt doesn't already exist.
+  path_report_map <- make_safe_path(photometry_folder, "report_map.txt")
+  if (!file.exists(path_report_map)) {
+    lines <- c(
+      paste0(";----- This is report_map.txt for AN folder ", AN_rel_folder),
+      paste0(";----- Use this file to combine and/or omit target observations from AAVSO report."),
+      paste0(";----- Example directive lines:\n"),
+      paste0(";"),
+      paste0(";"),
+      paste0(";"),
+      paste0(";"),
+      paste0(";\n;----- Add your directive lines:\n;\n\n")
+    )
+    writeLines(lines, con=path_report_map)
+  }
+  nTargetObs <- df_transformed %>% filter(StarType=="Target") %>% nrow()
+  nTargets   <- df_transformed %>% filter(StarType=="Target") %>% select(ModelStarID) %>% 
+    unique() %>% nrow()
+  nCheckObs  <- df_transformed %>% filter(StarType=="Check") %>% nrow()
+  Filters    <- df_transformed %>% filter(StarType=="Target") %>% select(Filter) %>% 
+    unique()
+  cat("PredictAll() yields", nTargetObs, "Target obs for", nTargets, "in filters:", 
+      paste(Filters,collapse=" ","\n"))
+  cat("   and ", nCheckObs, " Check observations.\n")
+
+  cat("predictAll() has saved this AN's transformed predictions to", path_transformed, "\n",
+      "   and has ensured a report_map.txt is available in the same folder\n",
+      "Now you are ready to:\n",
+      "   1. run targetPlots(),\n",
+      "   2. group/select target observations in report_map.txt, repeat 1 & 2 as needed\n",
+      "   3. run AAVSO() to make report, and\n",
+      "   4. submit report to AAVSO.")
+}
+  
+AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   #####    Writes AAVSO-ready text file.
   require(dplyr, quietly=TRUE)
-  if (is.na(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
   
   out <- "#TYPE=EXTENDED" %>%
@@ -89,11 +128,12 @@ writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
     c("#OBSTYPE=CCD") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
 
-  # Read in all df_target_V etc data frames.
+  # Read in all required data (should only need df_transformed.Rdata and report_map.txt).
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_report <- make_df_report(photometry_folder)
   
-  # Create data frame df_report.
-  
-  # Format each row of df_report as a text line.
+  # Format rows of df_report as a character vector and append them to character vector "out".
   obs_lines <- paste(
     df_report$target,
     df_report$JD_mid,
@@ -124,6 +164,10 @@ writeAAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NA) {
 
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
+
+make_df_report <- function() {
+  
+}
 
 imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {
   # Impute Color Index CI (=true V Mag - true I Mag) from untransformed mags.
@@ -161,7 +205,7 @@ imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {
       df_targetStarID$CI[df_targetStarID$JD_num > df_CI_points$JD_num[nrow(df_CI_points)]] <-
         predict.lm(m,data.frame(JD_num=df_CI_points$JD_num[nrow(df_CI_points)]))
     }
-    if (nrow(df_CI_points) >= 4) { # make and apply Akima spline.
+    if (nrow(df_CI_points) >= 4) { # make and apply smoothing spline (std package "stats").
       degrees_freedom <- round(nrow(df_CI_points)/6) %>% max(4) %>% min(nrow(df_CI_points))
       thisSpline <- smooth.spline(df_CI_points$JD_num, df_CI_points$CI, df=degrees_freedom)
       df_targetStarID$CI <- predict(thisSpline, df_targetStarID$JD_num)$y

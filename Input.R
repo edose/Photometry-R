@@ -171,6 +171,8 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   if (!file.exists(omitPath)) {
     lines <- c(
       paste0(";----- This is omit.txt template file for AN folder ", AN_rel_folder),
+      paste0(";----- Use this file to omit observations from input to modelOneFilter()."),
+      paste0(";----- Example directive lines:\n"),
       paste0(";#OBS   Obj-0000-V, 132 ; to omit star 132 from FITS image Obj-0000-V.fts"),
       paste0(";#STAR  Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
       paste0(";#STAR  Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
