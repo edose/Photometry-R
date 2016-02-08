@@ -87,7 +87,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   if (!file.exists(path_report_map)) {
     lines <- c(
       paste0(";----- This is report_map.txt for AN folder ", AN_rel_folder),
-      paste0(";----- Use this file to combine and/or omit target observations from AAVSO report."),
+      paste0(";----- Use this file to omit and/or combine target observations from AAVSO report."),
       paste0(";----- Example directive lines:\n"),
       paste0(";"),
       paste0(";"),
@@ -117,7 +117,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   return(df_transformed)
 }
   
-AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, software_version="0.1") {
   ##### Writes AAVSO-ready text file.
   ##### No return value.
   ##### First testing 20160207.
@@ -125,20 +125,27 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
   
+  # First, make df_report.
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_report <- make_df_report(photometry_folder)
+  
+  # Construct report's header lines.
   out <- "#TYPE=EXTENDED" %>%
     c("#OBSCODE=DERA") %>% #       DERA = Eric Dose's observer code @ AAVSO
     c("#SOFTWARE=custom R Scripts, github/edose") %>%
     c("#DELIM=,") %>%
     c("#DATE=JD") %>%
     c("#OBSTYPE=CCD") %>%
+    c(paste0("#This report of ", nrow(df_report), " observations was generated ", 
+             format(Sys.time(), tz = "GMT"), " UTC.")) %>%
+    c(paste0("#Software version for all computation yielding this report = ", software_version)) %>%
+    c("#Eric Dose, Bois d'Arc Observatory, Kansas") %>%
+    c("#") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
-
-  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
-  photometry_folder <- make_safe_path(AN_folder, "Photometry")
   
-  # Get and reformat df_report.
-  df_report <- make_df_report(photometry_folder)
-  df_report <- make_df_report(photometry_folder) %>%
+  # Final formatting of all observation report fields.
+  df_report <- df_report %>%
     mutate(TargetName = TargetName %>% trimws() %>% toupper()) %>%
     mutate(JD         = JD         %>% as.numeric() %>% round(5) %>% format(nsmall=5)) %>%
     mutate(Mag        = Mag        %>% round(3) %>% format()) %>%
@@ -198,15 +205,36 @@ make_df_report <- function(photometry_folder) {
   df_report <- df_transformed %>%
     select(Serial, StarType, TargetName=StarID, JD=JD_mid, Mag=TransformedMag, MagErr, Filter) %>%
     mutate(CompName=NA, CompMag=NA, CheckName=NA, CheckMag=NA) %>%
-    mutate(Airmass=df_transformed$Airmass, Chart=df_transformed$Chart, Notes="") %>%
+    mutate(Airmass=df_transformed$Airmass, Chart=df_transformed$Chart) %>%
+    mutate(Notes=paste0("Serial=",Serial)) %>%
     filter(StarType=="Target") %>% # need to do this late to keep df_report & df_transformed aligned.
     select(-StarType)
            
-  # Read report_map.txt and arrange actions.
-  # POSTPONE.
+  # Get report_map.txt file for this AN folder, then parse directive lines.
+  report_map_file <- make_safe_path(photometry_folder, "report_map.txt")
+  if (!file.exists(report_map_file)) {
+    cat("Report Map file", report_map_file, "does not exist.")
+    return (NA)
+  } else {
+    lines <- readLines(report_map_file, warn=FALSE)   # read last line even without EOL character(s).
+    for (iLine in 1:length(lines)) {
+      lines[iLine] <- lines[iLine] %>% 
+        strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
+    }
+    directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
+  }
   
   # Apply report_map.txt omissions before any other manipulations.
-  # POSTPONE.
+  require(stringi, quietly=TRUE)
+  omit_lines <- directiveLines[stri_startswith_fixed(directiveLines, "#SERIAL")]
+  serialsToOmit <- as.numeric() # we may want to keep this for error msgs, below.
+  for (thisLine in omit_lines) {
+    words <- stri_extract_all_words(thisLine) %>% unlist() %>% strsplit(",") %>% unlist()
+    serials <- words[-1] %>% as.numeric()
+    serials <- serials[serials>=1]
+    serialsToOmit <- c(serialsToOmit, serials)
+  }
+  df_report <- df_report %>% filter(!Serial %in% serialsToOmit)
   
   # Apply check-star names and mags (lookup from df_transformed, then insert column in-place).
   df_checks <- df_transformed %>% filter(StarType=="Check") %>% select(JD_mid, StarID, TransformedMag)
@@ -231,20 +259,17 @@ make_df_report <- function(photometry_folder) {
       # the ensemble case.
       df_report$CompName[df_report$JD==thisJD] <- "ENSEMBLE"
       df_report$CompMag[df_report$JD==thisJD]  <- "na"
-      df_report$Notes[df_report$JD==thisJD]    <- paste0(nrow(df_compsThisJD)," comps")
+      df_report$Notes[df_report$JD==thisJD]    <- paste0(df_report$Notes[df_report$JD==thisJD],
+                                                         " (",nrow(df_compsThisJD)," comps)")
     } else { 
       # the single-comp-star case.
       df_report$CompName[df_report$JD==thisJD] <- df_compsThisJD$StarID[1]
       df_report$CompMag[df$reportJD==thisJD]  <- "na" # unsure what AAVSO's "Inst Mag of Comp Star" means.
     }
-    i <- 1 # to look at df_report
   }
-  
 
   # Apply report_map.txt #COMBINE directive lines (careful with the check and comp stars associated).
   # POSTPONE.
-  
-  
   
   
   return(df_report) # return without final formatting for AAVSO report (leave that to AAVSO() function).
