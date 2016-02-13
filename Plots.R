@@ -233,7 +233,7 @@ modelPlots <- function(modelList) {
   
   # Residuals vs Max ADU (uncalibrated) plot.
   library(scales)
-  x <- obs$MaxADU
+  x <- obs$MaxADU_Ur
   xRange <- max(x) - min(x)
   y <- obs$Residual
   ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
@@ -247,7 +247,7 @@ modelPlots <- function(modelList) {
     xlab(paste0("Maximum ADU in raw (uncalibrated) image [log scale]")) +
     ylab("Residual\n(mMag)") +
     Photometry.bw.theme()
-  plotList$ResidualsMaxADU <- p
+  plotList$ResidualsMaxADU_Ur <- p
   
   ##### Plots looking for outlier images etc.
   
@@ -274,7 +274,7 @@ modelPlots <- function(modelList) {
   ##### Now print, in desired order, the plot objects.
   # Find outlier observations & model bias.
   print(plotList$QQ)
-  print(plotList$ResidualsMaxADU)
+  print(plotList$ResidualsMaxADU_Ur)
   print(plotList$ResidualsFitted)
   print(plotList$ResidualsInstMag)
   print(plotList$ResidualsExposure)

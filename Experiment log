@@ -1,6 +1,9 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
+##### Feb 7 2016: First basic end-to-end workflow complete, tag v 0.1. Ready to test against a lot of AN
+data sets before submitting to AAVSO.
+
 ##### Jan 31 2016: Vignette oddness was due to MaxIm's failure to save calibrated FITS properly. MaxIm found
 to be more stable when using Batch Convert & Save function, and prepareForCal() was modded to account for
 its new file naming style. Works well.

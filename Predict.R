@@ -24,7 +24,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   df_predict_input <- df_master %>%
     filter(StarType %in% c("Check","Target")) %>%
     filter(UseInModel==TRUE) %>%
-    filter(MaxADU<=saturatedADU) %>%
+    filter(MaxADU_Ur<=saturatedADU) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%
     select(Serial, ModelStarID, StarID, Chart, Xpixels, Ypixels, InstMag, MagUncertainty, StarType,
@@ -89,9 +89,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       paste0(";----- This is report_map.txt for AN folder ", AN_rel_folder),
       paste0(";----- Use this file to omit and/or combine target observations from AAVSO report."),
       paste0(";----- Example directive lines:\n"),
-      paste0(";"),
-      paste0(";"),
-      paste0(";"),
+      paste0(";#SERIAL 34 44,129  32  1202 ; to omit these 5 Serial numbers from AAVSO report."),
       paste0(";"),
       paste0(";\n;----- Add your directive lines:\n;\n\n")
     )
@@ -117,7 +115,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   return(df_transformed)
 }
   
-AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, software_version="0.1") {
+AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, software_version="0.11") {
   ##### Writes AAVSO-ready text file.
   ##### No return value.
   ##### First testing 20160207.
@@ -196,6 +194,7 @@ make_df_report <- function(photometry_folder) {
   ##### Returns: df_report for AAVSO().
   ##### In development EVD Feb 6, 2016.
   require(dplyr, quietly=TRUE)
+  require(stringi, quietly=TRUE)
   
   path_df_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
   load(path_df_transformed, verbose=TRUE)
@@ -225,7 +224,6 @@ make_df_report <- function(photometry_folder) {
   }
   
   # Apply report_map.txt omissions before any other manipulations.
-  require(stringi, quietly=TRUE)
   omit_lines <- directiveLines[stri_startswith_fixed(directiveLines, "#SERIAL")]
   serialsToOmit <- as.numeric() # we may want to keep this for error msgs, below.
   for (thisLine in omit_lines) {

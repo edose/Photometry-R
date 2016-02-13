@@ -164,23 +164,6 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   # Now it's safe to delete /Uncalibrated and all files in it.
   file.remove(preCalibration)
   unlink(UncalibratedFolder,recursive=TRUE)
-
-  # Make a template-only omit.txt file if omit.txt doesn't already exist.
-  PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
-  omitPath <- make_safe_path(PhotometryFolder, "omit.txt")
-  if (!file.exists(omitPath)) {
-    lines <- c(
-      paste0(";----- This is omit.txt template file for AN folder ", AN_rel_folder),
-      paste0(";----- Use this file to omit observations from input to modelOneFilter()."),
-      paste0(";----- Example directive lines:\n"),
-      paste0(";#OBS   Obj-0000-V, 132 ; to omit star 132 from FITS image Obj-0000-V.fts"),
-      paste0(";#STAR  Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
-      paste0(";#STAR  Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
-      paste0(";#IMAGE Obj-0000-V      ; to omit FITS image Obj-0000-V specifically"),
-      paste0(";\n;----- Add your directive lines:\n;\n\n")
-      )
-    writeLines(lines, con=omitPath)
-  }
 }
 
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
@@ -301,6 +284,23 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
   save(df_master, file=df_master_path, precheck=FALSE) # recover via: load_df_master(AN_rel_folder="201..").
   cat("make_df_master() has saved df_master to", df_master_path, "\n   now returning df_master.\n")
+  
+  # Make a template-only omit.txt file if omit.txt doesn't already exist.
+  PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
+  omitPath <- make_safe_path(PhotometryFolder, "omit.txt")
+  if (!file.exists(omitPath)) {
+    lines <- c(
+      paste0(";----- This is omit.txt for AN folder ", AN_rel_folder),
+      paste0(";----- Use this file to omit observations from input to modelOneFilter()."),
+      paste0(";----- Example directive lines:\n"),
+      paste0(";#OBS   Obj-0000-V, 132 ; to omit star 132 from FITS image Obj-0000-V.fts"),
+      paste0(";#STAR  Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
+      paste0(";#STAR  Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
+      paste0(";#IMAGE Obj-0000-V      ; to omit FITS image Obj-0000-V specifically"),
+      paste0(";\n;----- Add your directive lines:\n;\n\n")
+    )
+    writeLines(lines, con=omitPath)
+  }
   return(df_master)  # one row per observation, for every FITS file.
 }
 
@@ -335,6 +335,7 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL){
     filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Exclude/")) %>%
     mutate(OldFullPath=RelPath %>% make_safe_path(AN_folder,.)) %>%
     mutate(NewFullPath=UrFolder %>% make_safe_path(RelPath)) %>%
     mutate(NewFullDir="", RelDir="")
@@ -375,6 +376,7 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Exclude/")) %>%
     mutate(OldRelDir="", NewFilename="", Object="", Filter="", JD_start=NA, Airmass=NA)
 
   # Collect header data from FITS files.
@@ -397,6 +399,8 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     JD_start       <- get_header_value(header, "JD")
     airmass        <- get_header_value(header, "AIRMASS")
     errorThisFile <- FALSE
+    print(paste0(">>>>> renameACP(): oldFilename>",oldFilename,"<  objectFromFilename>",objectFromFilename,
+      "<  objectFromFITS>",objectFromFITS,"<\n"))
     if (objectFromFilename != objectFromFITS) {
       cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
       nErrors <- nErrors + 1
@@ -664,7 +668,7 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
   Xsize <- D$axDat$len[1]
   Ysize <- D$axDat$len[2]
   df_APT$Saturated <- FALSE  # add column to data frame with initial values.
-  df_APT$MaxADU <- NA        #  "
+  df_APT$MaxADU_Ur <- NA        #  "
 
   # now, mark Saturated=TRUE for any row (Observation) with a saturated pixel within aperture.
   for (iObj in 1:nrow(df_APT)) {
@@ -681,8 +685,8 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
         ADU <- image[X,Y]
         if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
           if (ADU > saturatedADU)         { df_APT$Saturated[iObj] <- TRUE }
-          if (is.na(df_APT$MaxADU[iObj])) { df_APT$MaxADU[iObj] <- ADU }
-          if (ADU > df_APT$MaxADU[iObj])  { df_APT$MaxADU[iObj] <- ADU }
+          if (is.na(df_APT$MaxADU_Ur[iObj])) { df_APT$MaxADU_Ur[iObj] <- ADU }
+          if (ADU > df_APT$MaxADU_Ur[iObj])  { df_APT$MaxADU_Ur[iObj] <- ADU }
         } # if
       } # for Y
     } # for X

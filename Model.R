@@ -26,7 +26,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     filter(MagUncertainty<=maxMagUncertainty) %>%
     filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex) %>%
-    filter(MaxADU<=saturatedADU) %>%
+    filter(MaxADU_Ur<=saturatedADU) %>%
     filter(!is.na(Airmass)) %>%
     filter(!is.na(CatMag))
 
