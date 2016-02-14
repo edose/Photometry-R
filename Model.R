@@ -2,7 +2,7 @@
 #####  Tests OK 20160124.
 ##### Typical usages: listV <- modelOneFilter(AN_rel_folder="20151216", filter="V")
 #####                 omitSerial(AN_rel_folder="20151216", serial=c(123,32))
-#####                 make_masterModelList(AN_rel_folder="20151216", modelLists=c(listV, listR, listI))
+#####                 make_masterModelList(AN_rel_folder="20151216", modelLists=list(listV, listR, listI))
 
 modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                             filter=NULL, maxMagUncertainty=0.03, maxColorIndex=2.5, saturatedADU=54000,
@@ -259,7 +259,7 @@ get_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
   df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
-  load(df_master_path, verbose=TRUE)
+  load(df_master_path)
   return (df_master)
 }
 

@@ -15,10 +15,10 @@
 #####              (2) Edit/File Batch and Convert, Select All /Uncalibrated, Destination Path=/Calibrated, 
 #####                     check the 'Perform Calibration' box, click 'OK'.
 #####    finishFITS(AN_rel_folder="200151216")
-#####    df_master <- make_df_master(AN_rel_folder="200151216")
+#####    df_master <- make_df_master(AN_rel_folder="20151216")
 ##### ...then start modeling with Model.R functions.
 
-renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, 
+renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                          oldObject, newObject) {
   ## Tests OK 20151220.
   ##### For occasional use in renaming objects (FITS header *and* FITS file name), typically as first step.
@@ -34,7 +34,10 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     if (length(value)==0) value <- NA
     trimws(value)
   }  
-  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
+                                    "e.g., AN_rel_folder='20151216'.")}
+    AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
 
   # Make list of all FITS files with oldObject at beginning of file name.
   df <- data.frame(RelPath=list.files(AN_folder, full.names=FALSE, recursive=TRUE, include.dirs=FALSE),
@@ -309,7 +312,7 @@ load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
   df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
-  load(df_master_path, envir=globalenv(), verbose=TRUE)
+  load(df_master_path, envir=globalenv())
   cat(AN_folder, "::df_master now available in current workspace (global envir.).\n",sep="")
 }
 
@@ -336,6 +339,7 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL){
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Exclude/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Excluded/")) %>%
     mutate(OldFullPath=RelPath %>% make_safe_path(AN_folder,.)) %>%
     mutate(NewFullPath=UrFolder %>% make_safe_path(RelPath)) %>%
     mutate(NewFullDir="", RelDir="")
@@ -377,6 +381,7 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
     filter(!stri_startswith_fixed(RelPath,"Exclude/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Excluded/")) %>%
     mutate(OldRelDir="", NewFilename="", Object="", Filter="", JD_start=NA, Airmass=NA)
 
   # Collect header data from FITS files.
@@ -399,8 +404,6 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     JD_start       <- get_header_value(header, "JD")
     airmass        <- get_header_value(header, "AIRMASS")
     errorThisFile <- FALSE
-    print(paste0(">>>>> renameACP(): oldFilename>",oldFilename,"<  objectFromFilename>",objectFromFilename,
-      "<  objectFromFITS>",objectFromFITS,"<\n"))
     if (objectFromFilename != objectFromFITS) {
       cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
       nErrors <- nErrors + 1
