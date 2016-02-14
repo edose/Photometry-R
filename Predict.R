@@ -219,7 +219,7 @@ make_df_report <- function(photometry_folder) {
   
   df_report <- df_transformed %>%
     select(Serial, StarType, TargetName=StarID, JD=JD_mid, Mag=TransformedMag, MagErr, Filter) %>%
-    mutate(CompName=NA, CompMag=NA, CheckName=NA, CheckMag=NA) %>%
+    mutate(CompName=NA, CompMag=NA, nComps=NA, CheckName=NA, CheckMag=NA) %>%
     mutate(Airmass=df_transformed$Airmass, Chart=df_transformed$Chart) %>%
     mutate(Notes=paste0("Serial=",Serial)) %>%
     filter(StarType=="Target") %>%   # do this late to keep df_report & df_transformed aligned.
@@ -259,7 +259,8 @@ make_df_report <- function(photometry_folder) {
     serialsToOmit <- c(serialsToOmit, serials)
   }
   df_report <- df_report %>% filter(!Serial %in% serialsToOmit)
-  cat(paste0("Omitted ", length(serialsToOmit), " observations by Serial number.\n"))
+  cat(paste0("Omitting ", length(serialsToOmit), " observations by Serials ",
+             paste0(serialsToOmit, collapse=" "), " done.\n"))
   
   # Apply check-star names and mags (lookup from df_transformed, then insert column in-place).
   df_checks <- df_transformed %>% filter(StarType=="Check") %>% select(JD_mid, StarID, TransformedMag)
@@ -277,15 +278,17 @@ make_df_report <- function(photometry_folder) {
   reportJDs <- (df_report %>% arrange(JD))$JD %>% unique()
   for (thisJD in reportJDs) {
     df_compsThisJD <- df_comps %>% filter(JD_mid==thisJD)
-    if (nrow(df_compsThisJD)<=0) {
+    nCompsThisJD <- nrow(df_compsThisJD)
+    df_report$nComps[df_report$JD==thisJD] <- nCompsThisJD
+    if (nCompsThisJD<=0) {
       stop(">>>>> No comp stars in model for JD = ", thisJD)
     }
-    if(nrow(df_compsThisJD) > 1) { 
+    if(nCompsThisJD > 1) { 
       # the ensemble case.
       df_report$CompName[df_report$JD==thisJD] <- "ENSEMBLE"
       df_report$CompMag[df_report$JD==thisJD]  <- "na"
-      df_report$Notes[df_report$JD==thisJD]    <- paste0(df_report$Notes[df_report$JD==thisJD],
-                                                         " (",nrow(df_compsThisJD)," comps)")
+      df_report$Notes[df_report$JD==thisJD]    <- paste0(df_report$Notes[df_report$JD==thisJD], 
+                                                         " (", nCompsThisJD, " comps)")
     } else { 
       # the single-comp-star case.
       df_report$CompName[df_report$JD==thisJD] <- df_compsThisJD$StarID[1]
@@ -351,7 +354,7 @@ make_df_report <- function(photometry_folder) {
     df_new$CheckMag <- mean(df_combine$CheckMag)
     df_new$Airmass  <- mean(df_combine$Airmass)
     df_new$Notes    <- paste0("Serials=[", (paste0(df_combine$Serial,collapse=" ")), "] (",
-                              nrow(df_comps %>% filter(JD_mid==df_combine$JD[1]))," comps)")
+                              min(df_combine$nComps), "-", max(df_combine$nComps), " comps)")
     df_report[df_report$Serial==serialToReplace,] <- df_new[1,]
     df_report <- df_report %>% filter(!Serial %in% serialsToDelete)
     cat(paste0("Combination of Serials ", paste0(df_combine$Serial, collapse=" "), " done.\n"))
@@ -421,19 +424,21 @@ extractCI_points <- function (df, CI_filters, transforms) {
   df <- df %>% filter(Filter %in% CI_filters) %>% arrange(JD_num)
   
   df_CI_point <- data.frame()
-  for (iStart in 1:(nrow(df)-1)) {
-    if (df$Filter[iStart+1] != df$Filter[iStart]) {
-      if (df$JD_num[iStart+1]-df$JD_num[iStart] <= maxDiffJD) {
-        this_JD_num <- (df$JD_num[iStart+1] + df$JD_num[iStart]) / 2
-        # CI_predicted is color index from naive, predicted, untransformed (not catalog-basis) mags.
-        CI_predicted <- ifelse(df$Filter[iStart]==CI_filters[1],
-                               df$UntransformedMag[iStart]-df$UntransformedMag[iStart+1],
-                               df$UntransformedMag[iStart+1]-df$UntransformedMag[iStart])
-        this_CI <- CI_predicted / (1 + transforms[1] - transforms[2]) # transforms -> catalog-basis CI.
-        df_CI_point <- df_CI_point %>% rbind(data.frame(JD_num=this_JD_num, CI=this_CI))
-      } 
+  if (nrow(df)>=2) {
+    for (iStart in 1:(nrow(df)-1)) {
+      if (df$Filter[iStart+1] != df$Filter[iStart]) {
+        if (df$JD_num[iStart+1]-df$JD_num[iStart] <= maxDiffJD) {
+          this_JD_num <- (df$JD_num[iStart+1] + df$JD_num[iStart]) / 2
+          # CI_predicted is color index from naive, predicted, untransformed (not catalog-basis) mags.
+          CI_predicted <- ifelse(df$Filter[iStart]==CI_filters[1],
+                                 df$UntransformedMag[iStart]-df$UntransformedMag[iStart+1],
+                                 df$UntransformedMag[iStart+1]-df$UntransformedMag[iStart])
+          this_CI <- CI_predicted / (1 + transforms[1] - transforms[2]) # transforms -> catalog-basis CI.
+          df_CI_point <- df_CI_point %>% rbind(data.frame(JD_num=this_JD_num, CI=this_CI))
+        } 
+      }
     }
-  }
+} 
   return (df_CI_point)
 }
 

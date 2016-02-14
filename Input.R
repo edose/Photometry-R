@@ -179,7 +179,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   
-  # make list of all FITS.
+  # make list of all FITS (FITS in /Calibrated folder ONLY; hide files in /Exclude to remove from workflow).
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
   FITS_files  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
                                     recursive=FALSE, ignore.case=TRUE))
@@ -538,7 +538,7 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NUL
   }
   
   if (scriptCompletedOK) {
-    cat("Script #1 completed OK.\n")
+    cat("prepareForCal() completed OK.\n")
     cat("Now --> ensure all needed flats+darks (or Masters) are in /CalibrationMasters\n")
     cat("   (get any missing Masters from prev ANs),\n")
     cat("   then in MaxIm: 'Set Calibration' to this /CalibrationMasters\n")
