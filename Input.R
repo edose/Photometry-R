@@ -16,7 +16,8 @@
 #####                     check the 'Perform Calibration' box, click 'OK'.
 #####    finishFITS(AN_rel_folder="200151216")
 #####    df_master <- make_df_master(AN_rel_folder="20151216")
-##### ...then start modeling with Model.R functions.
+#####    df_image  <- images(AN_rel_folder="20151216")
+#####    ...then start modeling with Model.R functions.
 
 renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                          oldObject, newObject) {
@@ -185,7 +186,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                                     recursive=FALSE, ignore.case=TRUE))
   FITS_paths  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=TRUE, 
                                     recursive=FALSE, ignore.case=TRUE))
-  cat(">>>>> FITS folder= ",FITS_folder,"\n")
+  cat("FITS folder = ",FITS_folder,"\n")
   
   # make data frame with all FOV names for this AN, one row per FITS file.
   pattern<- "^([^-]+)-{1}[[:digit:]]{4}-{1}[[:alpha:]]" # must use dash alone as FOV/Object terminator, 
@@ -208,19 +209,28 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     group_by(FOVname) %>%
     summarize(nFITS=n()) %>% 
     as.data.frame() %>%
-    mutate(FOV_file_exists=FALSE, FOV_file_exists_string="*NA*")
+    mutate(FOV_file_exists=FALSE, FOV_file_exists_string="*NA*", NCheckStars=0, CheckMsg="")
   for (iFOV in 1:nrow(ask_df)) {
-    ask_df$FOV_file_exists[iFOV] <- !read_FOV_file(ask_df$FOVname[iFOV]) %>% is.na() %>% first()
+    this_FOV_file <- read_FOV_file(ask_df$FOVname[iFOV])
+    ask_df$FOV_file_exists[iFOV] <- !(this_FOV_file %>% is.na() %>% first())
     ask_df$FOV_file_exists_string[iFOV] <- ask_df$FOV_file_exists[iFOV] %>% 
         ifelse("OK","MISSING")
+    if (ask_df$FOV_file_exists[iFOV]) {
+      ask_df$NCheckStars[iFOV] <- sum(this_FOV_file$star_data$StarType=="Check")
+      ask_df$CheckMsg[iFOV] <- ifelse(ask_df$NCheckStars[iFOV]==1, "OK", 
+                                paste("WARNING: ", ask_df$NCheckStars, 
+                                       "Check Stars (must be 1 for Target FOVs)."))
+    }
   }
   ask_df %>%
-    select(FOVname,nFITS,FOV_file=FOV_file_exists_string) %>% 
+    select(FOVname, nFITS, FOV_file=FOV_file_exists_string, CheckStar=CheckMsg) %>% 
     print(right=FALSE)
-  if (all(ask_df$FOV_file_exists)) {
-    isYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
-  } else {
+  if (any(!ask_df$FOV_file_exists)) {
     stop("STOPPING: at least one FOV file is missing.")
+  }
+  answerYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
+  if (!answerYES) {
+    stop("STOPPING at user request.")
   }
 
   APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
@@ -251,13 +261,20 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
                                    APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
                                    APToutput_path)
-      df_APT <- parse_APToutput(APToutput_path) %>% getMaxADUs()
-      df_APT$FITSfile <- substring(df_APT$FITSpath, nchar(FITS_folder)+2)
-      df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
-      df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
       allAPTstdout <- c(allAPTstdout, APTstdout)
-      print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
-                  " --> df_master now has", nrow(df_master), "rows"), quote=FALSE)
+      df_APT <- parse_APToutput(APToutput_path)
+      if (nrow(df_APT) >= 1) {
+        df_APT <- df_APT %>% getMaxADUs()
+        df_APT$FITSfile <- substring(df_APT$FITSpath, nchar(FITS_folder)+2)
+        df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
+        df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
+        print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
+                    " --> df_master now has", nrow(df_master), "rows"), quote=FALSE)
+      } else {
+        print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
+                    " --> NO ROWS from this file ... df_master now has", nrow(df_master), "rows"), 
+              quote=FALSE)
+      }
     }
   }
 
@@ -305,6 +322,37 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     writeLines(lines, con=omitPath)
   }
   return(df_master)  # one row per observation, for every FITS file.
+}
+
+images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(df_master_path)
+  
+  maxMagUncertainty <- 0.03
+  maxColorIndex <- 2.5
+  saturatedADU <- 5400
+  
+  df <- df_master %>% 
+    filter(StarType=="Comp") %>% 
+    filter(UseInModel==TRUE) %>%
+    filter(MagUncertainty<=maxMagUncertainty) %>%
+    filter(!is.na(CI)) %>%
+    filter(CI<=maxColorIndex) %>%
+    filter(MaxADU_Ur<=saturatedADU) %>%
+    filter(!is.na(Airmass)) %>%
+    filter(!is.na(CatMag))
+  df_image <- df %>%
+    group_by(FITSfile) %>% 
+    summarize(nComp=n()) %>% 
+    as.data.frame() %>%
+    left_join(df_master %>% select(Object, FITSfile, Filter, Exposure)) %>% 
+    unique() %>%
+    select(Object, Filter, Exposure, FITSfile, nComp) %>%
+    arrange(Object, Filter, Exposure, FITSfile)
+  return (df_image)
 }
 
 load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {

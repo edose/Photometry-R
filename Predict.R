@@ -4,7 +4,7 @@
 ##### Typical workflow:
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
-#####    AAVSO(AN_rel_folder="20151216", software_version="0.00")
+#####    AAVSO(AN_rel_folder="20151216", software_version="0.0.0")
 #####    Examine AAVSO report, edit report_map.txt for #SERIAL & #COMBINE directives, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
@@ -115,7 +115,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   nCheckObs  <- df_transformed %>% filter(StarType=="Check") %>% nrow()
   Filters    <- df_transformed %>% filter(StarType=="Target") %>% select(Filter) %>% 
     unique()
-  cat("PredictAll() yields", nTargetObs, "Target obs for", nTargets, "in filters:", 
+  cat("PredictAll() yields", nTargetObs, "Target obs for", nTargets, " targets in filters:", 
       paste(Filters,collapse=" ","\n"))
   cat("   and ", nCheckObs, " Check observations.\n")
 
@@ -158,47 +158,51 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
     c("#") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
   
+    if (nrow(df_report) >= 1) {
   # Final formatting of all observation report fields.
-  df_report <- df_report %>%
-    mutate(TargetName = TargetName %>% trimws() %>% toupper()) %>%
-    mutate(JD         = JD         %>% as.numeric() %>% round(5) %>% format(nsmall=5)) %>%
-    mutate(Mag        = Mag        %>% round(3) %>% format()) %>%
-    mutate(MagErr     = MagErr     %>% round(3) %>% format()) %>%
-    mutate(Filter     = Filter     %>% trimws() %>% toupper()) %>%
-    mutate(CompName   = CompName   %>% trimws() %>% toupper()) %>%
-    mutate(CompMag    = ifelse(CompMag=="na","na",CompMag      %>% round(3) %>% format())) %>%
-    mutate(CheckName  = ifelse(is.na(CheckName),"na",CheckName %>% trimws() %>% toupper())) %>%
-    mutate(CheckMag   = ifelse(is.na(CheckMag), "na",CheckMag  %>% round(3) %>% format())) %>%
-    mutate(Airmass    = Airmass    %>% round(4) %>% format()) %>%
-    mutate(Chart      = Chart      %>% trimws() %>% toupper()) %>%
-    mutate(Notes      = ifelse(trimws(Notes)=="","na",trimws(Notes)))
+    df_report <- df_report %>%
+      mutate(TargetName = TargetName %>% trimws() %>% toupper()) %>%
+      mutate(JD         = JD         %>% as.numeric() %>% round(5) %>% format(nsmall=5)) %>%
+      mutate(Mag        = Mag        %>% round(3) %>% format()) %>%
+      mutate(MagErr     = MagErr     %>% round(3) %>% format()) %>%
+      mutate(Filter     = Filter     %>% trimws() %>% toupper()) %>%
+      mutate(CompName   = CompName   %>% trimws() %>% toupper()) %>%
+      mutate(CompMag    = ifelse(CompMag=="na","na",CompMag      %>% round(3) %>% format())) %>%
+      mutate(CheckName  = ifelse(is.na(CheckName),"na",CheckName %>% trimws() %>% toupper())) %>%
+      mutate(CheckMag   = ifelse(is.na(CheckMag), "na",CheckMag  %>% round(3) %>% format())) %>%
+      mutate(Airmass    = Airmass    %>% round(4) %>% format()) %>%
+      mutate(Chart      = Chart      %>% trimws() %>% toupper()) %>%
+      mutate(Notes      = ifelse(trimws(Notes)=="","na",trimws(Notes)))
   
-  # Append rows of df_report to character vector "out".
-  obs_lines <- paste(
-    df_report$TargetName,
-    df_report$JD,
-    df_report$Mag,
-    df_report$MagErr,
-    df_report$Filter,
-    "YES",                   # always Transformed for full model.
-    "STD",                   # we use standard comp stars, not "differential" mode.
-    df_report$CompName,      # ="ENSEMBLE" when more than one comp star for this observation.
-    df_report$CompMag,       # "na" if Ensemble comp, else instrument comp mag (or maybe "na" even so).
-    df_report$CheckName,
-    df_report$CheckMag,
-    df_report$Airmass,
-    "na",                   # GROUP, not used here.
-    df_report$Chart,
-    df_report$Notes,
-    sep=",")
-  out <- out %>% c(obs_lines)
-
+    # Append rows of df_report to character vector "out".
+    obs_lines <- paste(
+      df_report$TargetName,
+      df_report$JD,
+      df_report$Mag,
+      df_report$MagErr,
+      df_report$Filter,
+      "YES",                   # always Transformed for full model.
+      "STD",                   # we use standard comp stars, not "differential" mode.
+      df_report$CompName,      # ="ENSEMBLE" when more than one comp star for this observation.
+      df_report$CompMag,       # "na" if Ensemble comp, else instrument comp mag (or maybe "na" even so).
+      df_report$CheckName,
+      df_report$CheckMag,
+      df_report$Airmass,
+      "na",                   # GROUP, not used here.
+      df_report$Chart,
+      df_report$Notes,
+      sep=",")
+    out <- out %>% c(obs_lines)
+  } else {
+    out <- out %>% c("\n\n\n                    ########## NO OBSERVATIONS TO PRINT ##########\n")
+  }
+  
   # Now dump the char vector "out" to a text file.
   filename_report <- paste0("AAVSOreport-", AN_rel_folder, ".txt")
   path_report   <- make_safe_path(photometry_folder, filename_report)
   write(out,file=path_report)
   cat(paste0("AAVSO report for AN ",AN_rel_folder," written to: ", path_report, "\n   = ",
-    length(obs_lines)," observations."))
+    nrow(df_report)," observations."))
 }
 
 

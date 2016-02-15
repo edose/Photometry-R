@@ -143,7 +143,7 @@ read_FOV_file <- function (FOV_name) {
   
     # Diagnostic checks & messages before returning results.
     if (sum(df_star$StarType=="Check")<=0) {
-      cat(">>>>> Warning: FOV file ",FOV_name," has NO CHECK STAR.\n")
+      cat(">>>>> WARNING: FOV file ",FOV_name," has NO CHECK STAR.\n")
     }
   }
   return(list(FOV_data=FOV_data, star_data=df_star))

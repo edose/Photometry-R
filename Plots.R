@@ -3,6 +3,13 @@
 ##### Initiated Jan 17 2016.
 ##### Eric Dose, Bois d'Arc Observatory, Kansas
 
+eclipserPlot <- function(df=df_predictions, starID=NULL) {
+  if (is.null(df) | is.null(starID)){ stop("Please give non-NULL parms.")}
+  x <- (df %>% filter(StarID==starID) %>% arrange(JD_num))$JD_num
+  y <- (df %>% filter(StarID==starID) %>% arrange(JD_num))$TransformedMag
+  plot(x,y)
+}
+
 modelPlots <- function(modelList) {
   ##### Reads modelList from modelOneFilter() run, then performs diagnostics.
   ##### Testing needed.
