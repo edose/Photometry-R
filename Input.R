@@ -667,7 +667,7 @@ parse_APToutput <- function (APToutput_path) {
   
   # For each star, parse all values and add a row to data frame.
   stopString <- "End of "
-  df_APT <- data.frame()    # empty data frame to begin.
+  df_APT <- (rep(0,12) %>% t() %>% as.data.frame())[FALSE,] # df of 12 numeric vars, 0 obs.
   pathnames <- vector()     # empty vector to begin.
   for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
     if (substring(line,1,nchar(stopString))==stopString) 
@@ -681,7 +681,7 @@ parse_APToutput <- function (APToutput_path) {
     df_APT   <- rbind(df_APT, values)
     pathnames <- c(pathnames,FITSpath) # build separate vector of full path names.
   }
-  df_APT <- cbind(df_APT, pathnames)   # add vectors of pathnames as new columns
+  df_APT <- cbind(df_APT, pathnames)   # add vector of pathnames as a new column.
   colnames(df_APT) <- c("Number", "Xpixels", "Ypixels",
                         "RawMagAPT", "MagUncertainty", "SkyMedian", "SkySigma", 
                         "Radius", "SkyRadiusInner", "SkyRadiusOuter", "ApNumRej", 

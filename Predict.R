@@ -100,12 +100,13 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     lines <- c(
       paste0(";----- This is report_map.txt for AN folder ", AN_rel_folder),
       paste0(";----- Use this file to omit and/or combine target observations from AAVSO report."),
-      paste0(";----- Example directive lines:\n"),
+      paste0(";----- Example directive lines:"),
+      paste0(";"),
       paste0(";#TARGET  GD Cyg ; to omit this target star altogether from AAVSO report."),
       paste0(";#SERIAL  34 44,129  32  1202 ; to omit these 5 Serial numbers from AAVSO report."),
       paste0(";#COMBINE   80,128 ; to combine (average) these 2 Serial numbers within AAVSO report."),
-      paste0(";"),
-      paste0(";\n;----- Add your directive lines:\n;\n\n")
+      paste0(";----- Add your directive lines:"),
+      paste0(";\n") 
     )
     writeLines(lines, con=path_report_map)
   }
