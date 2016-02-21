@@ -95,3 +95,47 @@ renumberACP <- function (folder="J:/Astro/Images/C11/2015/20150825/Renaming/") {
   }
   return(df2)
 }
+
+apertureXXX <- function(image, X0, Y0, discR=9, innerR=12, outerR=16) {
+  # [was aperture(), but renamed to avoid later name conflicts]
+  require(dplyr)
+  Xsize <- dim(image)[1]
+  Ysize <- dim(image)[2]
+  testRadius  <- outerR + 1.5
+  Xlow  <- max(1, floor(X0-testRadius))
+  Xhigh <- min(Xsize, ceiling(X0+testRadius))
+  Ylow  <- max(1, floor(Y0-testRadius))
+  Yhigh <- min(Ysize, ceiling(Y0+testRadius))
+  subImage <- image[Xlow:Xhigh, Ylow:Yhigh]
+  discR2 <- discR^2
+  innerR2 <- innerR^2
+  outerR2 <- outerR^2
+  
+  X <- matrix((0:(ncol(subImage)-1))+Xlow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=TRUE)
+  Y <- matrix((0:(nrow(subImage)-1))+Ylow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=FALSE)
+  Xoffset <- 0  # will be a loop, later.
+  Yoffset <- 0  #   ""
+  dX <- X - (X0 + Xoffset)
+  dY <- Y - (Y0 + Yoffset)
+  dist2 <- ((dX*dX) + (dY*dY))
+  discMask <- dist2 <= discR2
+  annulusMask <- (dist2>=innerR2) & (dist2<=outerR2)
+  blotMask <- blot(X, Y)
+  discMask <- discMask & blotMask
+  annulusMask <- annulusMask & blotMask
+  discNA <- ifelse(discMask, subImage, NA)        # either pixel value or NA
+  annulusNA <- ifelse(annulusMask, subImage, NA)  #    ""
+  annulusMedian <- median(annulusNA, na.rm=TRUE)  # this could be more sophisticated later
+  annulusMean   <- mean(annulusNA, na.rm=TRUE)
+  discNet <- discNA - annulusMedian
+  totalNetFlux <- sum(discNet, na.rm=TRUE)
+  Xcentroid <- sum(discNet * X, na.rm=TRUE) / totalNetFlux
+  Ycentroid <- sum(discNet * Y, na.rm=TRUE) / totalNetFlux
+  # Test here for convergence. Loop back if change > TOL, drop through if <= TOL.
+  sigma <- sqrt(sum(discNet * dist2, na.rm=TRUE) / totalNetFlux) / 2
+  FWHM  <- sigma * (2 * sqrt(2 * log(2)))
+  maxPixel <- max(discNA, na.rm=TRUE)
+  return(list(Xcentroid=Xcentroid, Ycentroid=Ycentroid, Flux=totalNetFlux,
+              SkyMedian=annulusMedian, SkyMean=annulusMean,
+              sigma=sigma, FWHM=FWHM, maxPixel=maxPixel))
+}

@@ -1,6 +1,26 @@
 EXPERIMENT LOG, Photometry project.
 Eric Dose, Bois d'Arc Observatory, Kansas.
 
+##### Feb 21 2016: Investigated aperture-handling as a start to replacing APT. The problem rapidly reduced
+to finding the best sky-background level--everything else was just bookkeeping. APT's seemingly-reasonable
+median-of-annulus sky values were found to be biased high, which will reduce net flux of faint star 
+profiles, which is *exactly* what I've seen in some of my mixed model fits (residual vs max ADU). 
+----- The best sky background algorithm I found today was, for a given star: 
+1. optionally "punch" out (remove) from the sky annulus mask any pixels close to a neighboring star 
+(requires info about such interfering stars, which I suppose will need to go into FOV file),
+2. divide the annulus into 8 to 12 slices, 
+3. for each slice with half its pixels surviving the "punch", take the trimmed-mean ADU (or median ADU), 
+4. then take the trimmed-mean (or median) of the surviving slices, and use as the best estimate of
+sky background ADU/pixel for that star.
+This sky background is then subtracted from each pixel of the star disc mask to give the net ADUs 
+for each star pixel. 
+---- So now we should incorporate this into the main workflow via several stages:
+1) keep APT as is but then replace its values with simple (no-punch) algorithm. This will already capture a
+lot of the improvement in bias from APT's median approach.
+2) then add punch algorithm as well (have to modify FOV files and read-functions at great effort),
+3) add a function to find each star pixel location from its RA-Dec + FITS-header data, which when working
+will allow us to dispense with APT altogether.
+
 ##### Feb 7 2016: First basic end-to-end workflow complete, tag v 0.1. Ready to test against a lot of AN
 data sets before submitting to AAVSO.
 
