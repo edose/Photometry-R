@@ -3,7 +3,7 @@
 #####    NOTE: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
 
 makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=8, Rinner=11, Router=16) {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   Xsize <- dim(image)[1]
   Ysize <- dim(image)[2]
   testRadius  <- Router + 1.5
@@ -26,15 +26,49 @@ makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=8, Rinner=11, Router
                discPixels=sum(discMask), skyPixels=sum(skyMask)))
 }
 
-evalAperture <- function (aperture, evalSkyFunction=NULL) {
-  discADU <- aperture$subImage * aperture$discMask
-  if (is.null(evalSkyFunction)) {
-    skyADU <- weighted.mean(aperture$subImage, w=aperture$skyMask) # mean of sky ADUs
-  } else {
-    skyADU <- evalSkyFunction(aperture)
+punch <- function (aperture, df_punch=NULL, Rpunch=7) {
+  # df_punch: columns X & Y only.
+  if (is.null(df_punch)) return (aperture)
+  if (nrow(df_punch)<=0 | Rpunch<=0) return (aperture)
+  require(dplyr, quietly=TRUE)
+  nCol <- ncol(aperture$subImage)
+  nRow <- nrow(aperture$subImage)
+  Xlow     <- aperture$Xlow
+  Ylow     <- aperture$Ylow
+  Xcenter  <- aperture$Xlow + (1+ncol(aperture$subImage))/2
+  Ycenter  <- aperture$Ylow + (1+nrow(aperture$subImage))/2
+  skyMask  <- aperture$skyMask
+  R2punch <- Rpunch^2
+  RmaxPotentialPunch <-sqrt((Xlow-Xcenter)^2 + (Ylow-Ycenter)^2) + Rpunch + 2
+  X <- matrix((0:(nCol-1))+Xlow, nrow=nRow, ncol=nCol, byrow=FALSE)
+  Y <- matrix((0:(nRow-1))+Ylow, nrow=nRow, ncol=nCol, byrow=TRUE)
+  for (iPunch in 1:nrow(df_punch)) {
+    R2punchToCenter <- (df_punch$X[iPunch]-Xcenter)^2 + (df_punch$Y[iPunch]-Ycenter)^2
+    if (R2punchToCenter <= RmaxPotentialPunch^2) {
+      dX <- X - df_punch$X[iPunch]
+      dY <- Y - df_punch$Y[iPunch]
+      dist2 <- dX*dX + dY*dY
+      punchMask <- ifelse(dist2 <= R2punch, 0, 1)  # boolean, 0 to exclude from skyMask, else 1
+      skyMask <- skyMask * punchMask               # do the punch, i.e., exclude pixels
+    }
   }
+  # Modify aperture's sky mask and its # pixels ONLY.
+  aperture$skyMask   <- skyMask    
+  aperture$skyPixels <- sum(aperture$skyMask)
+  return (aperture)
+}
+
+evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
+  require(dplyr, quietly=TRUE)
+  discADU <- aperture$subImage * aperture$discMask
+  skyADU <- evalSkyFunction(aperture)
   netADU <- ifelse(aperture$discMask>0, discADU - skyADU, NA)
   netFlux <- sum(netADU, na.rm=TRUE)
+  gain <- 1.57 # e-/ADU, this valur for BOREA
+  skySigma <- sd( ifelse(aperture$skyMask==0,NA,aperture$subImage), na.rm=TRUE)
+  # netFluxSigma equation after APT paper, PASP 124, 737 (2012).
+  netFluxSigma <- sqrt( (netFlux/gain) + (aperture$skyPixels*(skySigma^2)) + 
+                          ( (pi/2) * ((aperture$discPixels*skySigma)^2) /aperture$skyPixels ) )
   nCol <- ncol(aperture$subImage)
   nRow <- nrow(aperture$subImage)
   Xlow     <- aperture$Xlow
@@ -49,10 +83,9 @@ evalAperture <- function (aperture, evalSkyFunction=NULL) {
   wtSumDist2 <- sum(dist2*netADU, na.rm=TRUE) / netFlux
   sigma <- sqrt(max(0,wtSumDist2)/2)
   FWHM  <- sigma * (2 * sqrt(2 * log(2)))
-  maxADU <- ifelse(aperture$discMask>0, aperture$subImage, NA) %>% max(na.rm=TRUE)
-  return(list(Xcentroid=Xcentroid, Ycentroid=Ycentroid, netFlux=netFlux, skyADU=skyADU,
-              sigma=sigma, FWHM=FWHM, maxADU=maxADU, 
-              discPixels=aperture$discPixels, skyPixels=aperture$skyPixels))
+  return(list(Xcentroid=Xcentroid, Ycentroid=Ycentroid, 
+              netFlux=netFlux, netFluxSigma=netFluxSigma,
+              FWHM=FWHM, discPixels=aperture$discPixels, skyPixels=aperture$skyPixels))
 }
 
 
@@ -79,7 +112,7 @@ evalSky005 <- function (aperture) {
 }
 
 make_sky_slices <- function (aperture, nSlices=8, method="trimmedMean") {
-  require(dplyr)
+  require(dplyr, quietly=TRUE)
   minPixelsPerSlice <- (aperture$skyPixels / nSlices) / 2
   skyMask <- aperture$skyMask
   nCol <- ncol(aperture$subImage)
@@ -111,37 +144,6 @@ make_sky_slices <- function (aperture, nSlices=8, method="trimmedMean") {
   return(sliceList %>% unlist())
 }
 
-punch <- function (aperture, df_punch=NULL, Rpunch=7) {
-  # df_punch: columns X & Y only.
-  if (is.null(df_punch)) return (aperture)
-  if (nrow(df_punch)<=0 | Rpunch<=0) return (aperture)
-  require(dplyr)
-  nCol <- ncol(aperture$subImage)
-  nRow <- nrow(aperture$subImage)
-  Xlow     <- aperture$Xlow
-  Ylow     <- aperture$Ylow
-  Xcenter  <- aperture$Xlow + (1+ncol(aperture$subImage))/2
-  Ycenter  <- aperture$Ylow + (1+nrow(aperture$subImage))/2
-  skyMask  <- aperture$skyMask
-  R2punch <- Rpunch^2
-  RmaxPotentialPunch <-sqrt((Xlow-Xcenter)^2 + (Ylow-Ycenter)^2) + Rpunch + 2
-  X <- matrix((0:(nCol-1))+Xlow, nrow=nRow, ncol=nCol, byrow=FALSE)
-  Y <- matrix((0:(nRow-1))+Ylow, nrow=nRow, ncol=nCol, byrow=TRUE)
-  for (iPunch in 1:nrow(df_punch)) {
-    R2punchToCenter <- (df_punch$X[iPunch]-Xcenter)^2 + (df_punch$Y[iPunch]-Ycenter)^2
-    if (R2punchToCenter <= RmaxPotentialPunch^2) {
-      dX <- X - df_punch$X[iPunch]
-      dY <- Y - df_punch$Y[iPunch]
-      dist2 <- dX*dX + dY*dY
-      punchMask <- ifelse(dist2 <= R2punch, 0, 1)  # boolean, 0 to exclude from skyMask, else 1
-      skyMask <- skyMask * punchMask               # do the punch, i.e., exclude pixels
-    }
-  }
-  # Modify aperture's sky mask and its # pixels ONLY.
-  aperture$skyMask   <- skyMask    
-  aperture$skyPixels <- sum(aperture$skyMask)
-  return (aperture)
-}
 
 
 ################################################################################
@@ -150,6 +152,8 @@ punch <- function (aperture, df_punch=NULL, Rpunch=7) {
 plotImage <- function (image, Xlow, Ylow) {
   # image needs to be a matrix of values.
   # Note: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
+  require(ggplot2, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   df <- expand.grid(X=Xlow:(Xlow+ncol(image)-1), Y=Ylow:(Ylow+nrow(image)-1)) %>%
     mutate(Z=as.vector(image))
   p <- ggplot(df, aes(X,Y)) + geom_raster(aes(fill=Z)) + scale_y_reverse()
@@ -158,6 +162,8 @@ plotImage <- function (image, Xlow, Ylow) {
 
 plotAperture <- function (aperture) {
   # aperture is an "aperture" object.
+  require(ggplot2, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
   plotImage (aperture$subImage, aperture$Xlow, aperture$Ylow)
   plotImage (aperture$discMask+0.8*aperture$skyMask, aperture$Xlow, aperture$Ylow)
 }

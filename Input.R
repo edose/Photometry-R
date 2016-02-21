@@ -172,13 +172,15 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
-                        CCDcenterX=1536, CCDcenterY=1024) {
+                        CCDcenterX=1536, CCDcenterY=1024, method="APT") {
   ##### Tests OK.
   ##### Process all FITS files in folder through APT, build & return master df.
   ##### Typical usage:  df_master <- make_df_master(AN_rel_folder="20151216")
+  ##### Parm "method" can = "APT" (to keep APT values) or "LOCAL" (to overwrite) [not case-sensitive].
   require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  method <- toupper(method)
   
   # make list of all FITS (FITS in /Calibrated folder ONLY; hide files in /Exclude to remove from workflow).
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
@@ -266,6 +268,37 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       if (nrow(df_APT) >= 1) {
         df_APT <- df_APT %>% getMaxADUs()
         df_APT$FITSfile <- substring(df_APT$FITSpath, nchar(FITS_folder)+2)
+        if (method=="LOCAL") {
+          # If we use local method, most of APT's values are overwritten by local scripts (in Aperture.R).
+          source("C:/Dev/Photometry/Aperture.R")
+          thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. In FITS, X is 1st dim, Y the 2nd.
+          Rdisc  <-  8
+          Rinner <- 11
+          Router <- 16
+          for (i in 1:nrow(df_APT)) {
+            # Make "aperture" object from this image and X,Y pixel coordinates.
+            Xcenter <- df_APT$Xpixels[i] # When APT removed, this will have to be supplied from FITS header.
+            Ycenter <- df_APT$Ypixels[i] #   " " "
+            thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
+            # Punch facility will be added later. A punch data frame of 0 rows has no effect.
+            df_punch <- (rep(0,2) %>% t() %>% as.data.frame())[FALSE,] # df of 2 numeric vars, 0 obs.
+            thisApPunched <- punch(thisAp, df_punch)
+            # Get values from this aperture and image matrix.
+            ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
+            # Replace values in this row of df_APT.
+            df_APT$XPixels[i]          <- ev$Xcentroid
+            df_APT$YPixels[i]          <- ev$Ycentroid
+            df_APT$RawMagAPT[i]        <- -2.5 * log10(ev$netFlux)
+            # df_APT$MagUncertainty[i] <- ????? WE NEED THIS!
+            df_APT$SkyMedian[i]        <- ev$skyADU
+            # df_APT$SkyMedian[i]      <- ????? Probably get rid of this.
+            df_APT$Radius[i]           <- Rdisc
+            df_APT$SkyRadiusInner[i]   <- Rinner
+            df_APT$SkyRadiusOuter[i]   <- Router
+            df_APT$ApNumRej[i]         <- thisAp$skyPixels - thisApPunched$skyPixels
+            df_APT$FWHMpixels[i]       <- ev$FWHM
+          }
+        }
         df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
         df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
         print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
