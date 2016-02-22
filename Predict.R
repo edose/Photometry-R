@@ -31,12 +31,11 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   require(dplyr, quietly=TRUE)
   df_predict_input <- df_master %>%
     filter(StarType %in% c("Check","Target")) %>%
-    filter(UseInModel==TRUE) %>%
     filter(MaxADU_Ur<=saturatedADU) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%
     select(Serial, ModelStarID, StarID, Chart, Xpixels, Ypixels, InstMag, MagUncertainty, StarType,
-           JD_mid, Filter, Airmass, CI, Vignette, Vignette4) %>%
+           JD_mid, Filter, Airmass, CI, Vignette) %>%
     mutate(CatMag=0) # arbitrarily chosen, to complete model.
 
   # Get untransformed predicted Inst Mags (via running predict(), collecting all results).

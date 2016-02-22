@@ -286,16 +286,15 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
             # Get values from this aperture and image matrix.
             ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
             # Replace values in this row of df_APT.
-            df_APT$XPixels[i]          <- ev$Xcentroid
-            df_APT$YPixels[i]          <- ev$Ycentroid
+            df_APT$Xpixels[i]          <- ev$Xcentroid
+            df_APT$Ypixels[i]          <- ev$Ycentroid
             df_APT$RawMagAPT[i]        <- -2.5 * log10(ev$netFlux)
-            # df_APT$MagUncertainty[i] <- ????? WE NEED THIS!
+            df_APT$MagUncertainty[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
             df_APT$SkyMedian[i]        <- ev$skyADU
-            # df_APT$SkyMedian[i]      <- ????? Probably get rid of this.
+            df_APT$SkySigma[i]         <- ev$skySigma
             df_APT$Radius[i]           <- Rdisc
             df_APT$SkyRadiusInner[i]   <- Rinner
             df_APT$SkyRadiusOuter[i]   <- Router
-            df_APT$ApNumRej[i]         <- thisAp$skyPixels - thisApPunched$skyPixels
             df_APT$FWHMpixels[i]       <- ev$FWHM
           }
         }
@@ -311,12 +310,11 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     }
   }
 
-  # Construct Vignette variables (stars' squared or 4th-power distance in pixels from image center)
+  # Construct Vignette variable (stars' squared distance in pixels from image center)
   # (Do it here, not in Model.R, so that they are available for predicting check and target stars.)
   df_master <- df_master %>%
     mutate(X1024=(Xpixels-CCDcenterX)/1024, Y1024=(Ypixels-CCDcenterY)/1024) %>%
-    mutate(Vignette =(X1024^2 + Y1024^2)) %>%
-    mutate(Vignette4=Vignette^2) # corrected definition
+    mutate(Vignette =(X1024^2 + Y1024^2))
   
   # Write out entire APT text log (all runs).
   write(allAPTstdout, APTstdout_path)
@@ -333,7 +331,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   df_master <- df_master %>%
     arrange(JD_mid, Number) %>%
     mutate(Serial=1:nrow(df_master)) %>%
-    select(Serial, UseInModel, ModelStarID, FITSfile, everything())
+    select(Serial, ModelStarID, FITSfile, everything()) %>%
+    select(-Number)
   df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
   save(df_master, file=df_master_path, precheck=FALSE) # recover via: load_df_master(AN_rel_folder="201..").
   cat("make_df_master() has saved df_master to", df_master_path, "\n   now returning df_master.\n")
@@ -370,7 +369,6 @@ images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   
   df <- df_master %>% 
     filter(StarType=="Comp") %>% 
-    filter(UseInModel==TRUE) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
     filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex) %>%
@@ -687,9 +685,9 @@ parse_APToutput <- function (APToutput_path) {
   header <- lines[3]
   headerKeys <- c("Number", "CentroidX", "CentroidY",
                   "Magnitude", "MagUncertainty", "SkyMedian", "SkySigma",
-                  "RadiusCentroid", "SkyRadiusInner", "SkyRadiusOuter", "ApertureNumRejected",
+                  "RadiusCentroid", "SkyRadiusInner", "SkyRadiusOuter",
                   "RadialProfileFWHM") # key "Image" is left-justified; handle separately below.
-  fieldWidths <- c(6,16,16, 16,16,16,16,  12,12,12,12,  12)
+  fieldWidths <- c(6,16,16, 16,16,16,16,  12,12,12,  12)
   rightmostColumns <- NULL
   for (key in headerKeys) {
     rightmostColumns <- c(rightmostColumns,
@@ -700,7 +698,11 @@ parse_APToutput <- function (APToutput_path) {
   
   # For each star, parse all values and add a row to data frame.
   stopString <- "End of "
-  df_APT <- (rep(0,12) %>% t() %>% as.data.frame())[FALSE,] # df of 12 numeric vars, 0 obs.
+  colNames_df_APT <- c("Number", "Xpixels", "Ypixels",
+                       "RawMagAPT", "MagUncertainty", "SkyMedian", "SkySigma", 
+                       "Radius", "SkyRadiusInner", "SkyRadiusOuter",
+                       "FWHMpixels", "FITSpath")
+  df_APT <- (rep(0,length(colNames_df_APT)-1) %>% t() %>% as.data.frame())[FALSE,] # df of 0 obs/rows.
   pathnames <- vector()     # empty vector to begin.
   for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
     if (substring(line,1,nchar(stopString))==stopString) 
@@ -715,21 +717,18 @@ parse_APToutput <- function (APToutput_path) {
     pathnames <- c(pathnames,FITSpath) # build separate vector of full path names.
   }
   df_APT <- cbind(df_APT, pathnames)   # add vector of pathnames as a new column.
-  colnames(df_APT) <- c("Number", "Xpixels", "Ypixels",
-                        "RawMagAPT", "MagUncertainty", "SkyMedian", "SkySigma", 
-                        "Radius", "SkyRadiusInner", "SkyRadiusOuter", "ApNumRej", 
-                        "FWHMpixels", "FITSpath")
+  colnames(df_APT) <- colNames_df_APT 
   df_APT$FITSpath <- as.character(df_APT$FITSpath) # without as.character() it ends up as a factor (bad).
   return(df_APT %>% arrange(Number))
   }
 
 getMaxADUs <- function(df_APT, saturatedADU=54000) {
   # TESTED 11/29/2015.
-  # Open Ur (not Calibrated) FITS and for any observation showing saturated pixels,
-  # set Saturated=TRUE for that row in df_FITS and return.
+  # Open Ur (not Calibrated) FITS and determine max ADU within the disc radius.
   # We want to use the original (Ur) FITS file for true checking of pixel saturation --
   #    unfortunately that means we have to look up the old filename.
-  # Note: APT's first pixel is numbered "1", MaxIm's is numbered "0".
+  # Note: FITS (& APT's) first pixel is numbered "1", MaxIm's is numbered "0".
+  # Later, use Aperture.R functions rather than duplicating them here.
   CalFITS_path <- as.character(df_APT$FITSpath[1])
 
   # make UrFITS_path (original file name, prob ACP-format) from CalFITS_path & new file name.
@@ -751,10 +750,9 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
   image <- D$imDat
   Xsize <- D$axDat$len[1]
   Ysize <- D$axDat$len[2]
-  df_APT$Saturated <- FALSE  # add column to data frame with initial values.
   df_APT$MaxADU_Ur <- NA        #  "
 
-  # now, mark Saturated=TRUE for any row (Observation) with a saturated pixel within aperture.
+  # now, get max ADU from Ur file, within source aperture.
   for (iObj in 1:nrow(df_APT)) {
     n <- df_APT$Number[iObj]
     Xcenter <- df_APT$Xpixels[iObj]
@@ -768,7 +766,6 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
       for (Y in Ylow:Yhigh) {
         ADU <- image[X,Y]
         if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
-          if (ADU > saturatedADU)         { df_APT$Saturated[iObj] <- TRUE }
           if (is.na(df_APT$MaxADU_Ur[iObj])) { df_APT$MaxADU_Ur[iObj] <- ADU }
           if (ADU > df_APT$MaxADU_Ur[iObj])  { df_APT$MaxADU_Ur[iObj] <- ADU }
         } # if
@@ -814,9 +811,8 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
   #   CI is color index V-I; RawMagAPT is 
   
   APT_star_data <- APT_star_data %>%
-    mutate(ModelStarID=paste0(FOV_data$Sequence,"_",APT_star_data$StarID)) %>%  # as "ST Tri_137"
-    mutate(UseInModel=TRUE)  # default value only
-  
+    mutate(ModelStarID=paste0(FOV_data$Sequence,"_",APT_star_data$StarID))  # as "ST Tri_137"
+
   df <- left_join(df_APT, APT_star_data, by="Number") %>%
     cbind(df_FITSheader) %>%
     mutate(Sequence=FOV_data$Sequence, 
@@ -824,7 +820,9 @@ make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_d
            FOV_date=FOV_data$Date,
            CI=MagV-MagI) %>%
     mutate(RawMagAPT = RawMagAPT + 2.5 * log10(Exposure)) %>%
-    rename(InstMag=RawMagAPT)
+    rename(InstMag=RawMagAPT) %>%
+    select(-Object) %>%
+    rename(FOV=Sequence)
   
   # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")

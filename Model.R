@@ -6,7 +6,7 @@
 
 modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                             filter=NULL, maxMagUncertainty=0.03, maxColorIndex=2.5, saturatedADU=54000,
-                            fit_vignette=TRUE, fit_vignette4=FALSE, fit_XY=FALSE,
+                            fit_vignette=TRUE, fit_XY=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
   #             (2) the omit.txt file of observations to omit (also stored in /Photometry).
@@ -22,7 +22,6 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
-    filter(UseInModel==TRUE) %>%
     filter(MagUncertainty<=maxMagUncertainty) %>%
     filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex) %>%
@@ -49,9 +48,6 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   if (fit_vignette) {
     formula_string <- paste0(formula_string, " + Vignette")
   }
-  if (fit_vignette4) {
-    formula_string <- paste0(formula_string, " + Vignette4")
-  } 
   if (fit_XY) {
     formula_string <- paste0(formula_string, " + X1024 + Y1024")
   }
@@ -108,12 +104,11 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   extinction <- ifelse(fit_extinction, fixef(thisModel)["Airmass"],   extinction)
   transform  <- ifelse(fit_transform,  fixef(thisModel)["CI"],        transform)
   vignette   <- ifelse(fit_vignette,   fixef(thisModel)["Vignette"],  0)
-  vignette4  <- ifelse(fit_vignette4,  fixef(thisModel)["Vignette4"], 0)
-  
+
   modelList <- list(model=thisModel, obs=obs, AN=AN_rel_folder, image=image, star=star, filter=filter, 
                     transform=transform, fit_transform=fit_transform,
                     extinction=extinction, fit_extinction=fit_extinction,
-                    vignette=vignette, vignette4=vignette4)
+                    vignette=vignette)
   cat("modelOneFilter('", filter, "') completed on ", nrow(df_model), " observations.\n", sep="")
   # source('C:/Dev/Photometry/Plots.R')
   # modelPlots(modelList)

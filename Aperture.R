@@ -84,7 +84,7 @@ evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
   sigma <- sqrt(max(0,wtSumDist2)/2)
   FWHM  <- sigma * (2 * sqrt(2 * log(2)))
   return(list(Xcentroid=Xcentroid, Ycentroid=Ycentroid, 
-              netFlux=netFlux, netFluxSigma=netFluxSigma,
+              netFlux=netFlux, netFluxSigma=netFluxSigma, skyADU=skyADU, skySigma=skySigma,
               FWHM=FWHM, discPixels=aperture$discPixels, skyPixels=aperture$skyPixels))
 }
 
@@ -143,7 +143,6 @@ make_sky_slices <- function (aperture, nSlices=8, method="trimmedMean") {
   }
   return(sliceList %>% unlist())
 }
-
 
 
 ################################################################################
