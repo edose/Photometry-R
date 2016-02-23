@@ -5,7 +5,7 @@
 #####                 make_masterModelList(AN_rel_folder="20151216", modelLists=list(listV, listR, listI))
 
 modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
-                            filter=NULL, maxMagUncertainty=0.03, maxColorIndex=2.5, saturatedADU=54000,
+                            filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
                             fit_vignette=TRUE, fit_XY=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
@@ -22,7 +22,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
-    filter(MagUncertainty<=maxMagUncertainty) %>%
+    filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex) %>%
     filter(MaxADU_Ur<=saturatedADU) %>%

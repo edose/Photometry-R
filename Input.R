@@ -277,8 +277,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           Router <- 16
           for (i in 1:nrow(df_APT)) {
             # Make "aperture" object from this image and X,Y pixel coordinates.
-            Xcenter <- df_APT$Xpixels[i] # When APT removed, this will have to be supplied from FITS header.
-            Ycenter <- df_APT$Ypixels[i] #   " " "
+            Xcenter <- df_APT$Xcentroid[i] # When APT removed, this will have to be supplied from FITS header.
+            Ycenter <- df_APT$Ycentroid[i] #   " " "
             thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
             # Punch facility will be added later. A punch data frame of 0 rows has no effect.
             df_punch <- (rep(0,2) %>% t() %>% as.data.frame())[FALSE,] # df of 2 numeric vars, 0 obs.
@@ -286,16 +286,16 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
             # Get values from this aperture and image matrix.
             ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
             # Replace values in this row of df_APT.
-            df_APT$Xpixels[i]          <- ev$Xcentroid
-            df_APT$Ypixels[i]          <- ev$Ycentroid
-            df_APT$RawMagAPT[i]        <- -2.5 * log10(ev$netFlux)
-            df_APT$MagUncertainty[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
-            df_APT$SkyMedian[i]        <- ev$skyADU
-            df_APT$SkySigma[i]         <- ev$skySigma
-            df_APT$Radius[i]           <- Rdisc
-            df_APT$SkyRadiusInner[i]   <- Rinner
-            df_APT$SkyRadiusOuter[i]   <- Router
-            df_APT$FWHMpixels[i]       <- ev$FWHM
+            df_APT$Xcentroid[i]      <- ev$Xcentroid
+            df_APT$Ycentroid[i]      <- ev$Ycentroid
+            df_APT$RawMagAPT[i]      <- -2.5 * log10(ev$netFlux)
+            df_APT$InstMagSigma[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
+            df_APT$SkyADU[i]         <- ev$skyADU
+            df_APT$SkySigma[i]       <- ev$skySigma
+            df_APT$DiscRadius[i]     <- Rdisc
+            df_APT$SkyRadiusInner[i] <- Rinner
+            df_APT$SkyRadiusOuter[i] <- Router
+            df_APT$FWHM[i]           <- ev$FWHM
           }
         }
         df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
@@ -313,7 +313,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   # Construct Vignette variable (stars' squared distance in pixels from image center)
   # (Do it here, not in Model.R, so that they are available for predicting check and target stars.)
   df_master <- df_master %>%
-    mutate(X1024=(Xpixels-CCDcenterX)/1024, Y1024=(Ypixels-CCDcenterY)/1024) %>%
+    mutate(X1024=(Xcentroid-CCDcenterX)/1024, Y1024=(Ycentroid-CCDcenterY)/1024) %>%
     mutate(Vignette =(X1024^2 + Y1024^2))
   
   # Write out entire APT text log (all runs).
@@ -363,13 +363,13 @@ images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
   load(df_master_path)
   
-  maxMagUncertainty <- 0.03
+  maxInstMagSigma <- 0.03
   maxColorIndex <- 2.5
   saturatedADU <- 5400
   
   df <- df_master %>% 
     filter(StarType=="Comp") %>% 
-    filter(MagUncertainty<=maxMagUncertainty) %>%
+    filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex) %>%
     filter(MaxADU_Ur<=saturatedADU) %>%
@@ -698,10 +698,10 @@ parse_APToutput <- function (APToutput_path) {
   
   # For each star, parse all values and add a row to data frame.
   stopString <- "End of "
-  colNames_df_APT <- c("Number", "Xpixels", "Ypixels",
-                       "RawMagAPT", "MagUncertainty", "SkyMedian", "SkySigma", 
-                       "Radius", "SkyRadiusInner", "SkyRadiusOuter",
-                       "FWHMpixels", "FITSpath")
+  colNames_df_APT <- c("Number", "Xcentroid", "Ycentroid",
+                       "RawMagAPT", "InstMagSigma", "SkyADU", "SkySigma", 
+                       "DiscRadius", "SkyRadiusInner", "SkyRadiusOuter",
+                       "FWHM", "FITSpath")
   df_APT <- (rep(0,length(colNames_df_APT)-1) %>% t() %>% as.data.frame())[FALSE,] # df of 0 obs/rows.
   pathnames <- vector()     # empty vector to begin.
   for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
@@ -755,9 +755,9 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
   # now, get max ADU from Ur file, within source aperture.
   for (iObj in 1:nrow(df_APT)) {
     n <- df_APT$Number[iObj]
-    Xcenter <- df_APT$Xpixels[iObj]
-    Ycenter <- df_APT$Ypixels[iObj]
-    testRadius  <- df_APT$Radius[iObj] + 0.5
+    Xcenter <- df_APT$Xcentroid[iObj]
+    Ycenter <- df_APT$Ycentroid[iObj]
+    testRadius  <- df_APT$DiscRadius[iObj] + 0.5
     Xlow  <- max(1, floor(Xcenter-testRadius))
     Xhigh <- min(Xsize, ceiling(Xcenter+testRadius))
     Ylow  <- max(1, floor(Ycenter-testRadius))

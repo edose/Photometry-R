@@ -10,7 +10,7 @@
 #####    Set all /Photometry files to read only (in Windows).
 
 predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
-                        saturatedADU=54000, maxMagUncertainty=0.05, CI_filters=c("V","I")) {
+                        saturatedADU=54000, maxInstMagSigma=0.05, CI_filters=c("V","I")) {
   ##### Performs ALL steps to get transformed magnitudes for Check and Target observations in df_master.
   ##### Returns big data frame df_predict (which is transformed).
   ##### Requires that AN folder contain R files df_master.Rdata (from Input.R::make_df_master()) and 
@@ -32,9 +32,9 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   df_predict_input <- df_master %>%
     filter(StarType %in% c("Check","Target")) %>%
     filter(MaxADU_Ur<=saturatedADU) %>%
-    filter(MagUncertainty<=maxMagUncertainty) %>%
+    filter(InstMagSigma<=maxInstMagSigma) %>%
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%
-    select(Serial, ModelStarID, StarID, Chart, Xpixels, Ypixels, InstMag, MagUncertainty, StarType,
+    select(Serial, ModelStarID, StarID, Chart, Xcentroid, Ycentroid, InstMag, InstMagSigma, StarType,
            JD_mid, Filter, Airmass, CI, Vignette) %>%
     mutate(CatMag=0) # arbitrarily chosen, to complete model.
 
@@ -85,7 +85,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   df_xref_modelSigma$Filter <- as.character(df_xref_modelSigma$Filter)
   df_transformed <- df_transformed %>%
     left_join(df_xref_modelSigma, by="Filter") %>%
-    mutate(MagErr = pmax(ModelSigma, MagUncertainty)) # pmax = "parallel" element-wise max of 2 vectors
+    mutate(MagErr = pmax(ModelSigma, InstMagSigma)) # pmax = "parallel" element-wise max of 2 vectors
   
   df_transformed <- df_transformed %>% arrange(ModelStarID, JD_num)
   
