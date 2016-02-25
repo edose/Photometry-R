@@ -170,18 +170,31 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   unlink(UncalibratedFolder,recursive=TRUE)
 }
 
+getXYfromAPT <- function(df_RADec, thisFITS_path, photometry_folder) {
+  require(dplyr, quietly=TRUE)
+  APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
+  APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
+  APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
+  unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
+  # allAPTstdout <- character(0)
+  APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
+                               APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
+                               APToutput_path)
+  # allAPTstdout <- c(allAPTstdout, APTstdout)
+  return(parse_APToutput(APToutput_path) %>% select(Number, Xcentroid, Ycentroid))
+}
+
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
                         APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
-                        CCDcenterX=1536, CCDcenterY=1024, method="APT") {
+                        CCDcenterX=1536, CCDcenterY=1024) {
   ##### Tests OK.
-  ##### Process all FITS files in folder through APT, build & return master df.
+  ##### Process all FITS files in folder through APT to get (X,Y) for FOV's (RA,Dec) pairs, 
+  #####    then build & return master data frame.
   ##### Typical usage:  df_master <- make_df_master(AN_rel_folder="20151216")
-  ##### Parm "method" can = "APT" (to keep APT values) or "LOCAL" (to overwrite) [not case-sensitive].
   require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
-  method <- toupper(method)
-  
+
   # make list of all FITS (FITS in /Calibrated folder ONLY; hide files in /Exclude to remove from workflow).
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
   FITS_files  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
@@ -235,12 +248,6 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     stop("STOPPING at user request.")
   }
 
-  APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
-  APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
-  APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
-  unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
-  allAPTstdout <- character(0)
-  
   # For each FOV, (1) read FOV file, (2) make APT source file,
   #    (3) run_APT_oneFITS() on each FITS file & add to master df.
   df_master <- data.frame()  # start with a null data frame and later add rows to it.
@@ -255,51 +262,58 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       unlist()
 
     # write APT's sourcelist file (one only) for all FITS files using this FOV.
-    APT_star_data <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
-    
+    # APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
+    # APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
+    APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
+    df_star_data_numbered <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
+    df_RADec <- df_star_data_numbered %>% select(Number, degRA, degDec)
+
     # for each FITS file derived from this FOV, run APT to make APT output file.
+    Rdisc  <-  8
+    Rinner <- 11
+    Router <- 16
     for (thisFITS_path in FOV_FITS_paths) {
-      df_FITSheader <- getFITSheaderInfo(thisFITS_path)
-      APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
-                                   APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
-                                   APToutput_path)
-      allAPTstdout <- c(allAPTstdout, APTstdout)
-      df_APT <- parse_APToutput(APToutput_path)
-      if (nrow(df_APT) >= 1) {
-        df_APT <- df_APT %>% getMaxADUs()
-        df_APT$FITSfile <- substring(df_APT$FITSpath, nchar(FITS_folder)+2)
-        if (method=="LOCAL") {
-          # If we use local method, most of APT's values are overwritten by local scripts (in Aperture.R).
-          source("C:/Dev/Photometry/Aperture.R")
-          thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. In FITS, X is 1st dim, Y the 2nd.
-          Rdisc  <-  8
-          Rinner <- 11
-          Router <- 16
-          for (i in 1:nrow(df_APT)) {
-            # Make "aperture" object from this image and X,Y pixel coordinates.
-            Xcenter <- df_APT$Xcentroid[i] # When APT removed, this will have to be supplied from FITS header.
-            Ycenter <- df_APT$Ycentroid[i] #   " " "
-            thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
-            # Punch facility will be added later. A punch data frame of 0 rows has no effect.
-            df_punch <- (rep(0,2) %>% t() %>% as.data.frame())[FALSE,] # df of 2 numeric vars, 0 obs.
-            thisApPunched <- punch(thisAp, df_punch)
-            # Get values from this aperture and image matrix.
-            ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
-            # Replace values in this row of df_APT.
-            df_APT$Xcentroid[i]      <- ev$Xcentroid
-            df_APT$Ycentroid[i]      <- ev$Ycentroid
-            df_APT$RawMagAPT[i]      <- -2.5 * log10(ev$netFlux)
-            df_APT$InstMagSigma[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
-            df_APT$SkyADU[i]         <- ev$skyADU
-            df_APT$SkySigma[i]       <- ev$skySigma
-            df_APT$DiscRadius[i]     <- Rdisc
-            df_APT$SkyRadiusInner[i] <- Rinner
-            df_APT$SkyRadiusOuter[i] <- Router
-            df_APT$FWHM[i]           <- ev$FWHM
-          }
+      df_XY <- getXYfromAPT(df_RADec, thisFITS_path, photometry_folder) 
+      df_apertures <- df_XY %>%
+        mutate(RawADUMag=NA_real_, InstMagSigma=NA_real_, 
+               SkyADU=NA_real_, SkySigma=NA_real_, 
+               DiscRadius=Rdisc, SkyRadiusInner=Rinner, SkyRadiusOuter=Router,
+               FWHM=NA_real_)
+      if (nrow(df_apertures) >= 1) {
+        df_apertures$FITSfile  <- substring(thisFITS_path, nchar(FITS_folder)+2)
+        df_apertures$MaxADU_Ur <- getMaxADU_Ur(thisFITS_path, df_XY, Rdisc)
+        source("C:/Dev/Photometry/Aperture.R")
+        thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. In FITS, X is 1st dim, Y the 2nd.
+        for (i in 1:nrow(df_apertures)) {
+          # Make "aperture" object from this image and this aperture center (X,Y).
+          Xcenter <- df_apertures$Xcentroid[i]
+          Ycenter <- df_apertures$Ycentroid[i]
+          thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
+          # Punch facility will be added later; it will require (1) #PUNCH directive added to FOV files, and
+          #    (2) code in read_FOV_file() to read #PUNCH directives and store them 
+          #    in FOV_data (not sure how to do that). 
+          # This temporary, empty punch data frame has no effect.
+          df_punch <- (rep(0,2) %>% t() %>% as.data.frame())[FALSE,]
+          thisApPunched <- punch(thisAp, df_punch)
+          # Get values from this aperture and image matrix.
+          ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
+          
+          # Replace values in this row of df_apertures.
+          df_apertures$Xcentroid[i]      <- ev$Xcentroid # update centroid.
+          df_apertures$Ycentroid[i]      <- ev$Ycentroid #   " "
+          df_apertures$RawADUMag[i]      <- -2.5 * log10(ev$netFlux)
+          df_apertures$InstMagSigma[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
+          df_apertures$SkyADU[i]         <- ev$skyADU
+          df_apertures$SkySigma[i]       <- ev$skySigma
+          df_apertures$FWHM[i]           <- ev$FWHM
         }
-        df_master_thisFITS <- make_df_master_thisFITS(df_APT, APT_star_data, df_FITSheader, FOV_list$FOV_data)
-        df_master <- rbind(df_master, df_master_thisFITS)         # append master rows to master data frame.
+        # Combine different data sets to make one data frame for this image.
+        df_FITSheader <- getFITSheaderInfo(thisFITS_path)
+        df_master_thisFITS <- make_df_master_thisFITS(df_apertures, df_star_data_numbered, df_FITSheader, 
+                                                      FOV_list$FOV_data)
+        # Append all this image's data to master data frame.
+        df_master <- rbind(df_master, df_master_thisFITS)
+        
         print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
                     " --> df_master now has", nrow(df_master), "rows"), quote=FALSE)
       } else {
@@ -311,13 +325,13 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   }
 
   # Construct Vignette variable (stars' squared distance in pixels from image center)
-  # (Do it here, not in Model.R, so that they are available for predicting check and target stars.)
+  #    and X1024 & Y1024 (well-scaled pixel distances from CCD center), for all stars incl check and target.
   df_master <- df_master %>%
     mutate(X1024=(Xcentroid-CCDcenterX)/1024, Y1024=(Ycentroid-CCDcenterY)/1024) %>%
     mutate(Vignette =(X1024^2 + Y1024^2))
   
   # Write out entire APT text log (all runs).
-  write(allAPTstdout, APTstdout_path)
+  # write(allAPTstdout, APTstdout_path)
   
   # Add column for old (Ur) filenames.
   df_rename <- read.table(make_safe_path(AN_folder, "Photometry/File-renaming.txt"), 
@@ -326,8 +340,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     rename(FITSfile=NewFilename, UrFITSfile=RelPath)
   df_master <- left_join(df_master, df_rename, by="FITSfile")
   
-  # Sort by JD_mid then Number, add Serial number column & move it to left end.
-  # Serial numbers mostly used to omit specific data points from models.
+  # Sort by JD_mid then Number, add master Serial number column & move it to left end.
+  # (Serial numbers mostly used to omit specific data points from models.)
   df_master <- df_master %>%
     arrange(JD_mid, Number) %>%
     mutate(Serial=1:nrow(df_master)) %>%
@@ -636,7 +650,6 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NUL
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
 
-
 run_APT_oneFITS <- function (thisFITS_path=NULL, 
                              APTsourcelist_path, APTpreferences_path, APToutput_path) {
 # Process one FITS file through APT. 
@@ -664,15 +677,15 @@ run_APT_oneFITS <- function (thisFITS_path=NULL,
 }
 
 write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
-  APT_star_data <- star_data %>% mutate(Number=1:nrow(star_data))
+  df_star_data_numbered <- star_data %>% mutate(Number=1:nrow(star_data))
   
-  APT_star_data %>%
+  df_star_data_numbered %>%
     arrange(Number) %>%          # ensure stars are in correct order in APT source file.
     select(degRA,degDec) %>%     # APT source file needs only degRA & degDec
     format(nsmall=6) %>% 
     write.table(APTsourcelist_path, quote=FALSE, row.names=FALSE, col.names=FALSE) # no header line.
   
-  return(APT_star_data) # with Number to ensure join works correctly.
+  return(df_star_data_numbered) # all star data, with added Number to ensure join works correctly.
 }
 
 parse_APToutput <- function (APToutput_path) {
@@ -683,53 +696,40 @@ parse_APToutput <- function (APToutput_path) {
   # Parse APT output header, set up a column range for each key.
   require(stringi, quietly=TRUE)
   header <- lines[3]
-  headerKeys <- c("Number", "CentroidX", "CentroidY",
-                  "Magnitude", "MagUncertainty", "SkyMedian", "SkySigma",
-                  "RadiusCentroid", "SkyRadiusInner", "SkyRadiusOuter",
-                  "RadialProfileFWHM") # key "Image" is left-justified; handle separately below.
-  fieldWidths <- c(6,16,16, 16,16,16,16,  12,12,12,  12)
+  headerKeys <- c("Number", "CentroidX", "CentroidY")
+  fieldWidths <- c(6,16,16)
   rightmostColumns <- NULL
   for (key in headerKeys) {
     rightmostColumns <- c(rightmostColumns,
                           stri_locate_first_fixed(header, paste(" ",key," ",sep=""))[2]-1) # append
   }
   leftmostColumns <- rightmostColumns - fieldWidths + 1
-  FITSpath_leftColumn <- (stri_locate_first_fixed(header, " Image "))[1]+1
-  
+
   # For each star, parse all values and add a row to data frame.
   stopString <- "End of "
-  colNames_df_APT <- c("Number", "Xcentroid", "Ycentroid",
-                       "RawMagAPT", "InstMagSigma", "SkyADU", "SkySigma", 
-                       "DiscRadius", "SkyRadiusInner", "SkyRadiusOuter",
-                       "FWHM", "FITSpath")
-  df_APT <- (rep(0,length(colNames_df_APT)-1) %>% t() %>% as.data.frame())[FALSE,] # df of 0 obs/rows.
-  pathnames <- vector()     # empty vector to begin.
+  colNames_df_apertures <- c("Number", "Xcentroid", "Ycentroid")
+  # Start df_apertures as a data frame of 0 rows (observations).
+  df_apertures <- (rep(0,length(colNames_df_apertures)) %>% t() %>% as.data.frame())[FALSE,]
   for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
     if (substring(line,1,nchar(stopString))==stopString) 
       break
-    FITSpath <- trimws(substring(line,FITSpath_leftColumn))
-    line <- line %>% substring(1,FITSpath_leftColumn-1) %>% paste(" ")
     values <- rep(NA,length(headerKeys))
     for (iKey in 1:length(headerKeys)) {
       values[iKey] <- as.numeric(substring(line,leftmostColumns[iKey],rightmostColumns[iKey]))
     }
-    df_APT   <- rbind(df_APT, values)
-    pathnames <- c(pathnames,FITSpath) # build separate vector of full path names.
+    df_apertures   <- rbind(df_apertures, values)
   }
-  df_APT <- cbind(df_APT, pathnames)   # add vector of pathnames as a new column.
-  colnames(df_APT) <- colNames_df_APT 
-  df_APT$FITSpath <- as.character(df_APT$FITSpath) # without as.character() it ends up as a factor (bad).
-  return(df_APT %>% arrange(Number))
-  }
+  colnames(df_apertures) <- colNames_df_apertures # do here, as column names not respected by rbind() above.
+  return(df_apertures %>% arrange(Number))
+}
 
-getMaxADUs <- function(df_APT, saturatedADU=54000) {
+getMaxADU_Ur <- function(CalFITS_path, df_XY, Rdisc, saturatedADU=54000) {
   # TESTED 11/29/2015.
   # Open Ur (not Calibrated) FITS and determine max ADU within the disc radius.
   # We want to use the original (Ur) FITS file for true checking of pixel saturation --
   #    unfortunately that means we have to look up the old filename.
   # Note: FITS (& APT's) first pixel is numbered "1", MaxIm's is numbered "0".
-  # Later, use Aperture.R functions rather than duplicating them here.
-  CalFITS_path <- as.character(df_APT$FITSpath[1])
+  # Later, use Aperture.R functions rather than ~ duplicating the code here.
 
   # make UrFITS_path (original file name, prob ACP-format) from CalFITS_path & new file name.
   pattern <- "^(.+)/Calibrated/(.+)"
@@ -750,14 +750,13 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
   image <- D$imDat
   Xsize <- D$axDat$len[1]
   Ysize <- D$axDat$len[2]
-  df_APT$MaxADU_Ur <- NA        #  "
+  MaxADU_Ur <- rep(NA_real_,nrow(df_XY)) # default vector to begin with.
 
   # now, get max ADU from Ur file, within source aperture.
-  for (iObj in 1:nrow(df_APT)) {
-    n <- df_APT$Number[iObj]
-    Xcenter <- df_APT$Xcentroid[iObj]
-    Ycenter <- df_APT$Ycentroid[iObj]
-    testRadius  <- df_APT$DiscRadius[iObj] + 0.5
+  for (iObj in 1:nrow(df_XY)) {
+    Xcenter     <- df_XY$Xcentroid[iObj]
+    Ycenter     <- df_XY$Ycentroid[iObj]
+    testRadius  <- Rdisc + 0.5
     Xlow  <- max(1, floor(Xcenter-testRadius))
     Xhigh <- min(Xsize, ceiling(Xcenter+testRadius))
     Ylow  <- max(1, floor(Ycenter-testRadius))
@@ -766,13 +765,13 @@ getMaxADUs <- function(df_APT, saturatedADU=54000) {
       for (Y in Ylow:Yhigh) {
         ADU <- image[X,Y]
         if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
-          if (is.na(df_APT$MaxADU_Ur[iObj])) { df_APT$MaxADU_Ur[iObj] <- ADU }
-          if (ADU > df_APT$MaxADU_Ur[iObj])  { df_APT$MaxADU_Ur[iObj] <- ADU }
+          if (is.na(MaxADU_Ur[iObj])) { MaxADU_Ur[iObj] <- ADU }
+          if (ADU > MaxADU_Ur[iObj])  { MaxADU_Ur[iObj] <- ADU }
         } # if
       } # for Y
     } # for X
   } # for iObj
-  return(df_APT)
+  return(MaxADU_Ur)
 }
 
 getFITSheaderInfo <- function (FITS_path) {
@@ -799,30 +798,28 @@ getFITSheaderInfo <- function (FITS_path) {
   return (df)
 }
 
-make_df_master_thisFITS <- function (df_APT, APT_star_data, df_FITSheader, FOV_data) {
+make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FITSheader, FOV_data) {
   # Combine all relevant data for all APT-detected stars for this FITS file.
   # Inputs:
-  #   df_APT = parsed output from APT run on this FITS file.
-  #   APT_star_data = FOV star data IN ORDER given to APT (so that data can be joined herein).
+  #   df_apertures = parsed output from APT run on this FITS file.
+  #   df_star_data_numbered = FOV star data IN ORDER given to APT (so that data can be joined herein).
   #   df_FITSheader = data from FITS file header (Filter used, JD of exposure, etc; uniform for all rows)
   #   FOV_data = data about the FOV (uniform across all rows)
 
   # Join APT, FOV star, and APT data  to give master data frame.
-  #   CI is color index V-I; RawMagAPT is 
+  #   CI is color index V-I; RawADUMag is ADU-based Instrument Mag not yet corrected for exposure time.
   
-  APT_star_data <- APT_star_data %>%
-    mutate(ModelStarID=paste0(FOV_data$Sequence,"_",APT_star_data$StarID))  # as "ST Tri_137"
+  df_star_data_numbered <- df_star_data_numbered %>%
+    mutate(ModelStarID=paste0(FOV_data$Sequence,"_",df_star_data_numbered$StarID))  # as "ST Tri_137"
 
-  df <- left_join(df_APT, APT_star_data, by="Number") %>%
+  df <- left_join(df_apertures, df_star_data_numbered, by="Number") %>%
     cbind(df_FITSheader) %>%
-    mutate(Sequence=FOV_data$Sequence, 
+    mutate(FOV=FOV_data$Sequence, 
            Chart=FOV_data$Chart, 
            FOV_date=FOV_data$Date,
            CI=MagV-MagI) %>%
-    mutate(RawMagAPT = RawMagAPT + 2.5 * log10(Exposure)) %>%
-    rename(InstMag=RawMagAPT) %>%
-    select(-Object) %>%
-    rename(FOV=Sequence)
+    mutate(InstMag = RawADUMag + 2.5 * log10(Exposure)) %>%
+    select(-Object,-RawADUMag)
   
   # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
