@@ -1,6 +1,42 @@
 ##### Aperture.R  Supporting Aperture and sky-background funcions, perhaps to replace APT.
-#####    In development February 2016.
+#####    TESTS OK February 27 2016.
 #####    NOTE: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
+
+addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec) {
+  require(stringi, quietly=TRUE)
+  FOV_folder <- "C:/Dev/Photometry/FOV"
+  FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
+  if (!file.exists(FOV_path)) {stop(">>>>> Cannot open FOV file.")}
+  lines <- readLines(FOV_path, warn=FALSE)   # read last line even without EOL character(s).
+  starsDirectiveAt <- charmatch("#STARS", lines)
+  if(starsDirectiveAt <= 0) {stop(">>>>> Cannot find #STARS directive in FOV file.")}
+  starID <- trimws(starID)
+  
+  # Check that given starID is in the FOV's list of stars.
+  df_FOV_stars <- (read_FOV_file(FOV_name))$star_data # data frame of stars in FOV file
+  if (!starID %in% df_FOV_stars$StarID) {stop(paste0(">>>>> StarID '", starID, "' not in FOV star list."))}
+
+  # Make line to insert into FOV file.
+  dNorth <- 3600 * (get_Dec_deg(punchDec) - get_Dec_deg(Dec))                                # in arcsec
+  dEast  <- 3600 * (get_RA_deg(punchRA)   - get_RA_deg(RA)) * cos((pi/180)*get_Dec_deg(Dec)) # in arcsec
+  punchLine <- paste0("#PUNCH ", starID, " : ",
+                    (round(dNorth,2) %>% format(nsmall=2) %>% stri_pad_left(width=8)),
+                    (round(dEast,2)  %>% format(nsmall=2) %>% stri_pad_left(width=8)),
+                    "   ;   dNorth dEast of punch center vs star, in arcsec")
+
+  # Confirm, then write into FOV file.
+  cat(paste0("FOV '", FOV_name, "':\n     ", punchLine, "\n"))
+  answerYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
+  if (answerYES) {
+    cat(c(lines[1:starsDirectiveAt-1], punchLine, lines[starsDirectiveAt:length(lines)]), 
+        file=FOV_path, sep="\n")
+    cat("Line inserted.\n")
+  }
+}
+
+
+################################################################################
+##### Support-only functions not normally called by user. ######################
 
 makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=8, Rinner=11, Router=16) {
   require(dplyr, quietly=TRUE)
@@ -22,12 +58,13 @@ makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=8, Rinner=11, Router
   dist2 <- ((dX*dX) + (dY*dY))
   discMask <- ifelse(dist2 <= R2disc, 1, 0)                         # 1=include pixel, else 0
   skyMask  <- ifelse((dist2 >= R2inner) & (dist2 <= R2outer), 1, 0) # 1=include pixel, else 0
-  return (list(subImage=subImage, Xlow=Xlow, Ylow=Ylow, discMask=discMask, skyMask=skyMask,
+  return (list(subImage=subImage, Xlow=Xlow, Ylow=Ylow, Xcenter=Xcenter, Ycenter=Ycenter,
+               discMask=discMask, skyMask=skyMask,
                discPixels=sum(discMask), skyPixels=sum(skyMask)))
 }
 
 punch <- function (aperture, df_punch=NULL, Rpunch=7) {
-  # df_punch: columns X & Y only.
+  # df_punch: only columns X & Y are needed.
   if (is.null(df_punch)) return (aperture)
   if (nrow(df_punch)<=0 | Rpunch<=0) return (aperture)
   require(dplyr, quietly=TRUE)
@@ -35,18 +72,20 @@ punch <- function (aperture, df_punch=NULL, Rpunch=7) {
   nRow <- nrow(aperture$subImage)
   Xlow     <- aperture$Xlow
   Ylow     <- aperture$Ylow
-  Xcenter  <- aperture$Xlow + (1+ncol(aperture$subImage))/2
-  Ycenter  <- aperture$Ylow + (1+nrow(aperture$subImage))/2
+  XsubImageCenter <- Xlow + (nCol-1)/2
+  YsubImageCenter <- Ylow + (nRow-1)/2
+  Xcenter  <- aperture$Xcenter   # centroid of main star
+  Ycenter  <- aperture$Ycenter   # centroid of main star
   skyMask  <- aperture$skyMask
   R2punch <- Rpunch^2
-  RmaxPotentialPunch <-sqrt((Xlow-Xcenter)^2 + (Ylow-Ycenter)^2) + Rpunch + 2
+  RmaxPotentialPunch <-sqrt((Xlow-XsubImageCenter)^2 + (Ylow-YsubImageCenter)^2) + Rpunch + 2
   X <- matrix((0:(nCol-1))+Xlow, nrow=nRow, ncol=nCol, byrow=FALSE)
   Y <- matrix((0:(nRow-1))+Ylow, nrow=nRow, ncol=nCol, byrow=TRUE)
   for (iPunch in 1:nrow(df_punch)) {
-    R2punchToCenter <- (df_punch$X[iPunch]-Xcenter)^2 + (df_punch$Y[iPunch]-Ycenter)^2
+    R2punchToCenter <- df_punch$dX[iPunch]^2 + df_punch$dY[iPunch]^2
     if (R2punchToCenter <= RmaxPotentialPunch^2) {
-      dX <- X - df_punch$X[iPunch]
-      dY <- Y - df_punch$Y[iPunch]
+      dX <- X - (Xcenter + df_punch$dX[iPunch])
+      dY <- Y - (Ycenter + df_punch$dY[iPunch])
       dist2 <- dX*dX + dY*dY
       punchMask <- ifelse(dist2 <= R2punch, 0, 1)  # boolean, 0 to exclude from skyMask, else 1
       skyMask <- skyMask * punchMask               # do the punch, i.e., exclude pixels
@@ -94,9 +133,6 @@ evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
 }
 
 
-################################################################################
-##### Support-only functions not normally called by user. ######################
-
 getImageMatrix <- function (FITS_path) {
   #####    NOTE: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
   require(FITSio, quietly=TRUE)
@@ -106,6 +142,53 @@ getImageMatrix <- function (FITS_path) {
   close(zz)
   image <- D$imDat
   return (image)
+}
+
+getXYfromFITSheader <- function (df_RADec, FITS_path=NULL) {
+  require(dplyr, quietly=TRUE)
+  
+  hdr <- getFITSheaderValues(FITS_path, c("CD1_1", "CD1_2", "CD2_1", "CD2_2",
+                                          "CRVAL1", "CRVAL2", "CRPIX1", "CRPIX2"))
+  cd11   <- as.numeric(hdr$CD1_1)
+  cd12   <- as.numeric(hdr$CD1_2)
+  cd21   <- as.numeric(hdr$CD2_1)
+  cd22   <- as.numeric(hdr$CD2_2)
+  crval1 <- as.numeric(hdr$CRVAL1)
+  crval2 <- as.numeric(hdr$CRVAL2)
+  crpix1 <- as.numeric(hdr$CRPIX1)
+  crpix2 <- as.numeric(hdr$CRPIX2)
+  df_XY  <- data.frame(Number=df_RADec$Number)
+  
+  dRA  <- df_RADec$degRA  - crval1
+  dDec <- df_RADec$degDec - crval2
+  degEW <- dRA * cos((pi/180)*df_RADec$degDec)
+  degNS <- dDec
+  a <- cd22 / cd12
+  dX <- (degNS-degEW*a)  / (cd21-cd11*a)
+  dY <- (degEW-cd11*dX)  / cd12
+  df_XY$X <- crpix1 + dX
+  df_XY$Y <- crpix2 + dY
+  return(df_XY)
+}
+
+getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
+  source('C:/Dev/Photometry/$Utility.R')
+  require(FITSio, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }
+  fileHandle <- file(description=FITS_path, open="rb")
+  header <- parseHdr(readFITSheader(fileHandle))
+  close(fileHandle)
+  
+  header_list <- list()
+  for (key in keys) {
+    header_list[[key]] <- get_header_value(header, key)
+  }
+  return(header_list)
 }
 
 evalSky005 <- function (aperture) {

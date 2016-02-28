@@ -181,7 +181,9 @@ getXYfromAPT <- function(df_RADec, thisFITS_path, photometry_folder) {
                                APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
                                APToutput_path)
   # allAPTstdout <- c(allAPTstdout, APTstdout)
-  return(parse_APToutput(APToutput_path) %>% select(Number, Xcentroid, Ycentroid))
+  return(parse_APToutput(APToutput_path) %>% 
+           left_join(df_RADec, by="Number") %>%
+           select(Number, StarID, Xcentroid, Ycentroid))
 }
 
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
@@ -269,12 +271,14 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     # APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
     APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
     df_star_data_numbered <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
-    df_RADec <- df_star_data_numbered %>% select(Number, degRA, degDec)
+    df_RADec <- df_star_data_numbered %>% select(Number, StarID, degRA, degDec)
 
-    # for each FITS file derived from this FOV, run APT to make APT output file.
     Rdisc  <-  8
-    Rinner <- 11
-    Router <- 16
+    Rinner <- 12
+    Router <- 18
+    df_punch <- FOV_list$punch
+
+        # For each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
       df_XY <- getXYfromAPT(df_RADec, thisFITS_path, photometry_folder) 
       df_apertures <- df_XY %>%
@@ -292,12 +296,33 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           Xcenter <- df_apertures$Xcentroid[i]
           Ycenter <- df_apertures$Ycentroid[i]
           thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
-          # Punch facility will be added later; it will require (1) #PUNCH directive added to FOV files, and
-          #    (2) code in read_FOV_file() to read #PUNCH directives and store them 
-          #    in FOV_data (not sure how to do that). 
-          # This temporary, empty punch data frame has no effect.
-          df_punch <- (rep(0,2) %>% t() %>% as.data.frame())[FALSE,]
-          thisApPunched <- punch(thisAp, df_punch)
+          
+          # Punch facility in development Feb 28 2016.
+          # Prepare punch list for THIS image.
+          this_df_punch <- FOV_list$punch %>%
+            filter(StarID==df_apertures$StarID[i]) %>%
+            mutate(dX=NA_real_, dY=NA_real_) # in pixels
+          if (nrow(this_df_punch) >=1) {
+            hdr <- getFITSheaderValues(FITS_path, c("PA", "CDELT1", "CDELT2"))
+            pa_FITS <- as.numeric(hdr$PA)
+            cdelt1_FITS <- as.numeric(hdr$CDELT1)
+            cdelt2_FITS <- as.numeric(hdr$CDELT2)
+            cat("punch:")
+            for (i in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
+              skyAngle <- atan2(this_df_punch$DEast[i], this_df_punch$DNorth[i])
+              skyToPlateRotation <- (pi/180) * (360-pa_FITS)
+              plateAngle <- skyAngle + skyToPlateRotation
+              arcsecPerPixel <- 3600 * mean(cdelt1_FITS, cdelt2_FITS)
+              distArcsec <- sqrt(this_df_punch$DEast[i]^2 + this_df_punch$DNorth[i]^2)
+              distPixels <- distArcsec / arcsecPerPixel
+              this_df_punch$dX[i] <- distPixels * sin(-plateAngle)
+              this_df_punch$dY[i] <- -distPixels * cos(+plateAngle) # minus sign because +Y means *down*.
+              cat(" ",this_df_punch$StarID[i])
+            }
+            cat("\n")
+          }
+          thisApPunched <- punch(thisAp, this_df_punch)
+          
           # Get values from this aperture and image matrix.
           ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
           
@@ -317,12 +342,11 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
         # Append all this image's data to master data frame.
         df_master <- rbind(df_master, df_master_thisFITS)
         
-        print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
-                    " --> df_master now has", nrow(df_master), "rows"), quote=FALSE)
+        cat(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
+                    " --> df_master now has", nrow(df_master), "rows\n"))
       } else {
-        print(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
-                    " --> NO ROWS from this file ... df_master now has", nrow(df_master), "rows"), 
-              quote=FALSE)
+        cat(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
+                    " --> NO ROWS from this file ... df_master now has", nrow(df_master), "rows\n"))
       }
     }
   }

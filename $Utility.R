@@ -100,6 +100,26 @@ read_FOV_file <- function (FOV_name) {
     FOV_data$ACP <- paste0( paste(ACP_strs,collapse="\n"), "\n")
   }
   
+  # Parse #PUNCH lines (for later removing pixels from sky annulus in make_df_master()).
+  df_punch <- data.frame(StarID=NA_character_, DNorth=NA_real_, DEast=NA_real_,
+                         stringsAsFactors = FALSE)[FALSE,]
+  for (line in directiveLines) {
+    directive <- line %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% first()
+    if (directive=="#PUNCH") {
+      value <- line %>% substring(nchar(directive)+1) # everything but the directive
+      starID <- value %>% strsplit(":",fixed=TRUE) %>% unlist() %>% first() %>% trimws()
+      terms <- value %>% strsplit(":",fixed=TRUE)  %>% unlist() %>% nth(2) %>% trimws() %>% 
+        strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+      dNorth <- as.numeric(terms[1])
+      dEast  <- as.numeric(terms[2])
+      df_thisLine <- data.frame(StarID=starID,  # should match one star name from the Star lines below.
+                            DNorth=dNorth,      # in degrees; 0=360=North, 90=East
+                            DEast=dEast,        # in arcseconds from center of named star
+                            stringsAsFactors = FALSE)
+      df_punch <- rbind(df_punch, df_thisLine)
+    }
+  }
+  
   # Parse STAR LINES (embedded lines from VPhot sequence):
   starsDirectiveAt <- charmatch("#STARS", lines)
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=starsDirectiveAt, fill=TRUE, strip.white=TRUE, 
@@ -146,7 +166,7 @@ read_FOV_file <- function (FOV_name) {
       cat(">>>>> WARNING: FOV file ",FOV_name," has NO CHECK STAR.\n")
     }
   }
-  return(list(FOV_data=FOV_data, star_data=df_star))
+  return(list(FOV_data=FOV_data, punch=df_punch, star_data=df_star))
 }
 
 get_RA_deg <- function (RA_string) {
