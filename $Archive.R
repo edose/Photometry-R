@@ -129,6 +129,7 @@ apertureXXX <- function(image, X0, Y0, discR=9, innerR=12, outerR=16) {
   annulusMean   <- mean(annulusNA, na.rm=TRUE)
   discNet <- discNA - annulusMedian
   totalNetFlux <- sum(discNet, na.rm=TRUE)
+  if(totalNetFlux <= 0) {stop(paste("totalNetFlux=", totalNetFlux))}
   Xcentroid <- sum(discNet * X, na.rm=TRUE) / totalNetFlux
   Ycentroid <- sum(discNet * Y, na.rm=TRUE) / totalNetFlux
   # Test here for convergence. Loop back if change > TOL, drop through if <= TOL.

@@ -64,11 +64,16 @@ evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
   skyADU <- evalSkyFunction(aperture)
   netADU <- ifelse(aperture$discMask>0, discADU - skyADU, NA)
   netFlux <- sum(netADU, na.rm=TRUE)
-  gain <- 1.57 # e-/ADU, this valur for BOREA
+  if(netFlux <= 0) {netFlux = NA}  # 
+  gain <- 1.57 # e-/ADU, this value is for current scope BOREA
   skySigma <- sd( ifelse(aperture$skyMask==0,NA,aperture$subImage), na.rm=TRUE)
-  # netFluxSigma equation after APT paper, PASP 124, 737 (2012).
-  netFluxSigma <- sqrt( (netFlux/gain) + (aperture$skyPixels*(skySigma^2)) + 
-                          ( (pi/2) * ((aperture$discPixels*skySigma)^2) /aperture$skyPixels ) )
+  # netFluxSigma equation after APT paper, PASP 124, 737 (2012), but pi/2 in 3rd term set to 1 as
+  #   pi/2 seems hard to justify, and as 1 gives S/N closer to VPhot's values.
+  netFluxSigma <- sqrt( 
+    (netFlux/gain) + 
+    (aperture$discPixels*(skySigma^2)) + 
+    ( (1) * ((aperture$discPixels*skySigma)^2) /aperture$skyPixels ) # the 1 here was pi/2 in paper.
+  )
   nCol <- ncol(aperture$subImage)
   nRow <- nrow(aperture$subImage)
   Xlow     <- aperture$Xlow

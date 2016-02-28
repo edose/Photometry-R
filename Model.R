@@ -20,14 +20,14 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   if (is.null(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
 
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
+    filter(!is.na(CatMag)) %>%
+    filter(!is.na(CI)) %>%
+    filter(!is.na(Airmass)) %>%
     filter(StarType=="Comp") %>%
     filter(Filter==filter) %>%
     filter(InstMagSigma<=maxInstMagSigma) %>%
-    filter(!is.na(CI)) %>%
     filter(CI<=maxColorIndex) %>%
-    filter(MaxADU_Ur<=saturatedADU) %>%
-    filter(!is.na(Airmass)) %>%
-    filter(!is.na(CatMag))
+    filter(MaxADU_Ur<=saturatedADU)
 
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))

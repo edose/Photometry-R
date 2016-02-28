@@ -7,7 +7,7 @@ eclipserPlot <- function(df=df_predictions, starID=NULL) {
   if (is.null(df) | is.null(starID)){ stop("Please give non-NULL parms.")}
   x <- (df %>% filter(StarID==starID) %>% arrange(JD_num))$JD_num
   y <- (df %>% filter(StarID==starID) %>% arrange(JD_num))$TransformedMag
-  plot(x,y)
+  plot(x,y,main=starID,xlab="JD_fract", ylab="best Mag")
 }
 
 modelPlots <- function(modelList) {
@@ -72,8 +72,7 @@ modelPlots <- function(modelList) {
   x <- qnorm(prob)
   df_plot <- df_plot %>%
     mutate(x=x) %>%
-    mutate(ptLabels=ifelse((abs(y)>=2*sd(y))|(abs(x)>=2), ptLabels, ""))
-  # ptLabels <- ifelse((abs(y)>=2*sd(y))|(abs(x)>=2), ptLabels, "")
+    mutate(ptLabels=ifelse((abs(y)>=2*sd(y))|(abs(x)>=2), paste0("  ",ptLabels), ""))
   xRange <- max(x) - min(x)
   p <- ggplot(data = df_plot, aes(x=x, y=y*1000)) + 
     geom_point() + 

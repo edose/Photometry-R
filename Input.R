@@ -197,6 +197,9 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
 
   # make list of all FITS (FITS in /Calibrated folder ONLY; hide files in /Exclude to remove from workflow).
   FITS_folder <- make_safe_path(AN_folder,"Calibrated")
+  if(!dir.exists(FITS_folder)) {
+    stop(paste0(">>>>> folder '", FITS_folder), "' does not exist.")
+  }
   FITS_files  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=FALSE, 
                                     recursive=FALSE, ignore.case=TRUE))
   FITS_paths  <- trimws(list.files(FITS_folder, pattern=".fts$", full.names=TRUE, 
@@ -233,7 +236,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     if (ask_df$FOV_file_exists[iFOV]) {
       ask_df$NCheckStars[iFOV] <- sum(this_FOV_file$star_data$StarType=="Check")
       ask_df$CheckMsg[iFOV] <- ifelse(ask_df$NCheckStars[iFOV]==1, "OK", 
-                                paste("WARNING: ", ask_df$NCheckStars, 
+                                paste("WARNING: ", ask_df$NCheckStars[iFOV], 
                                        "Check Stars (must be 1 for Target FOVs)."))
     }
   }
@@ -301,7 +304,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           # Replace values in this row of df_apertures.
           df_apertures$Xcentroid[i]      <- ev$Xcentroid # update centroid.
           df_apertures$Ycentroid[i]      <- ev$Ycentroid #   " "
-          df_apertures$RawADUMag[i]      <- -2.5 * log10(ev$netFlux)
+          df_apertures$RawADUMag[i]      <- -2.5 * log10(ev$netFlux) # nb: ev$netFlux may be NA.
           df_apertures$InstMagSigma[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
           df_apertures$SkyADU[i]         <- ev$skyADU
           df_apertures$SkySigma[i]       <- ev$skySigma
@@ -393,10 +396,10 @@ images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     group_by(FITSfile) %>% 
     summarize(nComp=n()) %>% 
     as.data.frame() %>%
-    left_join(df_master %>% select(Object, FITSfile, Filter, Exposure)) %>% 
+    left_join(df_master %>% select(FOV, FITSfile, Filter, Exposure)) %>% 
     unique() %>%
-    select(Object, Filter, Exposure, FITSfile, nComp) %>%
-    arrange(Object, Filter, Exposure, FITSfile)
+    select(FOV, Filter, Exposure, FITSfile, nComp) %>%
+    arrange(FOV, Filter, desc(Exposure), FITSfile)
   return (df_image)
 }
 

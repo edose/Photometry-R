@@ -82,12 +82,14 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     df_xref_modelSigma <- df_xref_modelSigma %>%
       rbind(data.frame(Filter=thisModelList$filter, ModelSigma=sigma(thisModelList$model)))
   }
+  
+  # Finish construction of data frame.
   df_xref_modelSigma$Filter <- as.character(df_xref_modelSigma$Filter)
   df_transformed <- df_transformed %>%
     left_join(df_xref_modelSigma, by="Filter") %>%
-    mutate(MagErr = pmax(ModelSigma, InstMagSigma)) # pmax = "parallel" element-wise max of 2 vectors
-  
-  df_transformed <- df_transformed %>% arrange(ModelStarID, JD_num)
+    mutate(MagErr = pmax(ModelSigma, InstMagSigma)) %>% # pmax = "parallel" element-wise max of 2 vectors
+    left_join((df_master %>% select(Serial, FITSfile, Exposure)), by="Serial") %>% # restore a few columns.
+    arrange(ModelStarID, JD_num)
   
   # Save df_transformed as .Rdata file (but do not return it).
   path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
@@ -115,7 +117,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   nCheckObs  <- df_transformed %>% filter(StarType=="Check") %>% nrow()
   Filters    <- df_transformed %>% filter(StarType=="Target") %>% select(Filter) %>% 
     unique()
-  cat("PredictAll() yields", nTargetObs, "Target obs for", nTargets, " targets in filters:", 
+  cat("PredictAll() yields", nTargetObs, "Target obs for", nTargets, "targets in filters:", 
       paste(Filters,collapse=" ","\n"))
   cat("   and ", nCheckObs, " Check observations.\n")
 
@@ -128,6 +130,33 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       "   4. submit report to AAVSO.")
   return(df_transformed)
 }
+
+markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
+                                    "e.g., AN_rel_folder='20151216'.")}
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  path_df_predictions <- make_safe_path(photometry_folder, "df_transformed.Rdata")
+  load(path_df_predictions)
+  
+  df_checkStars <- df_predictions %>% filter(StarType=="Check") %>% select(FITSfile, StarID)
+  JD_fract <- (df_predictions$JD_num - (df_predictions$JD_num %>% min() %>% floor())) %>% round(digits=4)
+  
+  df_markupReport <- df_predictions %>%
+    mutate(JD_fract=JD_fract) %>%
+    filter(StarType=="Target") %>%
+    select(Serial, FITSfile, Target=StarID, Filter, Exposure, InstMagSigma, MagErr, JD_fract) %>%
+    left_join(df_checkStars, by="FITSfile") %>%
+    rename(Check=StarID) %>%
+    mutate(Sigma_mMag=round(InstMagSigma*1000)) %>%
+    mutate(Err_mMag=round(MagErr*1000)) %>%
+    select(-InstMagSigma, -MagErr) %>%
+    arrange(Target, FITSfile, Filter, Exposure) %>%
+    select(Serial, Target, FITSfile, Filter, Exposure, everything())
+  return(df_markupReport)
+}
+
   
 AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, software_version=NULL) {
   ##### Writes AAVSO-ready text file.
