@@ -209,6 +209,22 @@ get_RA_hours <- function (RA_deg) {
                  stri_pad_left(format(seconds,nsmall=1),width=4,pad="0")))
 }
 
+distanceRADec <- function (RA1_deg, Dec1_deg, RA2_deg, Dec2_deg) {
+  # Returns distance on sphere, in degrees, between 2 points in RA,Dec.
+  # First, try short-distance "haversine formula".
+  RA1  <- (pi/180) * RA1_deg # convert to radians as required by R fns.
+  RA2  <- (pi/180) * RA2_deg
+  Dec1 <- (pi/180) * Dec1_deg
+  Dec2 <- (pi/180) * Dec2_deg
+  distance <- 2 * asin(sqrt(sin((Dec2-Dec1)/2)^2 + cos(Dec1)*cos(Dec2)*(sin((RA2-RA1)/2)^2)))
+  # If distance is not very small, use the "spherical law of cosines" formula instead.
+  maxHaversineDistance <- 1 * (pi/180) # 1 degree, in radians
+  if (distance > maxHaversineDistance) {
+     distance <- acos(sin(Dec1)*sin(Dec2) + cos(Dec1)*cos(Dec2)*cos(RA2-RA1))
+  }
+  return (distance * (180/pi)) # return in degrees.
+}
+
 read_AAVSO_Chart <- function(chartID) {
   ##### Tests OK 20151220.
   require(rvest, quietly=TRUE)

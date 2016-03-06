@@ -2,8 +2,11 @@
 #####    TESTS OK February 27 2016.
 #####    NOTE: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
 
-addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec) {
+addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec, RADecAsStrings=FALSE,
+                      userMustConfirm=TRUE) {
+  # If RADecAsStrings==TRUE, all RA and Dec are character scalars in form "+nn:nn:nn.nn".
   require(stringi, quietly=TRUE)
+  if (is.null(FOV_name)) {stop(">>>>> FOV file name is NULL.")}
   FOV_folder <- "C:/Dev/Photometry/FOV"
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
   if (!file.exists(FOV_path)) {stop(">>>>> Cannot open FOV file.")}
@@ -16,22 +19,157 @@ addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec) {
   df_FOV_stars <- (read_FOV_file(FOV_name))$star_data # data frame of stars in FOV file
   if (!starID %in% df_FOV_stars$StarID) {stop(paste0(">>>>> StarID '", starID, "' not in FOV star list."))}
 
+  # Convert to degrees if necessary.
+  if (RADecAsStrings) {
+    RA       <- get_RA_deg(RA)
+    Dec      <- get_Dec_deg(Dec)
+    punchRA  <- get_RA_deg(punchRA)
+    punchDec <- get_Dec_deg(punchDec)
+  }
+  
   # Make line to insert into FOV file.
-  dNorth <- 3600 * (get_Dec_deg(punchDec) - get_Dec_deg(Dec))                                # in arcsec
-  dEast  <- 3600 * (get_RA_deg(punchRA)   - get_RA_deg(RA)) * cos((pi/180)*get_Dec_deg(Dec)) # in arcsec
+  dNorth <- 3600 * ((punchDec) - (Dec))                       # in arcsec
+  dEast  <- 3600 * ((punchRA)   - (RA)) * cos((pi/180)*(Dec)) # in arcsec
   punchLine <- paste0("#PUNCH ", starID, " : ",
                     (round(dNorth,2) %>% format(nsmall=2) %>% stri_pad_left(width=8)),
                     (round(dEast,2)  %>% format(nsmall=2) %>% stri_pad_left(width=8)),
-                    "   ;   dNorth dEast of punch center vs star, in arcsec")
+                    "   ;   dNorth dEast of punch center vs target star, in arcsec")
 
-  # Confirm, then write into FOV file.
-  cat(paste0("FOV '", FOV_name, "':\n     ", punchLine, "\n"))
-  answerYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
-  if (answerYES) {
+  # Confirm if required, then write into FOV file.
+  if (userMustConfirm) {
+    cat(paste0("FOV '", FOV_name, "':\n     ", punchLine, "\n"))
+    OKtoWrite <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
+  } else {
+    OKtoWrite <- TRUE
+  }
+  if (OKtoWrite) {
     cat(c(lines[1:starsDirectiveAt-1], punchLine, lines[starsDirectiveAt:length(lines)]), 
         file=FOV_path, sep="\n")
-    cat("Line inserted.\n")
+    if (userMustConfirm) {cat("Line inserted.\n")}
   }
+}
+
+addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches-TEST.txt", delim="\t") {
+  # the file at textPath is a delimited (tab-delimited default) file of Punches, in format:
+  # for target line: col1=FOV, col2=target_name, col4=RA, col6=Dec
+  # for punch line:  col4=RA, col6=Dec
+  # blank line between target groups.
+  
+  require(dplyr, quietly = TRUE)
+  df_in <- read.table(textPath, header=FALSE, sep="\t", stringsAsFactors=FALSE, strip.white=TRUE,
+                   comment.char=";",
+                   col.names=c("FOV", "Target", "V3", "RA", "V5", "V6", "Dec", "V8")) %>%
+    select(FOV, Target, RA, Dec)
+  
+  df_punches <- data.frame()
+  targetRA  <- NA
+  targetDec <- NA
+  for (i in 1:nrow(df_in)) {
+    lineFOV    <- df_in$FOV[i]
+    lineTarget <- df_in$Target[i]
+    lineRA     <- df_in$RA[i]
+    lineDec    <- df_in$Dec[i]
+    if (lineRA=="") {                      # skip blank lines
+      next
+    }
+    if (nchar(lineFOV) >= 1) {             # update target data on (new) target line
+      targetFOV  <- lineFOV
+      target     <- lineTarget
+      targetRA   <- get_RA_deg(lineRA)
+      targetDec  <- get_Dec_deg(lineDec)
+      next
+    }
+    if (lineFOV=="" & lineTarget=="" & nchar(lineRA)>=1 & nchar(lineDec)>=1) { # punch line
+      punchRA  <- get_RA_deg(lineRA)    # in degrees
+      punchDec <- get_Dec_deg(lineDec)  # in degrees
+      distance <- 3600 * distanceRADec(punchRA, punchDec, targetRA, targetDec)     # in arcsec
+      dNorth <- round(3600 * (punchDec - targetDec),2)                             # in arcsec
+      dEast  <- round((3600 * (punchRA  - targetRA) * cos((pi/180)*targetDec)) ,2) # in arcsec
+      # distance <- round(sqrt(dNorth^2 + dEast^2),2) # in arcsec
+      df_punches <- df_punches %>% 
+        rbind(data.frame(i=i, FOV=targetFOV, Target=target, 
+                         TargetRA=targetRA, TargetDec=targetDec,        # in degrees
+                         PunchRA=punchRA, PunchDec=punchDec,            # in degrees
+                         DNorth=dNorth, DEast=dEast, Distance=distance, # in arcsec
+                         stringsAsFactors=FALSE))
+      next  
+    }  
+    stop(paste0(">>>>> addPunchesFromText() can't handle input line ", i, ": ",
+                lineFOV, ", ", lineTarget, ", ", lineRA, ", ", lineDec))
+  }
+  
+  # --> BEFORE writing into FOV files, verify here that in master data frame df_punches: 
+  #    (1) each FOV entry actually has a FOV file, 
+  #    (2) each punch target is present in FOV file, and
+  #    (3) each punch target RA & Dec is close to that in FOV file.
+  areAllOK <- TRUE  # default value, to be falsified by problem.
+  # FOVs <- (df_punches %>% filter(Target!=""))$FOV %>% unique()
+  FOVs <- df_punches %>% select(FOV) %>% unique() %>% unlist()
+  for (FOV_name in FOVs) {
+    FOV_list <- read_FOV_file(FOV_name)
+    # Verify FOV file exists for targets with this FOV name.
+    if (is.na(FOV_list[[1]][[1]])) {
+      cat(paste0(">>>>> FOV file '", FOV_name, "' does not exist.\n"))
+      areAllOK = FALSE
+      next
+    }
+    FOV_stars <- FOV_list$star_data$StarID
+    
+    df_thisFOV <- df_punches %>% filter(FOV==FOV_name)
+    
+    # Verify each target for this FOV is present and proper.
+    for (i_target in 1:nrow(df_thisFOV)) {
+      target    <- df_thisFOV$Target[i_target]
+      targetRA  <- df_thisFOV$TargetRA[i_target]
+      targetDec <- df_thisFOV$TargetDec[i_target]
+      
+      # Verify target's RA,Dec position in punch file is very close to that in FOV file.
+      i_FOV <- match(target, FOV_stars)
+      if (is.na(i_FOV)) {
+        cat(paste0(">>>>> Target ", target, " is MISSING from FOV file '", FOV_name))
+        areAllOK = FALSE
+        next
+      }
+
+      distance <- distanceRADec(targetRA, targetDec, 
+                                FOV_list$star_data$degRA[i_FOV], FOV_list$star_data$degDec[i_FOV])
+      if (distance > 5/3600) { # 5 arcseconds (even this may be way too generous).
+        cat(paste0(">>>>> Target ", target, " in FOV '", FOV_name, 
+                   "' has punch list RA,Dec=(", targetRA, ",", targetDec, ") which does not match ",
+                   "FOV-file RA,Dec=(", FOV_list$star_data$degRA[i], ",", 
+                   FOV_list$star_data$degDec[i], ")"))
+        areAllOK = FALSE
+      }
+    }
+  }
+
+  # Give any warnings, confirm that we're really going to modify FOV files.
+  numTooClose <- sum((df_punches$Distance) < 2)
+  if (numTooClose >= 1) {
+    cat(paste(">>>>> WARNING:", numTooClose, "Target-Punch pairs are too close to be real.\n"))
+  }
+  cat(paste("Largest distance (Target-Punch) = ", max(df_punches$Distance),"arcsec\n"))
+  recommendYes <- (areAllOK) & (numTooClose == 0) & (max(df_punches$Distance) <= 20)
+  
+  answerYES <- "Y" == (cat("Proceed? Recommend", ifelse(recommendYes, "Y", "NO!!!"), "(y/n)") %>% 
+                         readline() %>% trimws() %>% toupper())
+  if (answerYES) {
+    # Write all the #PUNCH lines into the FOV files.
+    cat(paste("[Write all", nrow(df_punches), "#PUNCH directives into", length(FOVs), "FOV files.]\n"))
+    for (i in 1:nrow(df_punches)) {
+      cat(paste("#PUNCH", df_punches$FOV[i], df_punches$Target[i], 
+                round(df_punches$TargetRA[i],6), round(df_punches$TargetDec[i],6),
+                round(df_punches$PunchRA[i],6), round(df_punches$PunchDec[i],6) ),"\n")
+      addPunch(df_punches$FOV[i], df_punches$Target[i], 
+               round(df_punches$TargetRA[i],6), round(df_punches$TargetDec[i],6),
+               round(df_punches$PunchRA[i],6), round(df_punches$PunchDec[i],6),
+               userMustConfirm = FALSE)
+      }
+    cat(paste("[All", nrow(df_punches), "#PUNCH directives written into", length(FOVs), "FOV files.]\n"))
+  } else {
+    {cat("[No change to FOV files.]\n")}
+  }
+  return(df_punches)  # return for testing...
 }
 
 
