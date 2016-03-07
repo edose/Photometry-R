@@ -291,49 +291,57 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
         df_apertures$MaxADU_Ur <- getMaxADU_Ur(thisFITS_path, df_XY, Rdisc)
         source("C:/Dev/Photometry/Aperture.R")
         thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. In FITS, X is 1st dim, Y the 2nd.
-        for (i in 1:nrow(df_apertures)) {
+        for (i_ap in 1:nrow(df_apertures)) {
           # Make "aperture" object from this image and this aperture center (X,Y).
-          Xcenter <- df_apertures$Xcentroid[i]
-          Ycenter <- df_apertures$Ycentroid[i]
+          Xcenter <- df_apertures$Xcentroid[i_ap]
+          Ycenter <- df_apertures$Ycentroid[i_ap]
           thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
           
           # Punch facility in development Feb 28 2016.
           # Prepare punch list for THIS image.
           this_df_punch <- FOV_list$punch %>%
-            filter(StarID==df_apertures$StarID[i]) %>%
+            filter(StarID==df_apertures$StarID[i_ap]) %>%
             mutate(dX=NA_real_, dY=NA_real_) # in pixels
           if (nrow(this_df_punch) >=1) {
-            hdr <- getFITSheaderValues(FITS_path, c("PA", "CDELT1", "CDELT2"))
+            hdr <- getFITSheaderValues(thisFITS_path, c("PA", "CDELT1", "CDELT2"))
             pa_FITS <- as.numeric(hdr$PA)
             cdelt1_FITS <- as.numeric(hdr$CDELT1)
             cdelt2_FITS <- as.numeric(hdr$CDELT2)
             cat("punch:")
-            for (i in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
-              skyAngle <- atan2(this_df_punch$DEast[i], this_df_punch$DNorth[i])
+            for (i_punch in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
+              skyAngle <- atan2(this_df_punch$DEast[i_punch], this_df_punch$DNorth[i_punch])
               skyToPlateRotation <- (pi/180) * (360-pa_FITS)
               plateAngle <- skyAngle + skyToPlateRotation
-              arcsecPerPixel <- 3600 * mean(cdelt1_FITS, cdelt2_FITS)
-              distArcsec <- sqrt(this_df_punch$DEast[i]^2 + this_df_punch$DNorth[i]^2)
+              arcsecPerPixel <- 3600 * mean(abs(cdelt1_FITS), abs(cdelt2_FITS))
+              distArcsec <- sqrt(this_df_punch$DEast[i_punch]^2 + this_df_punch$DNorth[i_punch]^2)
               distPixels <- distArcsec / arcsecPerPixel
-              this_df_punch$dX[i] <- distPixels * sin(-plateAngle)
-              this_df_punch$dY[i] <- -distPixels * cos(+plateAngle) # minus sign because +Y means *down*.
-              cat(" ",this_df_punch$StarID[i])
+              this_df_punch$dX[i_punch] <- distPixels * sin(-plateAngle)
+              this_df_punch$dY[i_punch] <- -distPixels * cos(+plateAngle) # minus because +Y means *down*.
+              cat(" ",this_df_punch$StarID[i_punch])
             }
             cat("\n")
           }
-          thisApPunched <- punch(thisAp, this_df_punch)
+          thisApPunched <- punch(thisAp, this_df_punch) # apply punch list to raw aperture
+          
+          ## for TESTING or PRESENTATION only: plot the image & punched aperture
+          #if (nrow(this_df_punch)>=1) { 
+          #  plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
+          #                                             df_apertures$StarID[i_ap]))
+          #  }
+          #cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
+          #    nrow(this_df_punch), " punches.\n")
           
           # Get values from this aperture and image matrix.
           ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
           
           # Replace values in this row of df_apertures.
-          df_apertures$Xcentroid[i]      <- ev$Xcentroid # update centroid.
-          df_apertures$Ycentroid[i]      <- ev$Ycentroid #   " "
-          df_apertures$RawADUMag[i]      <- -2.5 * log10(ev$netFlux) # nb: ev$netFlux may be NA.
-          df_apertures$InstMagSigma[i]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
-          df_apertures$SkyADU[i]         <- ev$skyADU
-          df_apertures$SkySigma[i]       <- ev$skySigma
-          df_apertures$FWHM[i]           <- ev$FWHM
+          df_apertures$Xcentroid[i_ap]      <- ev$Xcentroid # update centroid.
+          df_apertures$Ycentroid[i_ap]      <- ev$Ycentroid #   " "
+          df_apertures$RawADUMag[i_ap]      <- -2.5 * log10(ev$netFlux) # nb: ev$netFlux may be NA.
+          df_apertures$InstMagSigma[i_ap]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
+          df_apertures$SkyADU[i_ap]         <- ev$skyADU
+          df_apertures$SkySigma[i_ap]       <- ev$skySigma
+          df_apertures$FWHM[i_ap]           <- ev$FWHM
         }
         # Combine different data sets to make one data frame for this image.
         df_FITSheader <- getFITSheaderInfo(thisFITS_path)
@@ -839,7 +847,7 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
   df_star_data_numbered <- df_star_data_numbered %>%
     mutate(ModelStarID=paste0(FOV_data$Sequence,"_",df_star_data_numbered$StarID))  # as "ST Tri_137"
 
-  df <- left_join(df_apertures, df_star_data_numbered, by="Number") %>%
+  df <- left_join(df_apertures, df_star_data_numbered, by=c("Number", "StarID")) %>%
     cbind(df_FITSheader) %>%
     mutate(FOV=FOV_data$Sequence, 
            Chart=FOV_data$Chart, 

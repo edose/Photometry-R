@@ -126,7 +126,7 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches-TEST.txt", de
       # Verify target's RA,Dec position in punch file is very close to that in FOV file.
       i_FOV <- match(target, FOV_stars)
       if (is.na(i_FOV)) {
-        cat(paste0(">>>>> Target ", target, " is MISSING from FOV file '", FOV_name))
+        cat(paste0(">>>>> Target ", target, " is MISSING from FOV file '", FOV_name), "\n")
         areAllOK = FALSE
         next
       }
@@ -137,16 +137,21 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches-TEST.txt", de
         cat(paste0(">>>>> Target ", target, " in FOV '", FOV_name, 
                    "' has punch list RA,Dec=(", targetRA, ",", targetDec, ") which does not match ",
                    "FOV-file RA,Dec=(", FOV_list$star_data$degRA[i], ",", 
-                   FOV_list$star_data$degDec[i], ")"))
+                   FOV_list$star_data$degDec[i], ")"), "\n")
         areAllOK = FALSE
       }
     }
   }
 
   # Give any warnings, confirm that we're really going to modify FOV files.
-  numTooClose <- sum((df_punches$Distance) < 2)
+  minPunchDistance <- 2  # in arcsec
+  numTooClose <- sum((df_punches$Distance) < minPunchDistance)
   if (numTooClose >= 1) {
     cat(paste(">>>>> WARNING:", numTooClose, "Target-Punch pairs are too close to be real.\n"))
+    df_punches %>% 
+      filter(Distance < minPunchDistance) %>%
+      select(FOV, Target, Distance) %>% 
+      print()
   }
   cat(paste("Largest distance (Target-Punch) = ", max(df_punches$Distance),"arcsec\n"))
   recommendYes <- (areAllOK) & (numTooClose == 0) & (max(df_punches$Distance) <= 20)
@@ -374,23 +379,28 @@ make_sky_slices <- function (aperture, nSlices=8, method="trimmedMean") {
 ################################################################################
 ##### Test frameworks only. ####################################################
 
-plotImage <- function (image, Xlow, Ylow) {
+plotImage <- function (image, Xlow, Ylow, title="") {
   # image needs to be a matrix of values.
   # Note: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
   require(ggplot2, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   df <- expand.grid(X=Xlow:(Xlow+ncol(image)-1), Y=Ylow:(Ylow+nrow(image)-1)) %>%
     mutate(Z=as.vector(image))
-  p <- ggplot(df, aes(X,Y)) + geom_raster(aes(fill=Z)) + scale_y_reverse()
+  p <- ggplot(df, aes(X,Y)) + geom_raster(aes(fill=Z)) + 
+    scale_fill_gradientn(colours=c("#111111", "#EEEEEE")) +
+    scale_y_reverse() + ggtitle(title)
   print (p)
 }
 
-plotAperture <- function (aperture) {
+plotAperture <- function (aperture, title="") {
   # aperture is an "aperture" object.
   require(ggplot2, quietly=TRUE)
   require(dplyr, quietly=TRUE)
-  plotImage (aperture$subImage, aperture$Xlow, aperture$Ylow)
-  plotImage (aperture$discMask+0.8*aperture$skyMask, aperture$Xlow, aperture$Ylow)
+  apMod <- aperture
+  minADU <- min(apMod$subImage)
+  apMod$subImage <- (apMod$subImage - (minADU-1)) ^ 0.2
+  plotImage (apMod$subImage, apMod$Xlow, apMod$Ylow, title)
+  plotImage (aperture$discMask+0.8*aperture$skyMask, aperture$Xlow, aperture$Ylow, title)
 }
 
 makeMockAperture <- function (Xcentroid=303.112, Ycentroid=201.8333, FWHM=5) {

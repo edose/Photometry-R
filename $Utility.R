@@ -17,6 +17,7 @@ read_FOV_file <- function (FOV_name) {
     return (NA)
   }
   lines <- readLines(FOV_path, warn=FALSE)   # read last line even without EOL character(s).
+  lines <- lines[nchar(trimws(lines))>=1]    # remove blank lines
   for (iLine in 1:length(lines)) {
     lines[iLine] <- lines[iLine] %>% 
       strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
