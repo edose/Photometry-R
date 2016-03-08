@@ -414,7 +414,7 @@ images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   
   maxInstMagSigma <- 0.03
   maxColorIndex <- 2.5
-  saturatedADU <- 5400
+  saturatedADU <- 54000
   
   df <- df_master %>% 
     filter(StarType=="Comp") %>% 
@@ -428,9 +428,9 @@ images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     group_by(FITSfile) %>% 
     summarize(nComp=n()) %>% 
     as.data.frame() %>%
-    left_join(df_master %>% select(FOV, FITSfile, Filter, Exposure)) %>% 
+    left_join(df_master %>% select(FOV, FITSfile, Filter, Exposure, Airmass)) %>% 
     unique() %>%
-    select(FOV, Filter, Exposure, FITSfile, nComp) %>%
+    select(FOV, Filter, Exposure, Airmass, FITSfile, nComp) %>%
     arrange(FOV, Filter, desc(Exposure), FITSfile)
   return (df_image)
 }

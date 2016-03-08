@@ -4,6 +4,7 @@
 ##### Typical workflow:
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
+#####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    AAVSO(AN_rel_folder="20151216", software_version="0.0.0")
 #####    Examine AAVSO report, edit report_map.txt for #SERIAL & #COMBINE directives, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
@@ -252,9 +253,10 @@ make_df_report <- function(photometry_folder) {
   
   df_report <- df_transformed %>%
     select(Serial, StarType, TargetName=StarID, JD=JD_mid, Mag=TransformedMag, MagErr, Filter) %>%
-    mutate(CompName=NA, CompMag=NA, nComps=NA, CheckName=NA, CheckMag=NA) %>%
+    mutate(CompName=NA_character_, CompMag=NA_real_, nComps=NA_integer_, 
+           CheckName=NA_character_, CheckMag=NA_real_) %>%
     mutate(Airmass=df_transformed$Airmass, Chart=df_transformed$Chart) %>%
-    mutate(Notes=paste0("Serial=",Serial)) %>%
+    mutate(Notes=paste0("obs#",Serial)) %>%
     filter(StarType=="Target") %>%   # do this late to keep df_report & df_transformed aligned.
     select(-StarType)
            
@@ -304,7 +306,9 @@ make_df_report <- function(photometry_folder) {
   # Make df_comps by rbind() all $obs from masterModelList
   df_comps <- data.frame(stringsAsFactors=FALSE)
   for (thisModelList in masterModelList) {
-    df_thisComp <- thisModelList$obs %>% filter(StarType=="Comp") %>% select(Serial,JD_mid,StarID,Filter)
+    df_thisComp <- thisModelList$obs %>% filter(StarType=="Comp") %>% 
+      mutate(ObsMag=CatMag+Residual) %>%
+      select(Serial,JD_mid,StarID,ObsMag,Filter)
     df_comps <- df_comps %>% rbind(df_thisComp)
   }
   # Now insert comp info.
@@ -318,14 +322,16 @@ make_df_report <- function(photometry_folder) {
     }
     if(nCompsThisJD > 1) { 
       # the ensemble case.
-      df_report$CompName[df_report$JD==thisJD] <- "ENSEMBLE"
-      df_report$CompMag[df_report$JD==thisJD]  <- "na"
+      df_report$CompName[df_report$JD==thisJD] <- "ENSEMBLE" # & leave CompMag as NA
+      # df_report$CompMag[df_report$JD==thisJD]  <- NA
       df_report$Notes[df_report$JD==thisJD]    <- paste0(df_report$Notes[df_report$JD==thisJD], 
-                                                         " (", nCompsThisJD, " comps)")
+                                                         "/", nCompsThisJD, " comps")
     } else { 
       # the single-comp-star case.
       df_report$CompName[df_report$JD==thisJD] <- df_compsThisJD$StarID[1]
-      df_report$CompMag[df$reportJD==thisJD]  <- "na" # unsure what AAVSO's "Inst Mag of Comp Star" means.
+      df_report$CompMag[df_report$JD==thisJD]  <- df_compsThisJD$ObsMag[1]
+      df_report$Notes[df_report$JD==thisJD]    <- paste0(df_report$Notes[df_report$JD==thisJD], 
+                                                         "/", nCompsThisJD, " comp")
     }
   }
 
@@ -386,8 +392,8 @@ make_df_report <- function(photometry_folder) {
     df_new$MagErr   <- max( min(df_combine$MagErr), max(df_combine$MagErr/sqrt(nrow(df_combine))))
     df_new$CheckMag <- mean(df_combine$CheckMag)
     df_new$Airmass  <- mean(df_combine$Airmass)
-    df_new$Notes    <- paste0("Serials=[", (paste0(df_combine$Serial,collapse=" ")), "] (",
-                              min(df_combine$nComps), "-", max(df_combine$nComps), " comps)")
+    df_new$Notes    <- paste0("obs#[", (paste0(df_combine$Serial,collapse=" ")), "]/",
+                              min(df_combine$nComps), "+ comps")
     df_report[df_report$Serial==serialToReplace,] <- df_new[1,]
     df_report <- df_report %>% filter(!Serial %in% serialsToDelete)
     cat(paste0("Combination of Serials ", paste0(df_combine$Serial, collapse=" "), " done.\n"))
