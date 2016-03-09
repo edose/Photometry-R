@@ -143,13 +143,18 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     stop(paste(">>>>> STOP: of", length(allegedlyCalibrated), "FITS files,", 
                nUncalibrated, "have not been calibrated."))
   }
+
   preCalibration <- setdiff(list.files(UncalibratedFolder, full.names=TRUE), 
                              list.dirs(UncalibratedFolder))
   if (!(length(allegedlyCalibrated) == length(preCalibration))) {
-    stop(paste(">>>>> STOP: only", length(allegedlyCalibrated), "FITS were calibrated of",
-               length(preCalibration), "FITS in folder /Uncalibrated."))
+    cat(paste(">>>>>", length(allegedlyCalibrated), "FITS in /Calibrated folder, but",
+               length(preCalibration), "FITS in /Uncalibrated. (OK if some moved to /Excluded)\n"))
   }
-  # Here, all FITS in /Calibrated folder were verified to be fully calibrated, e.g., by MaxIm.
+  answerYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
+  if (!answerYES) {
+    stop("STOPPING at user request.")
+  }
+  
   
   # Now, change .fit file extension from MaxIm calibration back to .fts.
   require(stringi, quietly=TRUE)
@@ -398,6 +403,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       paste0(";#STAR  Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
       paste0(";#STAR  Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
       paste0(";#IMAGE Obj-0000-V      ; to omit FITS image Obj-0000-V specifically"),
+      paste0(";#JD    0.72, 1         ; to omit fractional JD from 0.72 through 1"),
       paste0(";\n;----- Add your directive lines:\n;\n\n")
     )
     writeLines(lines, con=omitPath)

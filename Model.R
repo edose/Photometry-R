@@ -20,11 +20,11 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   if (is.null(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
 
   df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
+    filter(Filter==filter) %>%
+    filter(StarType=="Comp") %>%
     filter(!is.na(CatMag)) %>%
     filter(!is.na(CI)) %>%
     filter(!is.na(Airmass)) %>%
-    filter(StarType=="Comp") %>%
-    filter(Filter==filter) %>%
     filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(CI<=maxColorIndex) %>%
     filter(MaxADU_Ur<=saturatedADU)
@@ -204,7 +204,9 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
       lines[iLine] <- lines[iLine] %>% 
         strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
     }
-    directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
+    # Detect and collect directive text lines.
+    directiveLines <- lines[stri_detect_regex(lines,'^#')]
+    directiveLines <- directiveLines[!is.na(directiveLines)]
   }
   
   # Process directive lines to curate df_omitted (i.e., to omit observations etc as requested).
@@ -215,10 +217,12 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     if (is.na(directive)) {directive <- ""}
     if (directive=="#OBS") {
       parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
-      if (length(parms)>=2) {
+      if (length(parms)==2) {
         FITSname <- paste0(parms[1], ".fts")
         starID <- parms[2]
         df_filtered <- df_filtered %>% filter(!(FITSfile==FITSname & StarID==starID))
+      } else {
+        cat(paste(">>>>> Can't parse line: ", thisLine))
       }
     }
     if (directive=="#STAR") {
@@ -232,11 +236,29 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
         } else {
           df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID & Filter==filter))
         }
+      } else {
+        cat(paste(">>>>> Can't parse line: ", thisLine))
       }
     }
     if (directive=="#IMAGE") {
       FITSname <- paste0(value, ".fts")
       df_filtered <- df_filtered %>% filter(!FITSfile==FITSname)
+    }
+    if (directive=="#JD") {
+      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
+      if (length(parms)==2) {
+        minJD <- as.numeric(parms[1])
+        maxJD <- as.numeric(parms[2])
+        if (minJD>0 | maxJD < 2) {
+          floorJD <- floor(min(as.numeric(df_filtered$JD_mid)))
+          df_filtered <- df_filtered %>% 
+            filter((JD_mid <= minJD+floorJD) | (JD_mid >= maxJD+floorJD))
+        } else {
+          cat(paste(">>>>> minJD and/or maxJD values suspect: ", thisLine))
+        }
+      } else {
+        cat(paste(">>>>> Can't parse line: ", thisLine))
+      }
     }
   }
   cat("ends with", nrow(df_filtered), "rows.\n")
@@ -245,7 +267,6 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     cat("omitObs() removed", nrow(thisDiff), "observations.\n")
     # if (nrow(thisDiff)>=1) { print(thisDiff %>% select(Serial, FITSfile, StarID)) }
   }
-  
   return (df_filtered)
 }
 
