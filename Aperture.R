@@ -278,7 +278,6 @@ evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
               FWHM=FWHM, discPixels=aperture$discPixels, skyPixels=aperture$skyPixels))
 }
 
-
 getImageMatrix <- function (FITS_path) {
   #####    NOTE: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
   require(FITSio, quietly=TRUE)

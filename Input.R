@@ -255,10 +255,10 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       select(FITS_path) %>% 
       unlist()
 
-    # APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
-    # df_star_data_numbered <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
-    df_star_data_numbered <- FOV_list$star_data %>% mutate(Number=1:nrow(FOV_list$star_data))
-    df_RADec <- df_star_data_numbered %>% select(Number, StarID, degRA, degDec)
+    df_star_data_numbered <- FOV_list$star_data %>% 
+      mutate(Number=1:nrow(FOV_list$star_data)) # this is needed later.
+    df_RADec <- df_star_data_numbered %>% 
+      select(Number, StarID, degRA, degDec)
     Rdisc  <-  8
     Rinner <- 12
     Router <- 18
