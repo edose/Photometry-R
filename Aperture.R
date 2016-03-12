@@ -1,5 +1,5 @@
-##### Aperture.R  Supporting Aperture and sky-background funcions, perhaps to replace APT.
-#####    TESTS OK February 27 2016.
+##### Aperture.R  Supporting Aperture and sky-background funcions, no longer using APT at all.
+#####    TESTS OK March 12 2016.
 #####    NOTE: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
 
 addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec, RADecAsStrings=FALSE,
@@ -193,6 +193,8 @@ makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=8, Rinner=11, Router
   R2disc <- Rdisc^2
   R2inner <- Rinner^2
   R2outer <- Router^2
+  # cat(paste("XYsize=", Xsize, Ysize, "\n"))
+  # cat(paste("   X,Y=", Xcenter, Ycenter, "Xlims=", Xlow, Xhigh, "Ylims=", Ylow, Yhigh, "\n"))
   subImage <- image[Xlow:Xhigh, Ylow:Yhigh] # FITS image matrices: X is *FIRST* index, Y is SECOND index.
   X <- matrix((0:(ncol(subImage)-1))+Xlow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=TRUE)
   Y <- matrix((0:(nrow(subImage)-1))+Ylow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=FALSE)
@@ -242,11 +244,12 @@ punch <- function (aperture, df_punch=NULL, Rpunch=7) {
 
 evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
   require(dplyr, quietly=TRUE)
+  maxADU  <- max(aperture$subImage[aperture$discMask>0])
   discADU <- aperture$subImage * aperture$discMask
   skyADU <- evalSkyFunction(aperture)
   netADU <- ifelse(aperture$discMask>0, discADU - skyADU, NA)
   netFlux <- sum(netADU, na.rm=TRUE)
-  if(netFlux <= 0) {netFlux = NA}  # 
+  if(netFlux <= 0) {netFlux = NA}  # return NA if star undetected
   gain <- 1.57 # e-/ADU, this value is for current scope BOREA
   skySigma <- sd( ifelse(aperture$skyMask==0,NA,aperture$subImage), na.rm=TRUE)
   # netFluxSigma equation after APT paper, PASP 124, 737 (2012), but pi/2 in 3rd term set to 1 as
@@ -270,7 +273,7 @@ evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
   wtSumDist2 <- sum(dist2*netADU, na.rm=TRUE) / netFlux
   sigma <- sqrt(max(0,wtSumDist2)/2)
   FWHM  <- sigma * (2 * sqrt(2 * log(2)))
-  return(list(Xcentroid=Xcentroid, Ycentroid=Ycentroid, 
+  return(list(Xcentroid=Xcentroid, Ycentroid=Ycentroid, maxADU=maxADU,
               netFlux=netFlux, netFluxSigma=netFluxSigma, skyADU=skyADU, skySigma=skySigma,
               FWHM=FWHM, discPixels=aperture$discPixels, skyPixels=aperture$skyPixels))
 }
@@ -287,8 +290,9 @@ getImageMatrix <- function (FITS_path) {
   return (image)
 }
 
-getXYfromFITSheader <- function (df_RADec, FITS_path=NULL) {
-  require(dplyr, quietly=TRUE)
+getXYfromWCS <- function (df_RADec, FITS_path=NULL) {
+  require(dplyr,  quietly=TRUE)
+  require(FITSio, quietly=TRUE)
   
   hdr <- getFITSheaderValues(FITS_path, c("CD1_1", "CD1_2", "CD2_1", "CD2_2",
                                           "CRVAL1", "CRVAL2", "CRPIX1", "CRPIX2"))
@@ -300,7 +304,7 @@ getXYfromFITSheader <- function (df_RADec, FITS_path=NULL) {
   crval2 <- as.numeric(hdr$CRVAL2)
   crpix1 <- as.numeric(hdr$CRPIX1)
   crpix2 <- as.numeric(hdr$CRPIX2)
-  df_XY  <- data.frame(Number=df_RADec$Number)
+  df_XY <- df_RADec %>% select(Number, StarID)
   
   dRA  <- df_RADec$degRA  - crval1
   dDec <- df_RADec$degDec - crval2
@@ -309,29 +313,9 @@ getXYfromFITSheader <- function (df_RADec, FITS_path=NULL) {
   a <- cd22 / cd12
   dX <- (degNS-degEW*a)  / (cd21-cd11*a)
   dY <- (degEW-cd11*dX)  / cd12
-  df_XY$X <- crpix1 + dX
-  df_XY$Y <- crpix2 + dY
+  df_XY$Xcentroid <- crpix1 + dX
+  df_XY$Ycentroid <- crpix2 + dY
   return(df_XY)
-}
-
-getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
-  source('C:/Dev/Photometry/$Utility.R')
-  require(FITSio, quietly=TRUE)
-  require(dplyr, quietly=TRUE)
-  get_header_value <- function(header, key) {  # nested function.
-    value <- header[which(header==key)+1]
-    if (length(value)==0) value <- NA
-    trimws(value)
-  }
-  fileHandle <- file(description=FITS_path, open="rb")
-  header <- parseHdr(readFITSheader(fileHandle))
-  close(fileHandle)
-  
-  header_list <- list()
-  for (key in keys) {
-    header_list[[key]] <- get_header_value(header, key)
-  }
-  return(header_list)
 }
 
 evalSky005 <- function (aperture) {

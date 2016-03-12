@@ -140,3 +140,92 @@ apertureXXX <- function(image, X0, Y0, discR=9, innerR=12, outerR=16) {
               SkyMedian=annulusMedian, SkyMean=annulusMean,
               sigma=sigma, FWHM=FWHM, maxPixel=maxPixel))
 }
+
+getXYfromAPT <- function(df_RADec, thisFITS_path, photometry_folder) {
+  require(dplyr, quietly=TRUE)
+  APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
+  APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
+  APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
+  unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
+  # allAPTstdout <- character(0)
+  APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
+                               APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
+                               APToutput_path)
+  # allAPTstdout <- c(allAPTstdout, APTstdout)
+  return(parse_APToutput(APToutput_path) %>% 
+           left_join(df_RADec, by="Number") %>%
+           select(Number, StarID, Xcentroid, Ycentroid))
+}
+
+run_APT_oneFITS <- function (thisFITS_path=NULL, 
+                             APTsourcelist_path, APTpreferences_path, APToutput_path) {
+  # Process one FITS file through APT. 
+  #    Requires calibrated FITS file. 
+  #    Also requires APT source-list file (previously constructed from VPhot sequence file).
+  #    Writes output file "APToutput.txt" into the AN directory.
+  
+  APTprogram_path <- "C:/Programs/APT/APT_v2.5.8/APT.jar"
+  unlink(APToutput_path, force=TRUE)   # else APT might append to old data (bad). 
+  
+  # Construct arguments.
+  APT_arguments <- c("-Duser.language=en",
+                     "-Duser.region=US",
+                     "-mx1024M",
+                     "-jar", APTprogram_path,
+                     "-i", thisFITS_path,
+                     "-s", APTsourcelist_path,
+                     "-p", APTpreferences_path,
+                     "-o", APToutput_path)  
+  # prefs file is default (set up in APT GUI)
+  
+  # Run APT to generate output file.
+  stdOutput <- system2("java", shQuote(APT_arguments), stdout=TRUE, wait=TRUE) # Run APT program.
+  return(stdOutput)      # return text output as character vector
+}
+
+write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
+  df_star_data_numbered <- star_data %>% mutate(Number=1:nrow(star_data))
+  
+  df_star_data_numbered %>%
+    arrange(Number) %>%          # ensure stars are in correct order in APT source file.
+    select(degRA,degDec) %>%     # APT source file needs only degRA & degDec
+    format(nsmall=6) %>% 
+    write.table(APTsourcelist_path, quote=FALSE, row.names=FALSE, col.names=FALSE) # no header line.
+  
+  return(df_star_data_numbered) # all star data, with added Number to ensure join works correctly.
+}
+
+parse_APToutput <- function (APToutput_path) {
+  # parse APT text output file, return data frame for this one file (one image).
+  
+  lines <- readLines(APToutput_path)
+  
+  # Parse APT output header, set up a column range for each key.
+  require(stringi, quietly=TRUE)
+  header <- lines[3]
+  headerKeys <- c("Number", "CentroidX", "CentroidY")
+  fieldWidths <- c(6,16,16)
+  rightmostColumns <- NULL
+  for (key in headerKeys) {
+    rightmostColumns <- c(rightmostColumns,
+                          stri_locate_first_fixed(header, paste(" ",key," ",sep=""))[2]-1) # append
+  }
+  leftmostColumns <- rightmostColumns - fieldWidths + 1
+  
+  # For each star, parse all values and add a row to data frame.
+  stopString <- "End of "
+  colNames_df_apertures <- c("Number", "Xcentroid", "Ycentroid")
+  # Start df_apertures as a data frame of 0 rows (observations).
+  df_apertures <- (rep(0,length(colNames_df_apertures)) %>% t() %>% as.data.frame())[FALSE,]
+  for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
+    if (substring(line,1,nchar(stopString))==stopString) 
+      break
+    values <- rep(NA,length(headerKeys))
+    for (iKey in 1:length(headerKeys)) {
+      values[iKey] <- as.numeric(substring(line,leftmostColumns[iKey],rightmostColumns[iKey]))
+    }
+    df_apertures   <- rbind(df_apertures, values)
+  }
+  colnames(df_apertures) <- colNames_df_apertures # do here, as column names not respected by rbind() above.
+  return(df_apertures %>% arrange(Number))
+}

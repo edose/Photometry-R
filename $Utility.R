@@ -263,3 +263,21 @@ read_AAVSO_Chart <- function(chartID) {
 getNumericOrNA <- function(string) {
   suppressWarnings(as.numeric(string)) # if not numeric, just return NA silently.
 }
+
+getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
+  require(dplyr, quietly=TRUE)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }
+  fileHandle <- file(description=FITS_path, open="rb")
+  header <- parseHdr(readFITSheader(fileHandle))
+  close(fileHandle)
+  
+  header_list <- list()
+  for (key in keys) {
+    header_list[[key]] <- get_header_value(header, key)
+  }
+  return(header_list)
+}

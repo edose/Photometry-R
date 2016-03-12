@@ -1,9 +1,10 @@
 #####  Input.R -- for general photometry, all the functions needed to get from 
 #####               (1) a folder of one night's FITS files generated via Bob Denny's ACP 
 #####                      and a filtered optical rig, &
-#####               (2) pre-prepared field-of-view text file founded on AAVSO sequences (from VPhot)
-#####             through use of APT (Cal Tech's aperture photometry software), to get a master
-#####             data frame (AN) of that Astronight's photometric data. 
+#####               (2) pre-prepared field-of-view text file founded on AAVSO sequences (from VPhot).
+#####                      no longer calling out to APT (CalTech's software) to find and measure stars,
+#####                      as of March 2016.
+#####             The above delivers a master data frame of that Astronight's photometric data. 
 #####             This master data frame is to be used by Model.R to build a mixed-model regression.
 #####             and finally to predict unknown 
 #####
@@ -175,27 +176,10 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   unlink(UncalibratedFolder,recursive=TRUE)
 }
 
-getXYfromAPT <- function(df_RADec, thisFITS_path, photometry_folder) {
-  require(dplyr, quietly=TRUE)
-  APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
-  APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
-  APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
-  unlink(APTstdout_path, force=TRUE) # delete any old file before we start appending.
-  # allAPTstdout <- character(0)
-  APTstdout <- run_APT_oneFITS(thisFITS_path, APTsourcelist_path, 
-                               APTpreferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
-                               APToutput_path)
-  # allAPTstdout <- c(allAPTstdout, APTstdout)
-  return(parse_APToutput(APToutput_path) %>% 
-           left_join(df_RADec, by="Number") %>%
-           select(Number, StarID, Xcentroid, Ycentroid))
-}
-
 make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
-                        APT_preferences_path="C:/Dev/Photometry/APT/APT-C14.pref",
                         CCDcenterX=1536, CCDcenterY=1024) {
   ##### Tests OK.
-  ##### Process all FITS files in folder through APT to get (X,Y) for FOV's (RA,Dec) pairs, 
+  ##### Process all FITS files in folder (w/o APT as of March 2016) to get (X,Y) for FOV's (RA,Dec) pairs, 
   #####    then build & return master data frame.
   ##### Typical usage:  df_master <- make_df_master(AN_rel_folder="20151216")
   require(dplyr, quietly=TRUE)
@@ -258,8 +242,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     stop("STOPPING at user request.")
   }
 
-  # For each FOV, (1) read FOV file, (2) make APT source file,
-  #    (3) run_APT_oneFITS() on each FITS file & add to master df.
+  # For each FOV, (1) read FOV file, (2) for each FITS file, each star, apply aperture and measure star,
+  #    (3) add each FITS file's star data to master df.
   df_master <- data.frame()  # start with a null data frame and later add rows to it.
 
   FOVs <- FOVdf$FOVname %>% unique() %>% sort()
@@ -271,13 +255,10 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       select(FITS_path) %>% 
       unlist()
 
-    # write APT's sourcelist file (one only) for all FITS files using this FOV.
-    # APTstdout_path  <- make_safe_path(photometry_folder, "APTstdout.txt")
-    # APToutput_path  <- make_safe_path(photometry_folder, "APToutput.txt")
-    APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
-    df_star_data_numbered <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
+    # APTsourcelist_path <- make_safe_path(photometry_folder,"APTsource.txt")
+    # df_star_data_numbered <- write_APTsourcelist_file(FOV_list$star_data, APTsourcelist_path)
+    df_star_data_numbered <- FOV_list$star_data %>% mutate(Number=1:nrow(FOV_list$star_data))
     df_RADec <- df_star_data_numbered %>% select(Number, StarID, degRA, degDec)
-
     Rdisc  <-  8
     Rinner <- 12
     Router <- 18
@@ -285,25 +266,41 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
 
         # For each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
-      df_XY <- getXYfromAPT(df_RADec, thisFITS_path, photometry_folder) 
-      df_apertures <- df_XY %>%
+      df_apertures <- getXYfromWCS(df_RADec, thisFITS_path)
+      df_apertures <- df_apertures %>%
         mutate(RawADUMag=NA_real_, InstMagSigma=NA_real_, 
                SkyADU=NA_real_, SkySigma=NA_real_, 
                DiscRadius=Rdisc, SkyRadiusInner=Rinner, SkyRadiusOuter=Router,
                FWHM=NA_real_)
-      if (nrow(df_apertures) >= 1) {
+      thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. 
+      Xsize <- (dim(thisImage))[1] # In FITS, X is 1st dim, Y the 2nd.
+      Ysize <- (dim(thisImage))[2]
+      if (nrow(df_apertures) >= 1) { # if we have any apertures at all...
+      # Remove any rows that will lie outside or too near this image's boundaries.
+        marginPixels <- Router + 3
+        df_apertures <- df_apertures %>%
+          filter((Xcentroid - marginPixels) >= 1) %>%
+          filter((Ycentroid - marginPixels) >= 1) %>%
+          filter((Xcentroid + marginPixels) <= Xsize) %>%
+          filter((Ycentroid + marginPixels) <= Ysize)
+      }
+      if (nrow(df_apertures) >= 1) { # if we have apertures within image boundaries...
         df_apertures$FITSfile  <- substring(thisFITS_path, nchar(FITS_folder)+2)
-        df_apertures$MaxADU_Ur <- getMaxADU_Ur(thisFITS_path, df_XY, Rdisc)
+        df_apertures$MaxADU_Ur <- getMaxADU_Ur(thisFITS_path, df_apertures, Rdisc)
         source("C:/Dev/Photometry/Aperture.R")
-        thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. In FITS, X is 1st dim, Y the 2nd.
         for (i_ap in 1:nrow(df_apertures)) {
           # Make "aperture" object from this image and this aperture center (X,Y).
           Xcenter <- df_apertures$Xcentroid[i_ap]
           Ycenter <- df_apertures$Ycentroid[i_ap]
           thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
           
-          # Punch facility in development Feb 28 2016.
-          # Prepare punch list for THIS image.
+          # Do one cycle of centroid refinement (without annulus punch) before accepting centroids.
+          ev <- evalAperture(thisAp, evalSkyFunction=evalSky005)
+          Xcenter <- ev$Xcentroid
+          Ycenter <- ev$Ycentroid
+          thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
+          
+          # Centroid position is refined once), so now prepare punch list for this star in this image.
           this_df_punch <- FOV_list$punch %>%
             filter(StarID==df_apertures$StarID[i_ap]) %>%
             mutate(dX=NA_real_, dY=NA_real_) # in pixels
@@ -326,9 +323,10 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
             }
             cat("\n")
           }
-          thisApPunched <- punch(thisAp, this_df_punch) # apply punch list to raw aperture
+          # Apply punch list to raw aperture
+          thisApPunched <- punch(thisAp, this_df_punch) 
           
-          ## for TESTING or PRESENTATION only: plot the image & punched aperture
+          # for PRESENTATION: plot the image & punched aperture
           #if (nrow(this_df_punch)>=1) { 
           #  plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
           #                                             df_apertures$StarID[i_ap]))
@@ -336,18 +334,24 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           #cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
           #    nrow(this_df_punch), " punches.\n")
           
+          # For TESTING: plot image & punched aperture
+          #plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
+          #  df_apertures$StarID[i_ap]))
+          
           # Get values from this aperture and image matrix.
           ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
           
           # Replace values in this row of df_apertures.
           df_apertures$Xcentroid[i_ap]      <- ev$Xcentroid # update centroid.
           df_apertures$Ycentroid[i_ap]      <- ev$Ycentroid #   " "
-          df_apertures$RawADUMag[i_ap]      <- -2.5 * log10(ev$netFlux) # nb: ev$netFlux may be NA.
+          df_apertures$RawADUMag[i_ap]      <- -2.5 * log10(ev$netFlux) # NB: ev$netFlux=NA for undet star.
           df_apertures$InstMagSigma[i_ap]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
           df_apertures$SkyADU[i_ap]         <- ev$skyADU
           df_apertures$SkySigma[i_ap]       <- ev$skySigma
           df_apertures$FWHM[i_ap]           <- ev$FWHM
         }
+        df_apertures <- df_apertures %>% filter(!is.na(RawADUMag)) # remove rows for undetected stars.
+      
         # Combine different data sets to make one data frame for this image.
         df_FITSheader <- getFITSheaderInfo(thisFITS_path)
         df_master_thisFITS <- make_df_master_thisFITS(df_apertures, df_star_data_numbered, df_FITSheader, 
@@ -691,79 +695,6 @@ prepareForCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NUL
 ################################################################################################
 ##### Below are support-only functions, not called by user. ####################################
 
-run_APT_oneFITS <- function (thisFITS_path=NULL, 
-                             APTsourcelist_path, APTpreferences_path, APToutput_path) {
-# Process one FITS file through APT. 
-#    Requires calibrated FITS file. 
-#    Also requires APT source-list file (previously constructed from VPhot sequence file).
-#    Writes output file "APToutput.txt" into the AN directory.
-
-  APTprogram_path <- "C:/Programs/APT/APT_v2.5.8/APT.jar"
-  unlink(APToutput_path, force=TRUE)   # else APT might append to old data (bad). 
-
-  # Construct arguments.
-  APT_arguments <- c("-Duser.language=en",
-                     "-Duser.region=US",
-                     "-mx1024M",
-                     "-jar", APTprogram_path,
-                     "-i", thisFITS_path,
-                     "-s", APTsourcelist_path,
-                     "-p", APTpreferences_path,
-                     "-o", APToutput_path)  
-                     # prefs file is default (set up in APT GUI)
-  
-  # Run APT to generate output file.
-  stdOutput <- system2("java", shQuote(APT_arguments), stdout=TRUE, wait=TRUE) # Run APT program.
-  return(stdOutput)      # return text output as character vector
-}
-
-write_APTsourcelist_file <- function (star_data, APTsourcelist_path) {
-  df_star_data_numbered <- star_data %>% mutate(Number=1:nrow(star_data))
-  
-  df_star_data_numbered %>%
-    arrange(Number) %>%          # ensure stars are in correct order in APT source file.
-    select(degRA,degDec) %>%     # APT source file needs only degRA & degDec
-    format(nsmall=6) %>% 
-    write.table(APTsourcelist_path, quote=FALSE, row.names=FALSE, col.names=FALSE) # no header line.
-  
-  return(df_star_data_numbered) # all star data, with added Number to ensure join works correctly.
-}
-
-parse_APToutput <- function (APToutput_path) {
-  # parse APT text output file, return data frame for this one file (one image).
-  
-  lines <- readLines(APToutput_path)
-  
-  # Parse APT output header, set up a column range for each key.
-  require(stringi, quietly=TRUE)
-  header <- lines[3]
-  headerKeys <- c("Number", "CentroidX", "CentroidY")
-  fieldWidths <- c(6,16,16)
-  rightmostColumns <- NULL
-  for (key in headerKeys) {
-    rightmostColumns <- c(rightmostColumns,
-                          stri_locate_first_fixed(header, paste(" ",key," ",sep=""))[2]-1) # append
-  }
-  leftmostColumns <- rightmostColumns - fieldWidths + 1
-
-  # For each star, parse all values and add a row to data frame.
-  stopString <- "End of "
-  colNames_df_apertures <- c("Number", "Xcentroid", "Ycentroid")
-  # Start df_apertures as a data frame of 0 rows (observations).
-  df_apertures <- (rep(0,length(colNames_df_apertures)) %>% t() %>% as.data.frame())[FALSE,]
-  for (line in lines[-1:-3]) {    # i.e., skip header lines (1st 3 lines)
-    if (substring(line,1,nchar(stopString))==stopString) 
-      break
-    values <- rep(NA,length(headerKeys))
-    for (iKey in 1:length(headerKeys)) {
-      values[iKey] <- as.numeric(substring(line,leftmostColumns[iKey],rightmostColumns[iKey]))
-    }
-    df_apertures   <- rbind(df_apertures, values)
-  }
-  colnames(df_apertures) <- colNames_df_apertures # do here, as column names not respected by rbind() above.
-  return(df_apertures %>% arrange(Number))
-}
-
 getMaxADU_Ur <- function(CalFITS_path, df_XY, Rdisc, saturatedADU=54000) {
   # TESTED 11/29/2015.
   # Open Ur (not Calibrated) FITS and determine max ADU within the disc radius.
@@ -797,20 +728,25 @@ getMaxADU_Ur <- function(CalFITS_path, df_XY, Rdisc, saturatedADU=54000) {
   for (iObj in 1:nrow(df_XY)) {
     Xcenter     <- df_XY$Xcentroid[iObj]
     Ycenter     <- df_XY$Ycentroid[iObj]
-    testRadius  <- Rdisc + 0.5
-    Xlow  <- max(1, floor(Xcenter-testRadius))
-    Xhigh <- min(Xsize, ceiling(Xcenter+testRadius))
-    Ylow  <- max(1, floor(Ycenter-testRadius))
-    Yhigh <- min(Ysize, ceiling(Ycenter+testRadius))
-    for (X in Xlow:Xhigh) {
-      for (Y in Ylow:Yhigh) {
-        ADU <- image[X,Y]
-        if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
-          if (is.na(MaxADU_Ur[iObj])) { MaxADU_Ur[iObj] <- ADU }
-          if (ADU > MaxADU_Ur[iObj])  { MaxADU_Ur[iObj] <- ADU }
-        } # if
-      } # for Y
-    } # for X
+    #testRadius  <- Rdisc + 0.5
+    #Xlow  <- max(1, floor(Xcenter-testRadius))
+    #Xhigh <- min(Xsize, ceiling(Xcenter+testRadius))
+    #Ylow  <- max(1, floor(Ycenter-testRadius))
+    #Yhigh <- min(Ysize, ceiling(Ycenter+testRadius))
+    #for (X in Xlow:Xhigh) {
+    #  for (Y in Ylow:Yhigh) {
+    #    ADU <- image[X,Y]
+    #    if ((X-Xcenter)^2+(Y-Ycenter)^2 <= testRadius^2) {
+    #      if (is.na(MaxADU_Ur[iObj])) { MaxADU_Ur[iObj] <- ADU }
+    #      if (ADU > MaxADU_Ur[iObj])  { MaxADU_Ur[iObj] <- ADU }
+    #    } # if
+    #  } # for Y
+    #} # for X
+    Rinner <- Rdisc + 2
+    Router <- Rinner + 2
+    aperture <- makeRawAperture(image=image, Xcenter=Xcenter, Ycenter=Ycenter, Rdisc=Rdisc,
+                                Rinner=Rinner, Router=Router) # Rinner and Router are not used here.
+    MaxADU_Ur[iObj] <- evalAperture(aperture)$maxADU
   } # for iObj
   return(MaxADU_Ur)
 }

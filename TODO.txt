@@ -1,19 +1,10 @@
-TODO list: as of 20160124.
+TODO list: as of 20160312.
 
-Immediate/showstopper (20160124): 
+Immediate/showstopper (20160312): 
 [None.]
 
-Soon / normal development (20160124):
-* Finish Color Index inference and application. Test.
-* Write, apply, test transform color correction.
-* Ensure that df_predictions is appropriate to WriteAAVSO(), especially in columns contained.
-* Go back (even into Input.R) and make both columns JD_mid (factor/character) and 
-     JD_num (numeric minus floor value). They should both be in df_master and df_predictions.
-     They are redundant, but JD_mid is important for random-effect and other factor uses, whereas
-     JD_num ensures numerical stability.
-* Some kind of facility for combining & selecting Target observations for WriteAAVSO().
-* Finish Predict.R::WriteAAVSO(). Requires complete df_predictions (), curated by user. Then it must run
-initial diagnostics and then write text file ready to send to AAVSO.
+Soon / normal development (20160312):
+
 
 ---------------------------
 Someday development:
@@ -21,16 +12,7 @@ Someday development:
 ANplanner.R (& FOV files before run):
 
 Input.R (& FOV files during reduction):
-* FOV file: new per-star notation to mark interfering stars, esp by direction (& arcsec dist?) 
-(or by RA Dec). --> OR possibly this can be automated in the aperture math alone (median-of-medians?) so
-that we avoid this effort to make FOV files (and avoid complicating them as well).
-* Rewrite aperture math (InstMag, FWHM, Sky), then using APT only to get pixel coordinates for targets. 
-This should improve interference rejection in sky annulus, FWHM values good enough to use in curating
-observations, etc.
 * Write own CalibrationMaster & Calibrate All routines to completely replace MaxIm usage.
-* FOV file: Add new directive "#AAVSONAME" to give AAVSO-report target name when not compatible with
-Windows file names, e.g., #AAVSONAME "1RXS J064434.5+334451" (which would otherwise require hand-editing
-the AAVSO report). Probably best to get this into the master data frame from the outset & carry through.
 
 Model.R: 
 
