@@ -5,7 +5,7 @@
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
-#####    AAVSO(AN_rel_folder="20151216", software_version="0.0.0")
+#####    AAVSO(AN_rel_folder="", software_version="0.0.0")
 #####    Examine AAVSO report, edit report_map.txt for #SERIAL & #COMBINE directives, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
@@ -284,6 +284,7 @@ make_df_report <- function(photometry_folder) {
     df_report <- df_report %>% filter(toupper(TargetName)!=toupper(targetToOmit))
     cat(paste0("Omitted TARGET: ", targetToOmit), "\n")
   }
+  
   # Apply #SERIAL directives.
   omit_lines <- directiveLines[stri_startswith_fixed(directiveLines, "#SERIAL")]
   serialsToOmit <- as.numeric() # we may want to keep this for error msgs, below.
@@ -297,6 +298,26 @@ make_df_report <- function(photometry_folder) {
   cat(paste0("Omitting ", length(serialsToOmit), " observations by Serials ",
              paste0(serialsToOmit, collapse=" "), " done.\n"))
   
+  # Apply #JD directives.
+  omit_lines <- directiveLines[stri_startswith_fixed(directiveLines, "#JD")]
+  for (thisLine in omit_lines) {
+    parms <- stri_extract_all_words(thisLine) %>% unlist() %>% strsplit(",") %>% unlist()
+    if (length(parms)==3) {
+      minJD <- as.numeric(parms[2]) # fractional part of JD expected
+      maxJD <- as.numeric(parms[3]) #   "
+      if (minJD>=0 | maxJD < 2) {
+        floorJD <- floor(min(as.numeric(df_report$JD)))
+        df_report <- df_report %>% 
+          filter((JD <= minJD+floorJD) | (JD >= maxJD+floorJD))
+        cat(paste0("Omitting JD_fract range",  minJD, " to ", maxJD, "\n"))
+      } else {
+        cat(paste(">>>>> minJD and/or maxJD values suspect: ", thisLine))
+      }
+    } else {
+      cat(paste(">>>>> Can't parse line: ", thisLine))
+    }
+  }
+
   # Apply check-star names and mags (lookup from df_transformed, then insert column in-place).
   df_checks <- df_transformed %>% filter(StarType=="Check") %>% select(JD_mid, StarID, TransformedMag)
   df_joined <- df_report      %>% left_join(df_checks, by=c("JD"="JD_mid"))

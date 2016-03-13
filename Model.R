@@ -232,9 +232,9 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
         starID <- parms[2]
         filter <- ifelse(length(parms)==3, parms[3], NA)
         if (is.na(filter)) {
-          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID))
+          df_filtered <- df_filtered %>% filter(!(FOV==object & StarID==starID))
         } else {
-          df_filtered <- df_filtered %>% filter(!(Object==object & StarID==starID & Filter==filter))
+          df_filtered <- df_filtered %>% filter(!(FOV==object & StarID==starID & Filter==filter))
         }
       } else {
         cat(paste(">>>>> Can't parse line: ", thisLine))

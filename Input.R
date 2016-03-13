@@ -150,10 +150,10 @@ finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   if (!(length(allegedlyCalibrated) == length(preCalibration))) {
     cat(paste(">>>>>", length(allegedlyCalibrated), "FITS in /Calibrated folder, but",
                length(preCalibration), "FITS in /Uncalibrated. (OK if some moved to /Excluded)\n"))
-  }
-  answerYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
-  if (!answerYES) {
-    stop("STOPPING at user request.")
+    answerYES <- "Y" == (cat("Proceed? (y/n)") %>% readline() %>% trimws() %>% toupper())
+    if (!answerYES) {
+      stop("STOPPING at user request.")
+    }
   }
   
   
