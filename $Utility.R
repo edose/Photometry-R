@@ -163,8 +163,10 @@ read_FOV_file <- function (FOV_name) {
     df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
   
     # Diagnostic checks & messages before returning results.
-    if (sum(df_star$StarType=="Check")<=0) {
-      cat(">>>>> WARNING: FOV file ",FOV_name," has NO CHECK STAR.\n")
+    if (substr(FOV_name,1,4)!="Std_") {
+      if (sum(df_star$StarType=="Check")<=0) {
+        cat(">>>>> WARNING: FOV file ",FOV_name," does not appear to be a Std field & has NO CHECK STAR.\n")
+      }
     }
   }
   return(list(FOV_data=FOV_data, punch=df_punch, star_data=df_star))

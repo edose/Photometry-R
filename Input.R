@@ -9,6 +9,7 @@
 #####             and finally to predict unknown 
 #####
 ##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
+#####    checkFOVs(AN_rel_folder="20151216")
 #####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
 #####    beforeCal(AN_rel_folder="20151216")
 #####    (get any missing Masters from prev ANs),
@@ -19,6 +20,75 @@
 #####    df_master <- make_df_master(AN_rel_folder="20151216")
 #####    df_image  <- images(AN_rel_folder="20151216")
 #####    ...then start modeling with Model.R functions.
+
+checkFOVs <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+  require(dplyr, quietly=TRUE)
+  require(stringi, quietly=TRUE)
+  source("C:/Dev/Photometry/$Utility.R")
+  require(FITSio, quietly=TRUE)
+  get_header_value <- function(header, key) {  # nested function.
+    value <- header[which(header==key)+1]
+    if (length(value)==0) value <- NA
+    trimws(value)
+  }  
+  
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  
+  # Collect file names for all relevant FITS files.
+  df <- data.frame(RelPath=list.files(AN_folder, full.names=FALSE, recursive=TRUE, include.dirs=FALSE),
+                   stringsAsFactors = FALSE) %>%
+    filter(!stri_startswith_fixed(RelPath,"AutoFlat/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Calibration/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Ur/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Exclude/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Excluded/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"CalibrationMasters/")) %>%
+    filter(!stri_startswith_fixed(RelPath,"Photometry/")) %>%
+    mutate(Filename="", Object="")
+  
+  # Collect header data from FITS files.
+  anyError <- FALSE
+  cat("Testing: ")
+  for (iRow in 1:nrow(df)) {
+    relPath <- df$RelPath[iRow]
+    fullPath <- make_safe_path(AN_folder, relPath)
+    filename <- strsplit(relPath,"/")[[1]] %>% last()
+    
+    pattern<- "^(.+)-[[:digit:]S][[:digit:]]{3}-" # gets both old and new formats of FITS filenames.
+    objectFromFilename <- regmatches(filename,regexec(pattern,filename)) %>% unlist() %>% nth(2)
+    fileHandle <- file(description=fullPath, open="rb")
+    header <- parseHdr(readFITSheader(fileHandle))
+    close(fileHandle)
+
+    objectFromFITS <- get_header_value(header, "OBJECT")
+    errorThisFile <- FALSE
+    #cat(paste0("testing: ",relPath,": ", objectFromFITS, " vs ", objectFromFilename, "\n"))
+    cat(paste0(iRow," "))
+    if (objectFromFilename != objectFromFITS) {
+      cat(paste0("\n>>>>> ", fullPath,": Object mismatch, ", objectFromFilename, 
+                " vs ", objectFromFITS, sep=""))
+      errorThisFile <- TRUE
+    }
+    if (!errorThisFile) {
+      df$Filename[iRow]   <- filename
+      df$Object[iRow]     <- objectFromFITS
+    } else {
+      anyError <- TRUE
+    }
+    this_FOV_list <- read_FOV_file(objectFromFITS)
+    FOV_file_absent <- (this_FOV_list %>% is.na() %>% first())
+    if (FOV_file_absent) {
+      cat(paste0("\n>>>>> No FOV file >", objectFromFITS, "< for FITS file >", relPath, "<\n"))
+      anyError <- TRUE
+    }
+  }
+  cat("\n")
+  if (anyError) {
+    cat(">>>>> Check the above listing for errors.\n")
+  } else {
+    cat("+++++ All OK: No FITS object errors, and all required FOV files are in place.\n")
+  }
+}
 
 renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                          oldObject, newObject) {
