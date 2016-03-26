@@ -4,9 +4,12 @@
 ##### Typical workflow:
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
+#####    eclipserPlot(starID="ST Tri") 
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
+#####    -- examine markup report, esp for COMBINES and poor check star agreement.
+#####    -- edit report_map.txt as needed for #SERIAL & #COMBINE directives.
 #####    AAVSO(AN_rel_folder="", software_version="0.0.0")
-#####    Examine AAVSO report, edit report_map.txt for #SERIAL & #COMBINE directives, rerun AAVSO().
+#####    -- examine AAVSO report, re-edit report_map.txt if needed, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
 
@@ -141,20 +144,21 @@ markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL
   path_df_predictions <- make_safe_path(photometry_folder, "df_transformed.Rdata")
   load(path_df_predictions)
   
-  df_checkStars <- df_predictions %>% filter(StarType=="Check") %>% select(FITSfile, StarID)
+  df_checkStars <- df_predictions %>% 
+    filter(StarType=="Check") %>% 
+    select(FITSfile, Check=StarID, CkMag=TransformedMag)
   JD_fract <- (df_predictions$JD_num - (df_predictions$JD_num %>% min() %>% floor())) %>% round(digits=4)
   
   df_markupReport <- df_predictions %>%
     mutate(JD_fract=JD_fract) %>%
     filter(StarType=="Target") %>%
-    select(Serial, FITSfile, Target=StarID, Filter, Exposure, InstMagSigma, MagErr, JD_fract) %>%
+    select(Serial, FITSfile, Target=StarID, Filter, Exp=Exposure, InstMagSigma, MagErr, JD_fract) %>%
     left_join(df_checkStars, by="FITSfile") %>%
-    rename(Check=StarID) %>%
-    mutate(Sigma_mMag=round(InstMagSigma*1000)) %>%
-    mutate(Err_mMag=round(MagErr*1000)) %>%
+    mutate(Sigma=round(InstMagSigma*1000)) %>%
+    mutate(Err=round(MagErr*1000)) %>%
     select(-InstMagSigma, -MagErr) %>%
-    arrange(Target, FITSfile, Filter, Exposure) %>%
-    select(Serial, Target, FITSfile, Filter, Exposure, everything())
+    arrange(Target, FITSfile, Filter, Exp) %>%
+    select(Serial, Target, FITSfile, Filter, Exp, everything())
   return(df_markupReport)
 }
 
@@ -182,7 +186,8 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
     c("#DATE=JD") %>%
     c("#OBSTYPE=CCD") %>%
     c(paste0("#This report of ", nrow(df_report), " observations was generated ", 
-             format(Sys.time(), tz = "GMT"), " UTC.")) %>%
+             format(Sys.time(), tz = "GMT"), " UTC", 
+             " from raw data in folder ",AN_rel_folder,".")) %>%
     c(paste0("#Software version for all computation yielding this report = ", software_version)) %>%
     c("#Eric Dose, Bois d'Arc Observatory, Kansas") %>%
     c("#") %>%
