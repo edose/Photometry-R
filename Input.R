@@ -364,11 +364,15 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           Ycenter <- df_apertures$Ycentroid[i_ap]
           thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
           
-          # Do one cycle of centroid refinement (without annulus punch) before accepting centroids.
-          ev <- evalAperture(thisAp, evalSkyFunction=evalSky005)
-          Xcenter <- ev$Xcentroid
-          Ycenter <- ev$Ycentroid
-          thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
+          # Do two cycles of centroid refinement (without annulus punch) before accepting centroids.
+          # (If far off from center, it may take the first cycle just to get anywhere close.)
+          nCycles <- 2
+          for (iCycle in 1:nCycles) {
+            ev <- evalAperture(thisAp, evalSkyFunction=evalSky005)
+            Xcenter <- ev$Xcentroid
+            Ycenter <- ev$Ycentroid
+            thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
+          }
           
           # Centroid position is refined once), so now prepare punch list for this star in this image.
           this_df_punch <- FOV_list$punch %>%
@@ -443,6 +447,9 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   df_master <- df_master %>%
     mutate(X1024=(Xcentroid-CCDcenterX)/1024, Y1024=(Ycentroid-CCDcenterY)/1024) %>%
     mutate(Vignette =(X1024^2 + Y1024^2))
+  
+  # Add SkyBias column.
+  df_master <- addBiasTerm(df_master, biasType="sigma")
   
   # Write out entire APT text log (all runs).
   # write(allAPTstdout, APTstdout_path)
@@ -844,6 +851,39 @@ getFITSheaderInfo <- function (FITS_path) {
   df$Airmass   <- as.numeric(get_header_value(header, "AIRMASS"))
   return (df)
 }
+
+addBiasTerm <- function (df_master, biasType="sigma") {
+  # IN TESTING March 25 2016, to add SkyBias term to improve ap. measurements of very low-flux sources.
+  # biasType must = "" or "sigma", for now.
+  # Later, add biasTypes of:
+  #    "medianOfSigma": which uses a median of skySigma rather than the individual levels.
+  #    "regularized"  : which uses an average of the "sigma" and "medianOfSigma" values.
+  require(dplyr)
+  if ("SkyBias" %in% colnames(df_master)) {
+    df_master <- df_master %>% select(-SkyBias) # remove any pre-existing column named "SkyBias"
+  }
+  
+  if(is.null(biasType) | is.na(biasType) | biasType=="") {
+    df_master$SkyBias <- 0
+  } 
+  else {
+    biasType      <- biasType %>% trimws() %>% tolower()
+    if (biasType=="sigma") {
+      netDiscFlux   <- 10 ^ (-df_master$InstMag/2.5) * df_master$Exposure
+      nDiscPixels   <- pi * df_master$DiscRadius^2
+      skyFluxUncert <- nDiscPixels * df_master$SkySigma
+      # This next line is correct--should NOT be a log10(), as (1+y/x) already approximates ln(y/x) for y<<x.
+      # Using the identity log10(z) = ln(z) / ln(10): [R's log() == natural log (i.e., ln())]
+      magUncert     <- abs(-2.5 * (skyFluxUncert / netDiscFlux) / log(10)) 
+      df_master$SkyBias <- magUncert
+    }
+    else {
+      df_master$SkyBias <- 0
+    }
+  }
+  return(df_master)
+}
+
 
 make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FITSheader, FOV_data) {
   # Combine all relevant data for all APT-detected stars for this FITS file.

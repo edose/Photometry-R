@@ -6,7 +6,7 @@
 
 modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                             filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
-                            fit_vignette=TRUE, fit_XY=FALSE,
+                            fit_skyBias=TRUE, fit_vignette=TRUE, fit_XY=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
   #             (2) the omit.txt file of observations to omit (also stored in /Photometry).
@@ -19,7 +19,9 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
                                   "e.g., AN_rel_folder='20151216'.")}
   if (is.null(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
 
-  df_model <- omitObs(AN_top_folder, AN_rel_folder) %>% # returns df w/user-requested obs removed.
+  df_omitted <- omitObs(AN_top_folder, AN_rel_folder) # returns df w/user-requested obs removed.
+  if (is.na(df_omitted[[1]][[1]]))  {stop(">>>>> omit.txt file does not exist.")}
+  df_model <- df_omitted %>%
     filter(Filter==filter) %>%
     filter(StarType=="Comp") %>%
     filter(!is.na(CatMag)) %>%
@@ -32,10 +34,13 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
+    # Case of fitting transform values from the current data.
     transform <- NA
     formula_string <- paste0(formula_string, " + CI")
   } else {
-    transform <- list(V=-0.0259,R=+0.0319,I=+0.0064)[filter] %>% unlist() # user-given (not fitted) value.
+    # Case of user-given (not fitted) transform value.
+    # These improved values are from standards run of AN 20151218.
+    transform <- list(V=-0.0199,R=+0.0398,I=+0.0432)[filter] %>% unlist()
     thisOffset <- thisOffset + transform * df_model$CI
   }
   if (fit_extinction) { 
@@ -44,6 +49,14 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   } else {
     extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # user-given (not fitted) value.
     thisOffset <- thisOffset + extinction * df_model$Airmass
+  }
+  if (fit_skyBias) {
+    if (all(df_model$SkyBias==0)) {
+      cat(">>>>> ALL SkyBias values in df_model's ", nrow(df_model), 
+          " observations are 0, so removing SkyBias term from model.\n", sep="")
+    } else {
+      formula_string <- paste0(formula_string, " + SkyBias")
+    }
   }
   if (fit_vignette) {
     formula_string <- paste0(formula_string, " + Vignette")
@@ -196,7 +209,7 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   # Get omit file for this AN folder, then parse directive lines.
   omit_file <- make_safe_path(photometry_folder, "omit.txt")
   if (!file.exists(omit_file)) {
-    cat("Omit file", omit_file, "does not exist.")
+    cat("\n>>>>> Omit file", omit_file, "does not exist.\n\n")
     return (NA)
   } else {
     lines <- readLines(omit_file, warn=FALSE)   # read last line even without EOL character(s).

@@ -49,7 +49,7 @@ addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec, RADecAs
   }
 }
 
-addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches-TEST.txt", delim="\t") {
+addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="\t") {
   # the file at textPath is a delimited (tab-delimited default) file of Punches, in format:
   # for target line: col1=FOV, col2=target_name, col4=RA, col6=Dec
   # for punch line:  col4=RA, col6=Dec
