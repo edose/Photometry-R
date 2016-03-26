@@ -254,6 +254,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   ##### Typical usage:  df_master <- make_df_master(AN_rel_folder="20151216")
   require(dplyr, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
+  source("C:/Dev/Photometry/Aperture.R")
+  
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
 
   # make list of all FITS (FITS in /Calibrated folder ONLY; hide files in /Exclude to remove from workflow).

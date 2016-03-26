@@ -36,7 +36,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     filter(InstMagSigma<=maxInstMagSigma) %>%
     mutate(CI=ifelse(is.na(CI),0,CI)) %>%
     select(Serial, ModelStarID, StarID, Chart, Xcentroid, Ycentroid, InstMag, InstMagSigma, StarType,
-           JD_mid, Filter, Airmass, CI, Vignette) %>%
+           JD_mid, Filter, Airmass, CI, SkyBias, Vignette) %>%
     mutate(CatMag=0) # arbitrarily chosen, to complete model.
 
   # Get untransformed predicted Inst Mags (via running predict(), collecting all results).
