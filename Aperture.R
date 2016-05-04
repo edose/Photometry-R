@@ -352,6 +352,7 @@ make_sky_slices <- function (aperture, nSlices=8, method="trimmedMean") {
       } else {
         sliceList[[i]] <- median(sliceADUs, na.rm=TRUE)
       }
+      i <- 1
       # plotImage(sliceADUs, Xlow, Ylow)
     }
   }
@@ -385,6 +386,72 @@ plotAperture <- function (aperture, title="") {
   plotImage (apMod$subImage, apMod$Xlow, apMod$Ylow, title)
   plotImage (aperture$discMask+0.8*aperture$skyMask, aperture$Xlow, aperture$Ylow, title)
 }
+
+#----------------------------------------------------------------------------------------------------------
+plotAperturePresentation <- function (aperture, title="") {
+  # aperture is an "aperture" object.
+  require(ggplot2, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  apMod <- aperture
+  minADU <- min(apMod$subImage)
+  apMod$subImage <- (apMod$subImage - (minADU-1)) ^ 0.2
+  plotImagePresentation (apMod$subImage, apMod$Xlow, apMod$Ylow, title)
+  plotImagePresentation (aperture$discMask+0.8*aperture$skyMask, aperture$Xlow, aperture$Ylow, title)
+  plotSlicesPresentation(aperture$skyMask, apMod$Xlow, apMod$Ylow, title)
+}
+
+# I never figured out how to tile the slices in different colors.
+plotSlicesPresentation <- function (image, Xlow, Ylow, title="") {
+  # image needs to be a matrix of values, typically passed in from plotAperturePresentation().
+  # Note: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
+  require(ggplot2, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  nCol = ncol(image)
+  nRow = nrow(image)
+  df <- expand.grid(X=Xlow:(Xlow+ncol(image)-1), Y=Ylow:(Ylow+nrow(image)-1)) %>%
+    mutate(Z=as.vector(image))
+  Xcenter <- Xlow + (ncol(image)-1)/2
+  Ycenter <- Ylow + (nrow(image)-1)/2
+  X <- matrix((0:(nCol-1))+Xlow, nrow=nRow, ncol=nCol, byrow=TRUE)
+  Y <- matrix((0:(nRow-1))+Ylow, nrow=nRow, ncol=nCol, byrow=FALSE)
+  dX <- X - Xcenter
+  dY <- Y - Ycenter
+  mask <- ifelse(image==0, NA, image)
+  arcTan <- atan2(dY,dX) * mask # to mask for the skyMask only.
+  nSlices = 12
+  arcTanPerSlice <- (2 * pi) / nSlices  # as atan2() ranges -pi to pi
+  arcTanLowest <- -pi
+  df$Islice = 1 + floor((as.vector(arcTan) - arcTanLowest) / arcTanPerSlice)
+  df$Islice = pmax(1, df$Islice)
+  df$Islice = pmin(nSlices, df$Islice)
+  df$Islice = as.factor(df$Islice)
+  p <- ggplot(df, aes(X,Y)) + geom_tile(aes(fill=Islice)) +
+    # scale_fill_gradientn(colours=these_colors) +
+    scale_fill_brewer(palette="Paired") +
+    scale_y_reverse() + ggtitle(title)
+  p <- p + SAS2016.bw.theme()
+  p <- p + theme(panel.background = element_rect(fill = "gray10"),
+                 panel.grid.major = element_line(colour="grey30"),
+                 panel.grid.minor = element_line(colour="grey20"))
+  print (p)
+}
+
+plotImagePresentation <- function (image, Xlow, Ylow, title="", 
+                                   these_colors=c("#111111", "#EEEEEE")) {
+  # image needs to be a matrix of values, typically passed in from plotAperturePresentation().
+  # Note: In FITS image matrices: X is *FIRST* index, Y is SECOND index.
+  require(ggplot2, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  df <- expand.grid(X=Xlow:(Xlow+ncol(image)-1), Y=Ylow:(Ylow+nrow(image)-1)) %>%
+    mutate(Z=as.vector(image))
+  p <- ggplot(df, aes(X,Y)) + geom_raster(aes(fill=Z)) + 
+    scale_fill_gradientn(colours=these_colors) +
+    scale_y_reverse() + ggtitle(title)
+  p <- p + SAS2016.bw.theme()
+  print (p)
+}
+
+#----------------------------------------------------------------------------------------------------------
 
 makeMockAperture <- function (Xcentroid=303.112, Ycentroid=201.8333, FWHM=5) {
   image <- matrix(data=123, nrow=2*1024, ncol=3*1024)

@@ -75,8 +75,8 @@ eveningMiras <- function (localStdTime=22, maxHoursEW=3, decLimitS=0, decLimitN=
     filter(Period > 0)
 }
 
-eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=85, selectBest=150,
-                              brightestVMax=10.5, brightestVMin=10.8) {
+eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLimitN=88, selectBest=150,
+                              brightestVMax=11, brightestVMin=11.25) {
   require(dplyr, quietly=TRUE)
   obsPlanner(VStype="E%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
              decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
@@ -106,3 +106,30 @@ ACP <- function (FOVs) {
   }
   cat(lines)
 }
+
+VSX <- function(starID="ST Tri") {
+  # Get search page.
+  require(rvest, quietly=TRUE)
+  require(dplyr, quietly=TRUE)
+  session  <- html_session("https://www.aavso.org/vsx/index.php?view=search.top")
+  form_in  <- (session %>% read_html() %>% html_form())[[1]]
+  form_out <- set_values(form_in, ident=starID)
+  result   <- submit_form(session, form_out)
+  url <- result$response$url
+  # Get data page.
+  doc <- url %>% read_html()
+  df  <- html_nodes(doc, "table.datasheet") %>% html_nodes("table")  %>% first() %>% 
+    html_table(fill=TRUE, trim=TRUE)
+  # Grab fields in table.
+  row <- match("Epoch", df[,1])
+  cell <- df[row,2]
+  epoch <- regmatches(cell,regexec("HJD ([[:digit:].]+)",cell)) %>% unlist() %>% nth(2)
+  row <- match("Period", df[,1])
+  cell <- df[row,2] %>% trimws()
+  period <- regmatches(cell,regexec("([[:digit:].]+)",cell)) %>% unlist() %>% nth(2)
+  row <- match("Mag. range", df[,1])
+  cell <- df[row,2] %>% trimws()
+  magRange <- cell
+  return(c(epoch=epoch, period=period, magRange=magRange)) # vector of character strings.
+}
+

@@ -8,10 +8,9 @@ make_safe_path <- function (folder, filename, extension="") {
   gsub("/+","/",paste(trimws(folder),"/",trimws(filename),trimws(extension),sep=""),fixed=FALSE)
 }
 
-read_FOV_file <- function (FOV_name) {
+read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_version="1.1") {
   require(stringi, quietly=TRUE)
   require(dplyr, quietly=TRUE)
-  FOV_folder <- "C:/Dev/Photometry/FOV"
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
   if (!file.exists(FOV_path)) {
     return (NA)
@@ -212,6 +211,20 @@ get_RA_hours <- function (RA_deg) {
                  stri_pad_left(format(seconds,nsmall=1),width=4,pad="0")))
 }
 
+get_Dec_hex <- function(Dec_deg) {
+  require(stringi, quietly=TRUE)
+  Dec_deg <- as.double(Dec_deg)
+  sign_str <- ifelse(Dec_deg < 0, "-", "+")
+  abs_degrees = abs(Dec_deg)
+  degrees <- floor(abs_degrees)
+  minutes <- floor((60*abs_degrees) - (60*degrees))
+  seconds <- round(3600*abs_degrees - (3600*degrees + 60*minutes))
+  return (paste0(sign_str,
+                 stri_pad_left(degrees, width=2, pad="0"), ":",
+                 stri_pad_left(minutes, width=2, pad="0"), ":",
+                 stri_pad_left(seconds, width=2, pad="0")))
+}
+      
 distanceRADec <- function (RA1_deg, Dec1_deg, RA2_deg, Dec2_deg) {
   # Returns distance on sphere, in degrees, between 2 points in RA,Dec.
   # First, try short-distance "haversine formula".
@@ -282,4 +295,39 @@ getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
     header_list[[key]] <- get_header_value(header, key)
   }
   return(header_list)
+}
+
+#####  LOCAL UTILITIES mostly for plots  #######################################################
+
+load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
+                                    "e.g., AN_rel_folder='20151216'.")}
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  path_df_master <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(path_df_master)
+  return(df_master)
+}
+
+load_modelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
+                                    "e.g., AN_rel_folder='20151216'.")}
+  source("C:/Dev/Photometry/$Utility.R")
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
+  load(path_masterModelList)
+  return(masterModelList)
+}
+
+#####  THEMES  ###############################################################################
+
+SAS2016.bw.theme <- function(){ # use later for publication of SAS 2016 paper.
+  th <- theme_bw()
+  th <- th + theme(plot.title=element_text(size=rel(1.6),face="bold",color="gray32"))
+  th <- th + theme(axis.text=element_text(size=rel(1.4),color="gray55"))  # both axes.
+  th <- th + theme(axis.title.x=element_text(angle=0,size=rel(1.4),face="italic",color="gray50"))
+  th <- th + theme(axis.title.y=element_text(angle=0,size=rel(1.4),face="italic",color="gray50"))
+  th <- th + theme(legend.position="none")
 }

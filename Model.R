@@ -1,8 +1,8 @@
 ##### Model.R   Get model (via mixed-model regression) for one Astronight's Comp and other standard stars.
 #####  Tests OK 20160124.
-##### Typical usages: listV <- modelOneFilter(AN_rel_folder="20151216", filter="V")
-########     alternate: listV <- modelOneFilter(AN_rel_folder="20151216", filter="V", fit_starID=TRUE)
-########          then: listV$star %>% arrange(desc(abs(CatalogEffect)))
+##### Typical usages:
+########     alternate: modelOneFilter(AN_rel_folder="20151216", filter="V", fit_starID=TRUE)$star %>% 
+########                    arrange(desc(abs(CatalogEffect)))
 #####                 omitSerial(AN_rel_folder="20151216", serial=c(123,32))
 #####                 make_masterModelList(AN_rel_folder="20151216", modelLists=list(listV, listR, listI))
 

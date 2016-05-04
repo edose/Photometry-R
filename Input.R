@@ -403,12 +403,19 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           thisApPunched <- punch(thisAp, this_df_punch) 
           
           # for PRESENTATION: plot the image & punched aperture
-          #if (nrow(this_df_punch)>=1) { 
-          #  plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
-          #                                             df_apertures$StarID[i_ap]))
-          #  }
-          #cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
-          #    nrow(this_df_punch), " punches.\n")
+          if (nrow(this_df_punch)>=1) { 
+            end_FITS_name = substring(df_apertures$FITSfile[i_ap],
+                                      nchar(df_apertures$FITSfile[i_ap])-5, 
+                                      nchar(df_apertures$FITSfile[i_ap]))
+            if (end_FITS_name == "-V.fts") {
+              plotAperturePresentation(thisApPunched, 
+                                       title = paste0(df_apertures$FITSfile[i_ap], 
+                                                      ":    target ", df_apertures$StarID[i_ap]))
+              iiii <- 1  # dummy stmt for bookmark during debugging.
+              }
+            }
+          cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
+              nrow(this_df_punch), " punches.\n")
           
           # For TESTING: plot image & punched aperture
           #plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",

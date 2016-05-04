@@ -92,7 +92,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   df_transformed <- df_transformed %>%
     left_join(df_xref_modelSigma, by="Filter") %>%
     mutate(MagErr = pmax(ModelSigma, InstMagSigma)) %>% # pmax = "parallel" element-wise max of 2 vectors
-    left_join((df_master %>% select(Serial, FITSfile, Exposure)), by="Serial") %>% # restore a few columns.
+    left_join((df_master %>% select(Serial, FITSfile, Exposure, MaxADU_Ur, FWHM)), 
+              by="Serial") %>% # restore a few columns.
     arrange(ModelStarID, JD_num)
   
   # Save df_transformed as .Rdata file (but do not return it).
@@ -139,6 +140,7 @@ markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
                                     "e.g., AN_rel_folder='20151216'.")}
   source("C:/Dev/Photometry/$Utility.R")
+  require(dplyr,quietly=TRUE)
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
   path_df_predictions <- make_safe_path(photometry_folder, "df_transformed.Rdata")
@@ -152,13 +154,14 @@ markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL
   df_markupReport <- df_predictions %>%
     mutate(JD_fract=JD_fract) %>%
     filter(StarType=="Target") %>%
-    select(Serial, FITSfile, Target=StarID, Filter, Exp=Exposure, InstMagSigma, MagErr, JD_fract) %>%
+    select(Serial, FITSfile, Target=StarID, Filter, Exp=Exposure, Mag=TransformedMag, InstMagSigma, 
+           MagErr, MaxADU=MaxADU_Ur, FWHM, JD_fract) %>%
     left_join(df_checkStars, by="FITSfile") %>%
     mutate(Sigma=round(InstMagSigma*1000)) %>%
     mutate(Err=round(MagErr*1000)) %>%
     select(-InstMagSigma, -MagErr) %>%
     arrange(Target, FITSfile, Filter, Exp) %>%
-    select(Serial, Target, FITSfile, Filter, Exp, everything())
+    select(Serial, Target, FITSfile, Filter, Exp, Mag, MaxADU, FWHM, everything())
   return(df_markupReport)
 }
 

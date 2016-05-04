@@ -5,9 +5,13 @@
 
 eclipserPlot <- function(df=df_predictions, starID=NULL) {
   if (is.null(df) | is.null(starID)){ stop("Please give non-NULL parms.")}
-  x <- (df %>% filter(StarID==starID) %>% arrange(JD_num))$JD_num
-  y <- (df %>% filter(StarID==starID) %>% arrange(JD_num))$TransformedMag
-  plot(x,y,main=starID,xlab="JD_fract", ylab="best Mag")
+  df_eclipser <- (df %>% filter(StarID==starID) %>% arrange(JD_num))
+  x <- df_eclipser$JD_num
+  y <- df_eclipser$TransformedMag
+  JD_mid_floor <-df_eclipser$JD_mid %>% as.numeric() %>% min() %>% floor()
+  plot(x,y,main=starID,
+       xlab=paste0("JD(mid) - ", JD_mid_floor), 
+       ylab="best Mag")
 }
 
 modelPlots <- function(modelList) {
@@ -76,7 +80,7 @@ modelPlots <- function(modelList) {
   xRange <- max(x) - min(x)
   p <- ggplot(data = df_plot, aes(x=x, y=y*1000)) + 
     geom_point() + 
-    geom_text(aes(hjust=0.1,label=ptLabels)) +
+    geom_text(aes(hjust=0.1,label=ptLabels,angle=-25)) +
     xlim(min(x)-0.03*xRange, max(x)+0.05*xRange) +
     ggtitle(paste0("Q-Q Plot of Residuals: ", AN, "     ", filter, " filter ")) +
     geom_abline(slope=sd(y*1000)) +
@@ -88,7 +92,8 @@ modelPlots <- function(modelList) {
   plotList$QQ <- p
   
   # Residuals vs Sky Background plot.
-  x <- obs$SkyADU
+  x <- obs$SkyMedian
+  #x <- obs$SkyADU
   xRange <- max(x) - min(x)
   y <- obs$Residual
   ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
@@ -127,7 +132,7 @@ modelPlots <- function(modelList) {
   JD_mid_floor <- floor(min(JD_mid_num))
   x <- JD_mid_num - JD_mid_floor
   xRange <- max(x) - min(x)
-  y <- obs$SkyADU
+  y <- obs$SkyMedian
   sigmaSky <- (y-mean(y))/sd(y)
   ptLabels <- ifelse(abs(sigmaSky)>=2, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
@@ -239,7 +244,8 @@ modelPlots <- function(modelList) {
   
   # Residuals vs Max ADU (uncalibrated) plot.
   library(scales)
-  x <- obs$MaxADU_Ur
+  x <- obs$MaxADU
+  # x <- obs$MaxADU_Ur
   xRange <- max(x) - min(x)
   y <- obs$Residual
   ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
