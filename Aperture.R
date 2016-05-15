@@ -58,7 +58,7 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
   require(dplyr, quietly = TRUE)
   df_in <- read.table(textPath, header=FALSE, sep="\t", stringsAsFactors=FALSE, strip.white=TRUE,
                    comment.char=";",
-                   col.names=c("FOV", "Target", "V3", "RA", "V5", "V6", "Dec", "V8")) %>%
+                   col.names=c("FOV", "Target", "V3", "RA", "V5", "V6", "Dec")) %>%
     select(FOV, Target, RA, Dec)
   
   df_punches <- data.frame()

@@ -9,8 +9,8 @@
 #####             and finally to predict unknown 
 #####
 ##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
-#####    checkFOVs(AN_rel_folder="20151216")
 #####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
+#####    checkFOVs(AN_rel_folder="20151216")
 #####    beforeCal(AN_rel_folder="20151216")
 #####    (get any missing Masters from prev ANs),
 #####    In MaxIm: (1) 'Set Calibration' to this /CalibrationMasters, 'Replace w/Masters'
@@ -913,15 +913,71 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
     mutate(FOV=FOV_data$Sequence, 
            Chart=FOV_data$Chart, 
            FOV_date=FOV_data$Date,
-           CI=MagV-MagI) %>%
+           CI=MagV-MagI,
+           CatMag=NA,
+           CatMagError=NA) %>%
     mutate(InstMag = RawADUMag + 2.5 * log10(Exposure)) %>%
     select(-Object,-RawADUMag)
   
   # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
   columnIndex <- match(magColumnName, colnames(df))
-  df$CatMag <- df[,columnIndex]  # new column
+  df$CatMag <- df[,columnIndex]  # populate CatMag column
   df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
 
+  # Populate column "CatMagError" carefully from JSON chart file (from VSP).
+  json_list <- get_VSP_json_list(FOV_data$Chart)
+  # TODO: Verify RA,Dec are close (correct chart was retrieved)
+  for (iRow in 1:nrow(df)) {
+    df$CatMagError[iRow] <- get_CatMagError(json_list$photometry, df$StarID, 
+                                            FOV_data$RA, FOV_data$Dec, FOV_data$Filter)
+  }
   return(df)
 }
+
+get_CatMagError <- function (df_chart, StarID="", RA, Dec, filter) {
+  # Returns catalog magnitude error extracted from AAVSO/VSP chart's photometry table.
+  # TESTS OK May 15 2016.
+  # df_chart is the photometry table.
+  # StarID is from a AAVSO/VPhot sequence (as embedded in FOV file).
+  # RA, Dec are included to choose correct star (if ambiguous) from chart photometry table.
+  # filter is required to get correct data point. (R & I correspond to table's Rc and Ic.)
+  require(dplyr, quietly=TRUE)
+  StarID_int <- strsplit(StarID, "_") %>% unlist() %>% first() %>% as.integer()
+  matchingRows <- df_chart$label == StarID_int
+  nMatching <- sum(matchingRows)
+  if (nMatching <= 0) {
+    return (NA_real_)
+  } 
+  if (nMatching == 1) {
+    iMatch <- which(df_chart$label == StarID_int)
+  } else {
+    iMatch <- NA
+    # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"), 
+    for (iRow in 1:nrow(df_chart)) {
+      if (matchingRows[iRow]) {
+        dist_arcsec <- 3600 * distanceRADec(get_RA_deg(RA), get_Dec_deg(Dec), 
+          get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
+        if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
+          iMatch <- iRow
+          break
+        }
+      }
+    }
+  }
+  df_star <- df_chart$bands[[iMatch]]  # small df for this star in the chart.
+  
+  # Now correct for VSP charts' filter names.
+  xref_filter <- data.frame(name_FOV=c("R","I"), name_chart=c("Rc", "Ic"), stringsAsFactors = FALSE)
+  lookup_filter <- filter
+  if (filter %in% xref_filter$name_FOV) {
+    lookup_filter <- xref_filter$name_chart[which(xref_filter$name_FOV==filter)]
+  }
+  if (! lookup_filter %in% df_star$band) {
+    return (NA_real_)
+  } 
+  catMagError <- df_star$error[match(lookup_filter, df_star$band)]
+  if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
+  return (catMagError)
+}
+

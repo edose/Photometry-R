@@ -9,6 +9,7 @@ make_safe_path <- function (folder, filename, extension="") {
 }
 
 read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_version="1.1") {
+  # Updated May 2016 for FOV schema version 1.1 (still intended only for R)
   require(stringi, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
@@ -32,73 +33,46 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
   }
   FOV_data <- list()
   
-  # REQUIRED directives here.
-  FOV_data$Sequence <- directive_value("#SEQUENCE")
+  # VERIFY FORMAT Version before parsing.
+  FOV_data$Format_version <- directive_value("#FORMAT_VERSION")
+  if (FOV_data$Format_version != format_version) {  # as required by parameter to this function
+    return (NA)
+  }
+  
+  # Parse directives (other than PUNCH and Star lines).
+  FOV_data$FOV_name <- directive_value("#FOV_NAME")
   center <- directive_value("#CENTER") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
   FOV_data$RA_center  <- get_RA_deg(center[1])
   FOV_data$Dec_center <- get_Dec_deg(center[2])
   FOV_data$Chart <- directive_value("#CHART")
   FOV_data$Date <- directive_value("#DATE")
-  
-  # OPTIONAL directives below here.
-  exps <- directive_value("#EXP")
-  if (is.na(exps[1])) {
-    #df_exps <- NA
-    FOV_data$Exposures <- NA
-  } else {
-    exps <- exps %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
-    df_exps <- data.frame(Filter="", Seconds="", stringsAsFactors = FALSE) # primer row; removed below.
-    for (iExp in 1:length(exps)) {
-      strs <- exps[iExp] %>% strsplit("=",fixed=TRUE) %>% unlist() %>% trimws()
-      filter <- strs[1]
-      exps_filter <- strs[2] %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws()
-      for (iExpFilter in 1:length(exps_filter)) {
-        thisExp <- c(Filter=filter,Seconds=exps_filter[iExpFilter])
-        df_exps <- rbind(df_exps,thisExp)
-      }
-    }
-    FOV_data$Exposures <- df_exps %>% filter(Filter!="") %>% filter(Seconds!="") # remove primer row.
+  FOV_data$InModel <- directive_value("#IN_MODEL") %>% trimws() %>% substr(1,1) %>% toupper()
+  if (!FOV_data$InModel %in% c("Y", "?", "N")) {
+    FOV_data$InModel <- NA
   }
-  cad_strs <- directive_value("#CADENCE") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
-  if(length(cad_strs) >= 2) {
-    cad_num  <- cad_strs[1] %>% as.numeric()
-    cad_unit <- cad_strs[2] %>% substr(1,1) %>% tolower()
-    if ((cad_num <= 0) | (!cad_unit %in% c("s","m","h","d"))) {
-      FOV_data$Cadence     <- NA
-      FOV_data$CadenceUnit <- NA
-    } else {
-      FOV_data$Cadence     <- cad_num
-      FOV_data$CadenceUnit <- cad_unit
-    }
+  FOV_data$Main_target <- directive_value("#MAIN_TARGET")
+  FOV_data$Target_type <- directive_value("#TARGET_TYPE")
+  FOV_data$Period <- directive_value("#PERIOD") %>% as.double()
+  FOV_data$JD_min <- directive_value("#JD_MIN") %>% as.double()
+  vmags <- directive_value("#VMAG") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  FOV_data$VMag_bright <- vmags[1] %>% as.double()
+  FOV_data$VMag_faint  <- vmags[2] %>% as.double()
+  colors <- directive_value("#COLOR_VI") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  FOV_data$ColorVI_bright <- colors[1] %>% as.double()
+  FOV_data$ColorVI_faint  <- colors[2] %>% as.double()
+  FOV_data$Stare <- directive_value("#STARE") %>% as.double()
+  ACP_directive_lines <- directive_value("#ACP_DIRECTIVES") %>% strsplit("|",fixed=TRUE) %>% unlist() %>% trimws()
+  if (length(ACP_directive_lines) < 5) {
+    FOV_data$ACP_directives <- NA
   } else {
-    FOV_data$Cadence     <- NA
-    FOV_data$CadenceUnit <- NA
+    ACP_directive_lines <- paste0(paste(ACP_directive_lines, collapse="\n"), "\n") %>%
+      append(
+        paste0(FOV_data$FOV_name, "\t",
+               get_RA_hours(FOV_data$RA_center), "\t",
+               get_Dec_hex(FOV_data$Dec_center), " ; generated from FOV file.\n;\n")
+        )
   }
-  stare_strs <- directive_value("#STAREFOR") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
-  if (length(stare_strs) >= 2) {
-    stare_num  <- stare_strs[1] %>% as.numeric()
-    stare_unit <- stare_strs[2] %>% substr(1,1) %>% tolower()
-    if ((stare_num <= 0) | (!stare_unit %in% c("s","m","h","d"))) {
-      FOV_data$Stare     <- NA
-      FOV_data$StareUnit <- NA
-    } else {
-      FOV_data$Stare     <- stare_num
-      FOV_data$StareUnit <- stare_unit
-    }
-  } else {
-    FOV_data$Stare     <- NA
-    FOV_data$StareUnit <- NA
-  }
-  ACP_strs <- directive_value("#ACP") %>% strsplit("|",fixed=TRUE) %>% unlist() %>% trimws()
-  if(length(ACP_strs) < 4) {
-    FOV_data$ACP <- NA
-  } else {
-    ACP_strs[length(ACP_strs)] <- paste0(FOV_data$Sequence,"\t", 
-                                         get_RA_hours(FOV_data$RA_center),"\t", 
-                                         format(FOV_data$Dec_center,nsmall=6)," ; ", 
-                                         ACP_strs[length(ACP_strs)])  
-    FOV_data$ACP <- paste0( paste(ACP_strs,collapse="\n"), "\n")
-  }
+  FOV_data$ACP_comments <- directive_value("#ACP_COMMENTS")
   
   # Parse #PUNCH lines (for later removing pixels from sky annulus in make_df_master()).
   df_punch <- data.frame(StarID=NA_character_, DNorth=NA_real_, DEast=NA_real_,
@@ -120,7 +94,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
     }
   }
   
-  # Parse STAR LINES (embedded lines from VPhot sequence):
+  # Parse STAR lines (embedded lines from VPhot sequence):
   starsDirectiveAt <- charmatch("#STARS", lines)
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=starsDirectiveAt, fill=TRUE, strip.white=TRUE, 
                         comment.char=";", stringsAsFactors = FALSE, 
@@ -297,6 +271,23 @@ getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
   return(header_list)
 }
 
+get_VSP_json_list <- function (chartID=NULL, chart_folder="C:/Dev/Photometry/FOV/Chart", 
+                               make_file_if_absent=TRUE) {
+  # get from chart_input_folder; if not available, get from web.
+  fullpath <- make_safe_path(chart_folder, paste0(chartID,".txt"))
+  if (file.exists(fullpath)) {
+    json_text <- readLines(con=fullpath)
+  } else {
+    URL <- paste0("https://www.aavso.org/apps/vsp/api/chart/", trimws(chartID), "/?format=json")
+    json_text <- readLines(con=URL, warn=FALSE)
+    if (make_file_if_absent == TRUE) { writeLines(json_text, con=fullpath) }
+  }
+  require(jsonlite, quietly=TRUE)
+  json_list <- fromJSON(json_text)
+  return (json_list)
+}
+
+
 #####  LOCAL UTILITIES mostly for plots  #######################################################
 
 load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
@@ -320,6 +311,7 @@ load_modelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NU
   load(path_masterModelList)
   return(masterModelList)
 }
+
 
 #####  THEMES  ###############################################################################
 

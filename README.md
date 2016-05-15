@@ -2,16 +2,23 @@
 Eric Dose's R scripts etc for telescope photometry, especially for processing FITS image files and field-of-view data all the way to AAVSO reports for submission.
 
 ## My workflow
-First, basic end-to-end workflow is complete Feb 7 2016, and tagged v 0.1. 
+Wow, has this changed since I last updated this README. For an overview, you might want to look at the poster PDF in this repository. 
 
-In this workflow, I use RStudio to process one new AN (Astronight) folder (e.g., /20151218 for all images taken Dec 18 2015) at a time. I do the steps in this order:
+While the first, basic end-to-end workflow was complete Feb 7 2016, and tagged v 0.1, I found in April-May that I needed to rewrite the modeling data prep to accommodate the poor quality of very many comp stars in VPhot sequences (as evaluated both by large regression residuals and by widely ranging mag errors listed in the matching VSP charts). 
+
+The workflow as committed today (May 15 2016) is between numbered versions and is NOT READY for use. Some code rewriting is done, but I still need to write and test much of the data prep and ALL of the modeling and ALL of the subsequent reporting (especially new error estimation and reporting check stars as AUIDs to resolve ambiguity).
+
+Current working version is **V 0.51** (March 26 2016), and it works as well as it can without being more selective of comp stars to build the model. Manual comp-star selection works fairly well, but future versions will use magnitude errors reported in the corresponding AAVSO/VSP chart, both to screen comp stars in/out of the model, and to compute more realistic errors on the reported target-star magnitudes.
+
+The V 0.51 workflow is:
 
 **Input.R (pre-calibration)_______________________________________________**
 
- 1. **renameObject()** --- Optional, rarely used. Renames FITS files *and* FITS headers' "OBJECT" value from old to new Object name, across all FITS files (and subdirectories) within AN top folder. For example, renames all "Landolt_001" to "Std_001". For when object name and file name in images (probably due to inclusion in ACP nightly observing plan) turned out not to be the best one; renameObject() must be run first if it is used at all.
+ 1. **renameObject()** --- Optional, rarely used any more. Renames FITS files *and* FITS headers' "OBJECT" value from old to new Object name, across all FITS files (and subdirectories) within AN top folder. For example, renames all "Landolt_001" to "Std_001". This was needed whenever object name and file name in images (probably due to inclusion in ACP nightly observing plan) had been poorly chosen. renameObject() must be run first if it is used at all.
+ 2. **checkFOVs()** --- Run next, on every data set without exception. Checks that a field-of-view FOV file exists for every FITS file. A FOV file is required for every FITS file included in the model and AAVSO reporting. FOV files are obviously not required for FITS files acquired for other uses, notably those acquired as "Burn" images to prepare new FOV files for use in future photometric runs.
  1. **beforeCal()** --- Calls all 3 functions in correct order: copyToUr(), renameACP(), and prepareForCal(), which takes renames and arranges FITS files (light, flat, bias, and darks) for the next step, which is calibration (I use MaxIm DL). Its steps in order are: [copyToUr()]: Copies (backs up) all (possibly renamed) target FITS files to a new /Ur directory, for safe keeping. [renameACP()]: Renames all _target_ FITS files (not calibration files) from ACP-format names (like TargetName-S001-R001-C003-V-dupe1.fts) to my own strictly sequential file naming system(like TargetName-0003-V.fts). Each new sequence number is based on time (JD) from the FITS header, and it is validated and sorted by time across all files of the same TargetName. Renaming is not fooled by dupe or duplicate naming across subdirectories. TargetNames and Filter IDs are verified for equality between the original file name and the FITS header. All target FITS files are then collected in the top AN folder. A table of old vs new file names is written to a text file, and the data frame is stored as a .RData file for immediate reload into R. [prepareForCal()]: Sets up folders /Calibration (all flat, dark, bias images for the AN), /CalibrationMasters (calibration images duplicated here & ultimate home of MaxIm generated calibration master frames), /Ur (backup of all renamed target FITS files; may move this forward to renameACP() (or similar fn) so that the Ur files are really Ur), and /Photometry (catchall for metadata about this AN folder).
 
-**Calibration of all target images in MaxIm DL (not R)______________________**
+**Calibration of all target images in MaxIm DL (not in R)______________________**
 
   1. Ensure all needed raw flat, dark, and bias frames are collected in /CalibrationMasters.
   1. In MaxIm, "Set Calibration" to this /CalibrationMasters folder, and "Replace w/Masters".
@@ -39,5 +46,6 @@ our AAVSO reports.]**
  1. **predictAll()**  ---  Takes the final masterModelList and (1) makes predictions of target and check-star
  1. **writeAAVSO()**  ---  [in development. will need to draw on a LOT of metadata, but this should be available from outputs of the above, previously executed functions].
 
-V 0.1 (Feb 7 2016) is in testing with a dozen or so all-night data sets. When this testing and revision is done, probably in February, V 1.0 will be committed and I'll be using that version to prepare my growing backlog of data as official AAVSO submissions.
+**[end of README] ______________________________________________________________**
+
 
