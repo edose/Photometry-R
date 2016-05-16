@@ -46,10 +46,6 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
   FOV_data$Dec_center <- get_Dec_deg(center[2])
   FOV_data$Chart <- directive_value("#CHART")
   FOV_data$Date <- directive_value("#DATE")
-  FOV_data$InModel <- directive_value("#IN_MODEL") %>% trimws() %>% substr(1,1) %>% toupper()
-  if (!FOV_data$InModel %in% c("Y", "?", "N")) {
-    FOV_data$InModel <- NA
-  }
   FOV_data$Main_target <- directive_value("#MAIN_TARGET")
   FOV_data$Target_type <- directive_value("#TARGET_TYPE")
   FOV_data$Period <- directive_value("#PERIOD") %>% as.double()
@@ -62,15 +58,10 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
   FOV_data$ColorVI_faint  <- colors[2] %>% as.double()
   FOV_data$Stare <- directive_value("#STARE") %>% as.double()
   ACP_directive_lines <- directive_value("#ACP_DIRECTIVES") %>% strsplit("|",fixed=TRUE) %>% unlist() %>% trimws()
-  if (length(ACP_directive_lines) < 5) {
-    FOV_data$ACP_directives <- NA
+  if (length(ACP_directive_lines) >= 3) {
+    FOV_data$ACP_directives <- ACP_directive_lines
   } else {
-    ACP_directive_lines <- paste0(paste(ACP_directive_lines, collapse="\n"), "\n") %>%
-      append(
-        paste0(FOV_data$FOV_name, "\t",
-               get_RA_hours(FOV_data$RA_center), "\t",
-               get_Dec_hex(FOV_data$Dec_center), " ; generated from FOV file.\n;\n")
-        )
+    FOV_data$ACP_directives <- NA
   }
   FOV_data$ACP_comments <- directive_value("#ACP_COMMENTS")
   

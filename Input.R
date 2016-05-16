@@ -402,20 +402,19 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           # Apply punch list to raw aperture
           thisApPunched <- punch(thisAp, this_df_punch) 
           
-          # for PRESENTATION: plot the image & punched aperture
           if (nrow(this_df_punch)>=1) { 
-            end_FITS_name = substring(df_apertures$FITSfile[i_ap],
-                                      nchar(df_apertures$FITSfile[i_ap])-5, 
-                                      nchar(df_apertures$FITSfile[i_ap]))
-            if (end_FITS_name == "-V.fts") {
-              plotAperturePresentation(thisApPunched, 
-                                       title = paste0(df_apertures$FITSfile[i_ap], 
-                                                      ":    target ", df_apertures$StarID[i_ap]))
-              iiii <- 1  # dummy stmt for bookmark during debugging.
-              }
-            }
-          cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
+            # for PRESENTATION: plot the image & punched aperture:
+            # end_FITS_name = substring(df_apertures$FITSfile[i_ap],
+            #                           nchar(df_apertures$FITSfile[i_ap])-5, 
+            #                           nchar(df_apertures$FITSfile[i_ap]))
+            # if (end_FITS_name == "-V.fts") {
+            #   plotAperturePresentation(thisApPunched, 
+            #                            title = paste0(df_apertures$FITSfile[i_ap], 
+            #                                           ":    target ", df_apertures$StarID[i_ap]))
+            #   }
+            cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
               nrow(this_df_punch), " punches.\n")
+          }
           
           # For TESTING: plot image & punched aperture
           #plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
@@ -906,11 +905,11 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
   #   CI is color index V-I; RawADUMag is ADU-based Instrument Mag not yet corrected for exposure time.
   
   df_star_data_numbered <- df_star_data_numbered %>%
-    mutate(ModelStarID=paste0(FOV_data$Sequence,"_",df_star_data_numbered$StarID))  # as "ST Tri_137"
+    mutate(ModelStarID=paste0(FOV_data$FOV_name,"_",df_star_data_numbered$StarID))  # as "ST Tri_137"
 
   df <- left_join(df_apertures, df_star_data_numbered, by=c("Number", "StarID")) %>%
     cbind(df_FITSheader) %>%
-    mutate(FOV=FOV_data$Sequence, 
+    mutate(FOV=FOV_data$FOV_name, 
            Chart=FOV_data$Chart, 
            FOV_date=FOV_data$Date,
            CI=MagV-MagI,
@@ -919,18 +918,18 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
     mutate(InstMag = RawADUMag + 2.5 * log10(Exposure)) %>%
     select(-Object,-RawADUMag)
   
-  # Make new column "CatMag" from MagX column where X is FILTER (from FITS header).
+  # Populate column "CatMag" from MagX column where X is FILTER (from FITS header).
   magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
   columnIndex <- match(magColumnName, colnames(df))
   df$CatMag <- df[,columnIndex]  # populate CatMag column
   df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
 
-  # Populate column "CatMagError" carefully from JSON chart file (from VSP).
+  # Populate column "CatMagError" from JSON chart file (cached from VSP download).
   json_list <- get_VSP_json_list(FOV_data$Chart)
-  # TODO: Verify RA,Dec are close (correct chart was retrieved)
   for (iRow in 1:nrow(df)) {
-    df$CatMagError[iRow] <- get_CatMagError(json_list$photometry, df$StarID, 
-                                            FOV_data$RA, FOV_data$Dec, FOV_data$Filter)
+    df$CatMagError[iRow] <- get_CatMagError(json_list$photometry, 
+                                            df$StarID[iRow], 
+                                            df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
   }
   return(df)
 }
@@ -943,20 +942,20 @@ get_CatMagError <- function (df_chart, StarID="", RA, Dec, filter) {
   # RA, Dec are included to choose correct star (if ambiguous) from chart photometry table.
   # filter is required to get correct data point. (R & I correspond to table's Rc and Ic.)
   require(dplyr, quietly=TRUE)
-  StarID_int <- strsplit(StarID, "_") %>% unlist() %>% first() %>% as.integer()
-  matchingRows <- df_chart$label == StarID_int
+  StarID_before_underscore <- strsplit(StarID, "_") %>% unlist() %>% first()
+  matchingRows <- df_chart$label == StarID_before_underscore
   nMatching <- sum(matchingRows)
   if (nMatching <= 0) {
     return (NA_real_)
   } 
   if (nMatching == 1) {
-    iMatch <- which(df_chart$label == StarID_int)
+    iMatch <- which(df_chart$label == StarID_before_underscore)
   } else {
     iMatch <- NA
     # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"), 
     for (iRow in 1:nrow(df_chart)) {
       if (matchingRows[iRow]) {
-        dist_arcsec <- 3600 * distanceRADec(get_RA_deg(RA), get_Dec_deg(Dec), 
+        dist_arcsec <- 3600 * distanceRADec(RA, Dec,
           get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
         if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
           iMatch <- iRow

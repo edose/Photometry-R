@@ -2,7 +2,7 @@
 Eric Dose's R scripts etc for telescope photometry, especially for processing FITS image files and field-of-view data all the way to AAVSO reports for submission.
 
 ## My workflow
-Wow, has this changed since I last updated this README. For an overview, you might want to look at the poster PDF in this repository. 
+Wow, has this changed since I last updated this README. For an overview, you might want to look at the poster PDF in this repository (but please download the PDF file--github's viewer corrupts embedded images). 
 
 While the first, basic end-to-end workflow was complete Feb 7 2016, and tagged v 0.1, I found in April-May that I needed to rewrite the modeling data prep to accommodate the poor quality of very many comp stars in VPhot sequences (as evaluated both by large regression residuals and by widely ranging mag errors listed in the matching VSP charts). 
 

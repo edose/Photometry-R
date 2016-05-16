@@ -90,21 +90,25 @@ ACP <- function (FOVs) {
   ##### Test OK 20160103.
   ##### Typical usage: ACP(c("SU Lac","IK Peg")) or ACP(df_miras$Name)
   source("C:/Dev/Photometry/$Utility.R")
-  lines <- ""
-  for (FOV in FOVs) {
-    f <- read_FOV_file(FOV)
-    if (!is.na(f[[1]][[1]])) {
-      acp <- f$FOV_data$ACP
-      if (!is.na(acp)) {
-        lines <- paste0(lines, ";\n", acp)
-      } else{
-        lines <- paste0(lines, "; >>>>> FOV file '", FOV, "' exists, but it has no #ACP directive.\n;\n")
-      }
+  require(dplyr, quietly=TRUE)
+  text <- ""
+  for (FOV_name in FOVs) {
+    fov <- read_FOV_file(FOV_name)
+    if (! (is.na(fov)[1]) ) {
+      directive_text <- paste0(fov$FOV_data$ACP_directives, collapse=" ;\n")  # pre-collapse to string.
+      target_text <- paste(fov$FOV_data$FOV_name, 
+                            get_RA_hours(fov$FOV_data$RA_center), 
+                            get_Dec_hex(fov$FOV_data$Dec_center),
+                            sep="\t")
+      text <- text %>%
+        paste0(";\n", directive_text, " ;\n",
+               target_text, " ;\n", 
+               ";----", fov$FOV_data$ACP_comments, " \n")
     } else{
-      lines <- paste0(lines, "; >>>>> FOV file '", FOV, "' not found.\n;\n")
+      text <- paste0(text, ";\n; >>>>> FOV file '", FOV_name, "' not found.\n")
     }
   }
-  cat(lines)
+  cat(paste0(text, ";\n"))
 }
 
 VSX <- function(starID="ST Tri") {
