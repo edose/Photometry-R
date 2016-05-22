@@ -10,7 +10,7 @@
 #####
 ##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
 #####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
-#####    checkFOVs(AN_rel_folder="20151216")
+#####    precheck(AN_rel_folder="20151216")
 #####    beforeCal(AN_rel_folder="20151216")
 #####    (get any missing Masters from prev ANs),
 #####    In MaxIm: (1) 'Set Calibration' to this /CalibrationMasters, 'Replace w/Masters'
@@ -21,11 +21,13 @@
 #####    df_image  <- images(AN_rel_folder="20151216")
 #####    ...then start modeling with Model.R functions.
 
-checkFOVs <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   require(dplyr, quietly=TRUE)
   require(stringi, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   require(FITSio, quietly=TRUE)
+  platesolvedHeaderKey <- "PLTSOLVD"
+  platesolvedHeaderValue <- "T"
   get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
@@ -33,7 +35,6 @@ checkFOVs <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   }  
   
   AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
-  
   # Collect file names for all relevant FITS files.
   df <- data.frame(RelPath=list.files(AN_folder, full.names=FALSE, recursive=TRUE, include.dirs=FALSE),
                    stringsAsFactors = FALSE) %>%
@@ -48,6 +49,7 @@ checkFOVs <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   
   # Collect header data from FITS files.
   anyError <- FALSE
+  FITS_missing_platesolve <- vector(mode="character", length=0)
   cat("Testing: ")
   for (iRow in 1:nrow(df)) {
     relPath <- df$RelPath[iRow]
@@ -64,6 +66,8 @@ checkFOVs <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     errorThisFile <- FALSE
     #cat(paste0("testing: ",relPath,": ", objectFromFITS, " vs ", objectFromFilename, "\n"))
     cat(paste0(iRow," "))
+    
+    # Check that object name is same: filename vs FITS header.
     if (objectFromFilename != objectFromFITS) {
       cat(paste0("\n>>>>> ", fullPath,": Object mismatch, ", objectFromFilename, 
                 " vs ", objectFromFITS, sep=""))
@@ -81,14 +85,34 @@ checkFOVs <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
       cat(paste0("\n>>>>> No FOV file >", objectFromFITS, "< for FITS file >", relPath, "<\n"))
       anyError <- TRUE
     }
+    
+    # Check that plate solution is present.
+    plateSolvedValue <- toupper(trimws(get_header_value(header, platesolvedHeaderKey)))
+    if (is.na(plateSolvedValue)) { 
+      FITS_missing_platesolve <- FITS_missing_platesolve %>% c(relPath)
+    } else {
+      if (plateSolvedValue != "T") {
+        FITS_missing_platesolve <- FITS_missing_platesolve %>% c(relPath)
+      }
+    }
+  }  
+  
+  # Summarize results.
+  cat("\n\n")
+  if (length(FITS_missing_platesolve) >= 1) {
+    anyError <- TRUE
+    for (i in 1:length(FITS_missing_platesolve)) {
+      cat(paste0(">>>>> No PLATE SOLUTION for FITS file >", FITS_missing_platesolve[i], "<\n"))
+    }
+    cat("\n")
   }
-  cat("\n")
   if (anyError) {
     cat(">>>>> Check the above listing for errors.\n")
   } else {
-    cat("+++++ All OK: No FITS object errors, and all required FOV files are in place.\n")
+    cat("+++++ All OK: No FITS object errors. All FITS are plate solved. All required FOV files are in place.\n")
   }
 }
+
 
 renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                          oldObject, newObject) {
@@ -544,7 +568,7 @@ load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
 ##### The following can be called directly, but normally call instead: beforeCal().
 
 copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL){
-  ##### Run this before anything, except possibly after renameObject().
+  ##### Run this before anything, except possibly after renameObject(), and then after checkFITS().
   ##### Typical usage:  copyToUr(AN_rel_folder="20151216")
   ##### Tests OK 20151220.
   require(dplyr, quietly=TRUE)

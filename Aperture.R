@@ -50,28 +50,27 @@ addPunch <- function (FOV_name=NULL, starID, RA, Dec, punchRA, punchDec, RADecAs
 }
 
 addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="\t") {
-  # the file at textPath is a delimited (tab-delimited default) file of Punches, in format:
-  # for target line: col1=FOV, col2=target_name, col4=RA, col6=Dec
-  # for punch line:  col4=RA, col6=Dec
-  # blank line between target groups.
+  # the file at textPath is a delimited (tab-delimited default) file of Punches,
+  #    most easily generated in Excel and re-saved as tab-delimited text.
+  # Header line and data lines must contain: FOV, Target, RA, Dec. 
+  # blank line between target groups are helpful but not strictly required.
   
   require(dplyr, quietly = TRUE)
-  df_in <- read.table(textPath, header=FALSE, sep="\t", stringsAsFactors=FALSE, strip.white=TRUE,
-                   comment.char=";",
-                   col.names=c("FOV", "Target", "V3", "RA", "V5", "V6", "Dec")) %>%
-    select(FOV, Target, RA, Dec)
-  
+  df_in <- read.table(textPath, header=TRUE, sep="\t", stringsAsFactors=FALSE, strip.white=TRUE,
+                      comment.char=";") %>%
+    select(FOV, Target, RA, Dec)  
   df_punches <- data.frame()
   targetRA  <- NA
   targetDec <- NA
   for (i in 1:nrow(df_in)) {
-    lineFOV    <- df_in$FOV[i]
-    lineTarget <- df_in$Target[i]
-    lineRA     <- df_in$RA[i]
-    lineDec    <- df_in$Dec[i]
-    if (lineRA=="") {                      # skip blank lines
+    if (df_in$RA[i]=="") { # skip blank lines
       next
     }
+    lineFOV    <- df_in$FOV[i]
+    lineTarget <- as.character(df_in$Target[i])  
+    if (is.na(lineTarget)) {lineTarget <- ""}  # because R may have tried to read Target as an integer
+    lineRA     <- df_in$RA[i]
+    lineDec    <- df_in$Dec[i]
     if (nchar(lineFOV) >= 1) {             # update target data on (new) target line
       targetFOV  <- lineFOV
       target     <- lineTarget
@@ -103,7 +102,6 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
   #    (2) each punch target is present in FOV file, and
   #    (3) each punch target RA & Dec is close to that in FOV file.
   areAllOK <- TRUE  # default value, to be falsified by problem.
-  # FOVs <- (df_punches %>% filter(Target!=""))$FOV %>% unique()
   FOVs <- df_punches %>% select(FOV) %>% unique() %>% unlist()
   for (FOV_name in FOVs) {
     FOV_list <- read_FOV_file(FOV_name)
