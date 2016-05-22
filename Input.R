@@ -409,7 +409,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
             pa_FITS <- as.numeric(hdr$PA)
             cdelt1_FITS <- as.numeric(hdr$CDELT1)
             cdelt2_FITS <- as.numeric(hdr$CDELT2)
-            cat("punch:")
+            # cat("punch:")
             for (i_punch in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
               skyAngle <- atan2(this_df_punch$DEast[i_punch], this_df_punch$DNorth[i_punch])
               skyToPlateRotation <- (pi/180) * (360-pa_FITS)
@@ -419,9 +419,9 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
               distPixels <- distArcsec / arcsecPerPixel
               this_df_punch$dX[i_punch] <- distPixels * sin(-plateAngle)
               this_df_punch$dY[i_punch] <- -distPixels * cos(+plateAngle) # minus because +Y means *down*.
-              cat(" ",this_df_punch$StarID[i_punch])
+              #cat(" ",this_df_punch$StarID[i_punch])
             }
-            cat("\n")
+            #cat("\n")
           }
           # Apply punch list to raw aperture
           thisApPunched <- punch(thisAp, this_df_punch) 
@@ -436,8 +436,8 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
             #                            title = paste0(df_apertures$FITSfile[i_ap], 
             #                                           ":    target ", df_apertures$StarID[i_ap]))
             #   }
-            cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
-              nrow(this_df_punch), " punches.\n")
+            #cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
+            #  nrow(this_df_punch), " punches.\n")
           }
           
           # For TESTING: plot image & punched aperture
@@ -474,6 +474,20 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     }
   }
 
+  # For comp stars with CatMagError == NA, overwrite with largest CatMagError for same FOV and Filter.
+  df_max <- df_master %>% 
+    filter(StarType=="Comp") %>% 
+    group_by(FOV, Filter) %>% 
+    summarize(maxInFOV=max(CatMagError, na.rm=TRUE))
+  for (iRow in 1:nrow(df_max)) {
+    rowsToOverwrite <- df_master$StarType=="Comp" &
+      df_master$FOV==df_max$FOV[iRow] & 
+      df_master$Filter==df_max$Filter[iRow] & 
+      !is.na(df_master$CatMag) &
+      is.na(df_master$CatMagError)
+    df_master$CatMagError[rowsToOverwrite] <- df_max$maxInFOV[iRow]
+  }
+  
   # Construct Vignette variable (stars' squared distance in pixels from image center)
   #    and X1024 & Y1024 (well-scaled pixel distances from CCD center), for all stars incl check and target.
   df_master <- df_master %>%
@@ -955,7 +969,7 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
                                      df$StarID[iRow], 
                                      df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
     # cat(paste0(df_chartStarData, collapse="   "), "\n")
-    if (is.na(df_chartStarData)) {
+    if (is.na(df_chartStarData)) {  # i.e., if there is no matching star
       df$CatMagError[iRow] <- NA
       df$AUID[iRow] <- NA
     } else {
@@ -965,7 +979,6 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
   }
   return(df)
 }
-
 
 get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
   # Returns v small df of data for one star, extracted from AAVSO/VSP chart's photometry table.

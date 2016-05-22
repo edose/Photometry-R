@@ -8,6 +8,7 @@
 
 modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                             filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
+                            maxCatMagError=NULL,  # NULL means "don't use to filter observations"
                             fit_skyBias=TRUE, fit_vignette=TRUE, fit_XY=FALSE,
                             fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
   # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
@@ -16,23 +17,13 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   # Usage if run manually: listV <- modelOneFilter(AN_rel_folder="20151216", filter="V")
   require(dplyr, quietly=TRUE)
   require(magrittr, quietly=TRUE)
-
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
   if (is.null(filter)) {stop(">>>>> You must provide a filter parm, e.g., filter='V'.")}
 
-  df_omitted <- omitObs(AN_top_folder, AN_rel_folder) # returns df w/user-requested obs removed.
-  if (is.na(df_omitted[[1]][[1]]))  {stop(">>>>> omit.txt file does not exist.")}
-  df_model <- df_omitted %>%
-    filter(Filter==filter) %>%
-    filter(StarType=="Comp") %>%
-    filter(!is.na(CatMag)) %>%
-    filter(!is.na(CI)) %>%
-    filter(!is.na(Airmass)) %>%
-    filter(InstMagSigma<=maxInstMagSigma) %>%
-    filter(CI<=maxColorIndex) %>%
-    filter(MaxADU_Ur<=saturatedADU)
-
+  df_model <- make_df_model(AN_top_folder, AN_rel_folder, 
+                            filter, maxInstMagSigma, maxColorIndex, saturatedADU,
+                            maxCatMagError)
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
@@ -191,6 +182,27 @@ make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fol
 
 ################################################################################################
 ##### Below are test or support-only functions, rarely or not typically called by user. ########
+
+make_model_df <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
+                           filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
+                           maxCatMagError=NULL) {
+  
+  df_omitted <- omitObs(AN_top_folder, AN_rel_folder) # returns df w/user-requested obs removed.
+  if (is.na(df_omitted[[1]][[1]]))  {stop(">>>>> omit.txt file does not exist.")}
+  df_model <- df_omitted %>%
+    filter(Filter==filter) %>%
+    filter(StarType=="Comp") %>%
+    filter(!is.na(CatMag)) %>%
+    filter(!is.na(CI)) %>%
+    filter(!is.na(Airmass)) %>%
+    filter(InstMagSigma<=maxInstMagSigma) %>%
+    filter(CI<=maxColorIndex) %>%
+    filter(MaxADU_Ur<=saturatedADU)
+  if(!is.null(maxCatMagError)) {
+    df_model <- df_model %>% filter(CatMagError <= maxCatMagError)
+  }
+  return (df_model)
+}
 
 omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Reads AN folder's df_master and omit.txt, returns df_filtered with requested observations omitted.
