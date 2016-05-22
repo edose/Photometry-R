@@ -1005,66 +1005,14 @@ get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
   if (filter %in% xref_filter$name_FOV) {
     lookup_filter <- xref_filter$name_chart[which(xref_filter$name_FOV==filter)]
   }
-  if (! lookup_filter %in% df_star$band) {
-    return (NA_real_)
-  }
-  
-  # Construct small data frame to return.
+
+  # Construct small data frame of results to return.
   catMagError <- df_star$error[match(lookup_filter, df_star$band)]
-  if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
-  auid <- df_chart$auid[[iMatch]]
+  if (! lookup_filter %in% df_star$band) {  # if this filter is absent.
+    catMagError <- NA_real_  
+    } else {
+      if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
+    }
+  auid <- df_chart$auid[iMatch]
   return (data.frame(Ichart=iMatch, CatMagError=catMagError, AUID=auid, stringsAsFactors=FALSE))
 }
-
-# get_ChartStarData <- function (df_chart, StarID="", RA, Dec, filter) {
-#   # Returns v small df of star data from in chart given its (partial) StarID, RA, Dec, and filter ID.
-#   # TESTS OK May 15 2016.
-#   # df_chart is the photometry table.
-#   # StarID is from a AAVSO/VPhot sequence (as embedded in FOV file).
-#   # RA, Dec are included to choose correct star (if ambiguous) from chart photometry table.
-#   # filter is required to get correct data point. (R & I correspond to table's Rc and Ic.)
-#   require(dplyr, quietly=TRUE)
-#   StarID_before_underscore <- strsplit(StarID, "_") %>% unlist() %>% first()
-#   matchingRows <- df_chart$label == StarID_before_underscore
-#   nMatching <- sum(matchingRows)
-#   if (nMatching <= 0) {
-#     return (NA_real_)
-#   } 
-#   if (nMatching == 1) {
-#     iMatch <- which(df_chart$label == StarID_before_underscore)
-#   } else {
-#     iMatch <- NA
-#     # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"), 
-#     for (iRow in 1:nrow(df_chart)) {
-#       if (matchingRows[iRow]) {
-#         dist_arcsec <- 3600 * distanceRADec(RA, Dec,
-#                                             get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
-#         if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
-#           iMatch <- iRow
-#           break
-#         }
-#       }
-#     }
-#   }
-#   return (iMatch)
-#   
-  # df_star <- df_chart$bands[[iMatch]]  # small df for this star in the chart.
-  # 
-  # # Now correct for VSP charts' filter names.
-  # xref_filter <- data.frame(name_FOV=c("R","I"), name_chart=c("Rc", "Ic"), stringsAsFactors = FALSE)
-  # lookup_filter <- filter
-  # if (filter %in% xref_filter$name_FOV) {
-  #   lookup_filter <- xref_filter$name_chart[which(xref_filter$name_FOV==filter)]
-  # }
-  # if (! lookup_filter %in% df_star$band) {
-  #   return (NA_real_)
-  # } 
-  # return (match(lookup_filter, df_star$band))
-  # 
-  # 
-  # catMagError <- df_star$error[match(lookup_filter, df_star$band)]
-  # if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
-  # return (catMagError)
-  # }
-
-
