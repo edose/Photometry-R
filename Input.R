@@ -918,12 +918,12 @@ addBiasTerm <- function (df_master, biasType="sigma") {
 
 
 make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FITSheader, FOV_data) {
-  # Combine all relevant data for all APT-detected stars for this FITS file.
+  # Combine all relevant data for all detected stars for this FITS file.
   # Inputs:
-  #   df_apertures = parsed output from APT run on this FITS file.
-  #   df_star_data_numbered = FOV star data IN ORDER given to APT (so that data can be joined herein).
+  #   df_apertures = parsed output 
+  #   df_star_data_numbered = FOV star data.
   #   df_FITSheader = data from FITS file header (Filter used, JD of exposure, etc; uniform for all rows)
-  #   FOV_data = data about the FOV (uniform across all rows)
+  #   FOV_data = data about the FOV (uniform across all rows of output df)
 
   # Join APT, FOV star, and APT data  to give master data frame.
   #   CI is color index V-I; RawADUMag is ADU-based Instrument Mag not yet corrected for exposure time.
@@ -948,18 +948,27 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
   df$CatMag <- df[,columnIndex]  # populate CatMag column
   df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
 
-  # Populate column "CatMagError" from JSON chart file (cached from VSP download).
+  # Populate column "CatMagError" and "AUID" from JSON chart file (cached from VSP download).
   json_list <- get_VSP_json_list(FOV_data$Chart)
   for (iRow in 1:nrow(df)) {
-    df$CatMagError[iRow] <- get_CatMagError(json_list$photometry, 
-                                            df$StarID[iRow], 
-                                            df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
+    df_chartStarData <- get_chartStarData(json_list$photometry, 
+                                     df$StarID[iRow], 
+                                     df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
+    # cat(paste0(df_chartStarData, collapse="   "), "\n")
+    if (is.na(df_chartStarData)) {
+      df$CatMagError[iRow] <- NA
+      df$AUID[iRow] <- NA
+    } else {
+      df$CatMagError[iRow] <- df_chartStarData$CatMagError[1]
+      df$AUID[iRow] <- df_chartStarData$AUID[1]
+    }
   }
   return(df)
 }
 
-get_CatMagError <- function (df_chart, StarID="", RA, Dec, filter) {
-  # Returns catalog magnitude error extracted from AAVSO/VSP chart's photometry table.
+
+get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
+  # Returns v small df of data for one star, extracted from AAVSO/VSP chart's photometry table.
   # TESTS OK May 15 2016.
   # df_chart is the photometry table.
   # StarID is from a AAVSO/VPhot sequence (as embedded in FOV file).
@@ -971,16 +980,16 @@ get_CatMagError <- function (df_chart, StarID="", RA, Dec, filter) {
   nMatching <- sum(matchingRows)
   if (nMatching <= 0) {
     return (NA_real_)
-  } 
+  }
   if (nMatching == 1) {
     iMatch <- which(df_chart$label == StarID_before_underscore)
   } else {
     iMatch <- NA
-    # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"), 
+    # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"),
     for (iRow in 1:nrow(df_chart)) {
       if (matchingRows[iRow]) {
         dist_arcsec <- 3600 * distanceRADec(RA, Dec,
-          get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
+                                            get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
         if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
           iMatch <- iRow
           break
@@ -998,9 +1007,64 @@ get_CatMagError <- function (df_chart, StarID="", RA, Dec, filter) {
   }
   if (! lookup_filter %in% df_star$band) {
     return (NA_real_)
-  } 
+  }
+  
+  # Construct small data frame to return.
   catMagError <- df_star$error[match(lookup_filter, df_star$band)]
   if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
-  return (catMagError)
+  auid <- df_chart$auid[[iMatch]]
+  return (data.frame(Ichart=iMatch, CatMagError=catMagError, AUID=auid, stringsAsFactors=FALSE))
 }
+
+# get_ChartStarData <- function (df_chart, StarID="", RA, Dec, filter) {
+#   # Returns v small df of star data from in chart given its (partial) StarID, RA, Dec, and filter ID.
+#   # TESTS OK May 15 2016.
+#   # df_chart is the photometry table.
+#   # StarID is from a AAVSO/VPhot sequence (as embedded in FOV file).
+#   # RA, Dec are included to choose correct star (if ambiguous) from chart photometry table.
+#   # filter is required to get correct data point. (R & I correspond to table's Rc and Ic.)
+#   require(dplyr, quietly=TRUE)
+#   StarID_before_underscore <- strsplit(StarID, "_") %>% unlist() %>% first()
+#   matchingRows <- df_chart$label == StarID_before_underscore
+#   nMatching <- sum(matchingRows)
+#   if (nMatching <= 0) {
+#     return (NA_real_)
+#   } 
+#   if (nMatching == 1) {
+#     iMatch <- which(df_chart$label == StarID_before_underscore)
+#   } else {
+#     iMatch <- NA
+#     # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"), 
+#     for (iRow in 1:nrow(df_chart)) {
+#       if (matchingRows[iRow]) {
+#         dist_arcsec <- 3600 * distanceRADec(RA, Dec,
+#                                             get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
+#         if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
+#           iMatch <- iRow
+#           break
+#         }
+#       }
+#     }
+#   }
+#   return (iMatch)
+#   
+  # df_star <- df_chart$bands[[iMatch]]  # small df for this star in the chart.
+  # 
+  # # Now correct for VSP charts' filter names.
+  # xref_filter <- data.frame(name_FOV=c("R","I"), name_chart=c("Rc", "Ic"), stringsAsFactors = FALSE)
+  # lookup_filter <- filter
+  # if (filter %in% xref_filter$name_FOV) {
+  #   lookup_filter <- xref_filter$name_chart[which(xref_filter$name_FOV==filter)]
+  # }
+  # if (! lookup_filter %in% df_star$band) {
+  #   return (NA_real_)
+  # } 
+  # return (match(lookup_filter, df_star$band))
+  # 
+  # 
+  # catMagError <- df_star$error[match(lookup_filter, df_star$band)]
+  # if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
+  # return (catMagError)
+  # }
+
 
