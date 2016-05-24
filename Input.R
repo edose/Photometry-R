@@ -518,6 +518,10 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   save(df_master, file=df_master_path, precheck=FALSE) # recover via: load_df_master(AN_rel_folder="201..").
   cat("make_df_master() has saved df_master to", df_master_path, "\n   now returning df_master.\n")
   
+  # Copy relevant FOV files and Chart files into folders inside AN folder.
+  copyFOVs(AN_rel_folder=AN_rel_folder, FOV_names=FOVs)
+  copyCharts(AN_rel_folder=AN_rel_folder, chart_names=(df_master$Chart %>% unique()))
+  
   # Make a template-only omit.txt file if omit.txt doesn't already exist.
   PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
   omitPath <- make_safe_path(PhotometryFolder, "omit.txt")
@@ -1028,4 +1032,32 @@ get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
     }
   auid <- df_chart$auid[iMatch]
   return (data.frame(Ichart=iMatch, CatMagError=catMagError, AUID=auid, stringsAsFactors=FALSE))
+}
+
+copyFOVs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, FOV_names=NULL) {
+  require(dplyr, quietly=TRUE)
+  folder_from <- "C:/Dev/Photometry/FOV"
+  folder_to   <- make_safe_path(AN_top_folder, AN_rel_folder) %>% make_safe_path("FOV")
+  if (! dir.exists(folder_to)) {
+    dir.create(folder_to)
+  }
+  for (name in FOV_names) {
+    path_from <- make_safe_path(folder_from, name, ".txt")
+    path_to   <- make_safe_path(folder_to,   name, ".txt")
+    file.copy(path_from, path_to, overwrite=TRUE, copy.mode=TRUE, copy.date=TRUE)
+  }
+}
+
+copyCharts <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, chart_names=NULL) {
+  require(dplyr, quietly=TRUE)
+  folder_from <- "C:/Dev/Photometry/FOV/Chart"
+  folder_to   <- make_safe_path(AN_top_folder, AN_rel_folder) %>% make_safe_path("Chart")
+  if (! dir.exists(folder_to)) {
+    dir.create(folder_to)
+  }
+  for (name in chart_names) {
+    path_from <- make_safe_path(folder_from, name, ".txt")
+    path_to   <- make_safe_path(folder_to,   name, ".txt")
+    file.copy(path_from, path_to, overwrite=TRUE, copy.mode=TRUE, copy.date=TRUE)
+  }
 }

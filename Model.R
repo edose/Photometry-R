@@ -24,6 +24,13 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   df_model <- make_df_model(AN_top_folder, AN_rel_folder, 
                             filter, maxInstMagSigma, maxColorIndex, saturatedADU,
                             maxCatMagError)
+  eligibleCatMagErrors <- (df_model %>% filter(Filter==filter) %>% filter(!is.na(CatMagError)))$CatMagError
+  hist(eligibleCatMagErrors, breaks=16, 
+       main=paste("Filter =", filter, "   //   median", median(eligibleCatMagErrors)))
+  answer <- cat("Choose max CatMagError:") %>% readline() %>% as.double()
+  df_model <- df_model %>% filter(CatMagError <= answer)
+  cat(paste0(nrow(df_model), " observations in model, of ", length(eligibleCatMagErrors), " eligible.\n"))
+  
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
@@ -183,7 +190,7 @@ make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fol
 ################################################################################################
 ##### Below are test or support-only functions, rarely or not typically called by user. ########
 
-make_model_df <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
+make_df_model <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                            filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
                            maxCatMagError=NULL) {
   

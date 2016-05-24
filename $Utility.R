@@ -278,7 +278,6 @@ get_VSP_json_list <- function (chartID=NULL, chart_folder="C:/Dev/Photometry/FOV
   return (json_list)
 }
 
-
 #####  LOCAL UTILITIES mostly for plots  #######################################################
 
 load_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
