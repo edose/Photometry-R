@@ -179,7 +179,7 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
 ################################################################################
 ##### Support-only functions not normally called by user. ######################
 
-makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=8, Rinner=11, Router=16) {
+makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=10, Rinner=15, Router=20) {
   require(dplyr, quietly=TRUE)
   Xsize <- dim(image)[1]
   Ysize <- dim(image)[2]

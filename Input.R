@@ -9,7 +9,8 @@
 #####             and finally to predict unknown 
 #####
 ##### Typical sequence will be (starting with AN folder copied directly from obs laptop/ACP):
-#####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") probably rarely.
+##### Pre-process all FITS to get to standard state and folder organization.
+#####    renameObject(AN_rel_folder="20151216", oldObject="XXX", newObject="YYY") -- probably rarely.
 #####    precheck(AN_rel_folder="20151216")
 #####    beforeCal(AN_rel_folder="20151216")
 #####    (get any missing Masters from prev ANs),
@@ -17,6 +18,8 @@
 #####              (2) Edit/File Batch and Convert, Select All /Uncalibrated, Destination Path=/Calibrated, 
 #####                     check the 'Perform Calibration' box, click 'OK'.
 #####    finishFITS(AN_rel_folder="200151216")
+##### Build data frame(s) for modeling.
+#####    Remove any FITS not intended for photometry, to a folder like "\Set Aside".
 #####    df_master <- make_df_master(AN_rel_folder="20151216")
 #####    df_image  <- images(AN_rel_folder="20151216")
 #####    ...then start modeling with Model.R functions.
@@ -355,9 +358,9 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       mutate(Number=1:nrow(FOV_list$star_data)) # this is needed later.
     df_RADec <- df_star_data_numbered %>% 
       select(Number, StarID, degRA, degDec)
-    Rdisc  <-  8
-    Rinner <- 12
-    Router <- 18
+    Rdisc  <- 10  # THESE are the apertures that will actually be used.
+    Rinner <- 15
+    Router <- 20
     df_punch <- FOV_list$punch
 
         # For each FITS file derived from this FOV, run APT to make APT output file.
@@ -530,11 +533,12 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
       paste0(";----- This is omit.txt for AN folder ", AN_rel_folder),
       paste0(";----- Use this file to omit observations from input to modelOneFilter()."),
       paste0(";----- Example directive lines:\n"),
-      paste0(";#OBS   Obj-0000-V, 132 ; to omit star 132 from FITS image Obj-0000-V.fts"),
-      paste0(";#STAR  Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
-      paste0(";#STAR  Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
-      paste0(";#IMAGE Obj-0000-V      ; to omit FITS image Obj-0000-V specifically"),
-      paste0(";#JD    0.72, 1         ; to omit fractional JD from 0.72 through 1"),
+      paste0(";#OBS    Obj-0000-V, 132 ; to omit star 132 from FITS image Obj-0000-V.fts"),
+      paste0(";#STAR   Obj, 132, V     ; to omit star 132 from all FITS with object Obj and filter V"),
+      paste0(";#STAR   Obj, 132        ; to omit star 132 from all FITS with object Obj and ALL filters"),
+      paste0(";#IMAGE  Obj-0000-V      ; to omit FITS image Obj-0000-V specifically"),
+      paste0(";#JD     0.72, 1         ; to omit fractional JD from 0.72 through 1"),
+      paste0(";#SERIAL 123,77 54   6   ; to omit observations by Serial number (many per line OK)"),
       paste0(";\n;----- Add your directive lines:\n;\n\n")
     )
     writeLines(lines, con=omitPath)
@@ -871,6 +875,7 @@ getMaxADU_Ur <- function(CalFITS_path, df_XY, Rdisc, saturatedADU=54000) {
     #} # for X
     Rinner <- Rdisc + 2
     Router <- Rinner + 2
+    require(stringi, quietly=TRUE)
     aperture <- makeRawAperture(image=image, Xcenter=Xcenter, Ycenter=Ycenter, Rdisc=Rdisc,
                                 Rinner=Rinner, Router=Router) # Rinner and Router are not used here.
     MaxADU_Ur[iObj] <- evalAperture(aperture)$maxADU
@@ -1025,10 +1030,13 @@ get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
 
   # Construct small data frame of results to return.
   catMagError <- df_star$error[match(lookup_filter, df_star$band)]
+  # cat(paste(df_chart$auid[iMatch], lookup_filter, catMagError))
   if (! lookup_filter %in% df_star$band) {  # if this filter is absent.
     catMagError <- NA_real_  
     } else {
-      if (catMagError <= 0) { catMagError <- NA_real_ }  # because VSP charts record missing errors as zero.
+      if (!is.na(catMagError)) {
+        if (catMagError <= 0) { catMagError <- NA_real_ }  # VSP-JSON records missing errors as zero.
+      }
     }
   auid <- df_chart$auid[iMatch]
   return (data.frame(Ichart=iMatch, CatMagError=catMagError, AUID=auid, stringsAsFactors=FALSE))

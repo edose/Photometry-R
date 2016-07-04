@@ -1,10 +1,13 @@
 ##### Model.R   Get model (via mixed-model regression) for one Astronight's Comp and other standard stars.
-#####  Tests OK 20160124.
+#####  Modified June 2016 to offer an option to set a max allowed error (from AAVSO chart),
+#####    in which case the models use only standards and high-quality comps.
+#####  
 ##### Typical usages:
-########     alternate: modelOneFilter(AN_rel_folder="20151216", filter="V", fit_starID=TRUE)$star %>% 
-########                    arrange(desc(abs(CatalogEffect)))
-#####                 omitSerial(AN_rel_folder="20151216", serial=c(123,32))
-#####                 make_masterModelList(AN_rel_folder="20151216", modelLists=list(listV, listR, listI))
+#####   listV <- modelOneFilter(AN_rel_folder="20151216", filter="V", maxCatMagError=0.02)
+#####   [or to get star effect:] modelOneFilter(AN_rel_folder="20151216", filter="V", fit_starID=TRUE)$star 
+#####        %>% arrange(desc(abs(CatalogEffect)))
+#####   For each model, curate its input points by editing the omit.txt.
+#####   make_masterModelList(AN_rel_folder="20151216", modelLists=list(listV, listR, listI))
 
 modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                             filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
@@ -24,13 +27,6 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   df_model <- make_df_model(AN_top_folder, AN_rel_folder, 
                             filter, maxInstMagSigma, maxColorIndex, saturatedADU,
                             maxCatMagError)
-  eligibleCatMagErrors <- (df_model %>% filter(Filter==filter) %>% filter(!is.na(CatMagError)))$CatMagError
-  hist(eligibleCatMagErrors, breaks=16, 
-       main=paste("Filter =", filter, "   //   median", median(eligibleCatMagErrors)))
-  answer <- cat("Choose max CatMagError:") %>% readline() %>% as.double()
-  df_model <- df_model %>% filter(CatMagError <= answer)
-  cat(paste0(nrow(df_model), " observations in model, of ", length(eligibleCatMagErrors), " eligible.\n"))
-  
   formula_string <- "InstMag ~ offset(CatMag) + (1|JD_mid)"
   thisOffset <- rep(0,nrow(df_model))
   if (fit_transform) {
@@ -131,36 +127,6 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   return (modelList)
 }
 
-omitSerial <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, serial=NULL) {
-  ##### User utility to quickly add lines to omit.txt from Serial numbers (df_master) only.
-  ##### Tested OK 20160117.
-  ##### Typical usage: omitSerial(AN_rel_folder="20151216", serial=c(1220,923,88,727))
-  
-  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
-                                  "e.g., AN_rel_folder='20151216'.")}
-  if (is.null(serial)) {
-    stop(">>>>> No serial values given.")
-  }
-  require(stringi, quietly=TRUE)
-  require(dplyr, quietly=TRUE)
-  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
-  photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  df_master <- get_df_master(AN_top_folder, AN_rel_folder)
-  if(any(!(serial %in% df_master$Serial))) {
-    stop(">>>>> at least one serial number given is not in df_master for ", AN_rel_folder)
-  }
-  lines <- paste0(";\n;Next ", length(serial), " lines added via omitSerial() at ", Sys.time(), "...\n")
-  for (thisSerial in serial) {
-    thisFITS <- df_master$FITSfile[df_master$Serial==thisSerial] %>%
-      strsplit(".f", fixed=TRUE) %>% unlist() %>% first() %>% trimws()
-    thisStarID <- df_master$StarID[df_master$Serial==thisSerial]
-    lines <- c(lines, paste0("#OBS   ", thisFITS, ", ", thisStarID, "  ;  Serial=", thisSerial, "\n"))
-  }
-  omitPath <- make_safe_path(photometry_folder, "omit.txt")
-  cat(lines, file=omitPath, sep="", append=TRUE)
-  cat(lines) # output to Console
-}
-
 make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, modelLists=NULL) {
   ##### The last stage in modeling, run once all comp models are OK. 
   #####    Saves to AN's Photometry folder, in one list of lists (the "masterModelList"). Nothing returned.
@@ -169,8 +135,8 @@ make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fol
   
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
-  if (is.null(modelLists)) {stop(">>>>> You must provide a vector of modelLists, ",
-                                       "e.g., vectorOfModelLists=list(listV,listI).")}
+  if (is.null(modelLists)) {stop(">>>>> You must provide a list of modelLists, ",
+                                       "e.g., modelLists=list(listV,listI).")}
   if (class(modelLists[[1]])!="list") {stop(">>>>> You must enter modelLists as =list() and NOT =c().")}
   
   masterModelList <- list()
@@ -205,7 +171,11 @@ make_df_model <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NU
     filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(CI<=maxColorIndex) %>%
     filter(MaxADU_Ur<=saturatedADU)
-  if(!is.null(maxCatMagError)) {
+  eligibleCatMagErrors <- df_model$CatMagError[!is.na(df_model$CatMagError)]
+  if (is.null(maxCatMagError)) {
+    hist(eligibleCatMagErrors, breaks=16, 
+         main=paste("Filter =", filter, "   //   median", median(eligibleCatMagErrors)))
+  } else {
     df_model <- df_model %>% filter(CatMagError <= maxCatMagError)
   }
   return (df_model)
@@ -273,6 +243,11 @@ omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
       } else {
         cat(paste(">>>>> Can't parse line: ", thisLine))
       }
+    }
+    if (directive=="#SERIAL") {
+      serials_to_omit <- stri_extract_all_words(value) %>% 
+        unlist() %>% strsplit(",") %>% unlist() %>% as.numeric()
+      df_filtered <- df_filtered %>% filter(!Serial %in% serials_to_omit)
     }
     if (directive=="#IMAGE") {
       FITSname <- paste0(value, ".fts")

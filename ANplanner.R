@@ -101,9 +101,9 @@ ACP <- function (FOVs) {
                             get_Dec_hex(fov$FOV_data$Dec_center),
                             sep="\t")
       text <- text %>%
-        paste0(";\n", directive_text, " ;\n",
-               target_text, " ;\n", 
-               ";----", fov$FOV_data$ACP_comments, " \n")
+        paste0(";\n", directive_text, " ;\n", 
+               ";----", fov$FOV_data$ACP_comments, " \n",
+               target_text, " ;\n")
     } else{
       text <- paste0(text, ";\n; >>>>> FOV file '", FOV_name, "' not found.\n")
     }

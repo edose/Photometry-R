@@ -92,8 +92,7 @@ modelPlots <- function(modelList) {
   plotList$QQ <- p
   
   # Residuals vs Sky Background plot.
-  x <- obs$SkyMedian
-  #x <- obs$SkyADU
+  x <- obs$SkyADU
   xRange <- max(x) - min(x)
   y <- obs$Residual
   ptLabels <- ifelse(abs(y)>=2*sigmaResidual, obs$Serial, "")
@@ -132,7 +131,7 @@ modelPlots <- function(modelList) {
   JD_mid_floor <- floor(min(JD_mid_num))
   x <- JD_mid_num - JD_mid_floor
   xRange <- max(x) - min(x)
-  y <- obs$SkyMedian
+  y <- obs$SkyADU
   sigmaSky <- (y-mean(y))/sd(y)
   ptLabels <- ifelse(abs(sigmaSky)>=2, obs$Serial, "")
   df_plot <- data.frame(x=x, y=y, ptLabels=ptLabels)
@@ -285,7 +284,6 @@ modelPlots <- function(modelList) {
   
   ##### Now print, in desired order, the plot objects.
   # Find outlier observations & model bias.
-  print(plotList$QQ)
   print(plotList$ResidualsMaxADU_Ur)
   print(plotList$ResidualsFitted)
   print(plotList$ResidualsInstMag)
@@ -304,6 +302,7 @@ modelPlots <- function(modelList) {
   print(plotList$SkyJD)
 
   # Find outlier images.
+  print(plotList$QQ)
   print(plotList$Cirrus)
 }
 

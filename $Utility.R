@@ -264,7 +264,9 @@ getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
 
 get_VSP_json_list <- function (chartID=NULL, chart_folder="C:/Dev/Photometry/FOV/Chart", 
                                make_file_if_absent=TRUE) {
-  # get from chart_input_folder; if not available, get from web.
+  if (is.null(chartID)) {stop(">>>>> You must provide an existing AAVSO chartID to get_VSP_json_list",
+                                    "e.g., chartID='X15603BRV'.")}
+  # get from chart_input_folder; if not available, import from AAVSO website and write JSON for later use.
   fullpath <- make_safe_path(chart_folder, paste0(chartID,".txt"))
   if (file.exists(fullpath)) {
     json_text <- readLines(con=fullpath)
