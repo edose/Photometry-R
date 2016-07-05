@@ -54,7 +54,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     filter(StarType=="Target"))$FITSfile %>% 
     unique() %>% 
     intersect(images_input_comps)  # these are the images we need to handle.
-  df_estimates_comps <- data.frame()
+  df_estimates_comps <- data.frame(stringsAsFactors = FALSE)
   for (thisModelList in masterModelList) {
     df_predict_input <- df_input_comps %>%
       filter(Filter == thisModelList$filter) %>%
@@ -63,11 +63,12 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     if (!thisModelList$fit_extinction) {
       predictOutput <- predictOutput + thisModelList$extinction * df_predict_input$Airmass
     }
-    columns_to_keep <- c("Serial", "ModelStarID", "FITSfile", "StarID", "Chart", "Xcentroid", "Ycentroid",
-                       "InstMag", "InstMagSigma", "StarType", "CatMag", "CatMagSaved", "CatMagError",
-                       "JD_mid", "Filter", "Airmass", "CI", "SkyBias", "Vignette")
+    columns_post_predict <- c("Serial", "ModelStarID", "FITSfile", "StarID", "Chart", 
+                             "Xcentroid", "Ycentroid", "InstMag", "InstMagSigma", "StarType", 
+                             "CatMag", "CatMagSaved", "CatMagError",
+                             "JD_mid", "Filter", "Airmass", "CI", "SkyBias", "Vignette")
     df_estimates_thisFilter <- df_predict_input %>% 
-        select(one_of(columns_to_keep)) %>%
+        select(one_of(columns_post_predict)) %>%
         mutate(EstimatedMag = InstMag - predictOutput)
     df_estimates_comps <- rbind(df_estimates_comps, df_estimates_thisFilter)
   }  
@@ -79,10 +80,10 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   
   # Here, df_estimates_comps accounts for airmass(extinction) and color (transforms).
   # Now, we will derive per-image cirrus-effect values from them (for all filters together).
-  df_cirrus_effect <- data.frame(image=images_with_targets, effect=NA, sigma=NA, 
-                                 criterion1=NA, criterion2=NA, n_used=NA, n_removed=NA,
+  df_cirrus_effect <- data.frame(Image=images_with_targets, CirrusEffect=NA, CirrusSigma=NA, 
+                                 Criterion1=NA, Criterion2=NA, CompsUsed=NA, CompsRemoved=NA,
                                  stringsAsFactors = FALSE)
-  for (image in df_cirrus_effect$image) {
+  for (image in df_cirrus_effect$Image) {
     df_estimates_this_image <- df_estimates_comps %>% filter(FITSfile==image)
     # cat(paste0(image, "  n=", nrow(df_estimates_this_image), "\n"))
     cirrus_effect_per_comp <- df_estimates_this_image$EstimatedMag - df_estimates_this_image$CatMag
@@ -98,8 +99,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     cirrus_sigma_this_image <- ifelse(nrow(df_estimates_this_image)==1, 
                                       df_estimates_this_image[1,"CatMagError"], 
                                       sqrt(v2*sum(normalized_weights * resid2)))
-    n_used <- nrow(df_estimates_this_image)  # default; kept if all comps good.
-    n_removed <- 0                           #   "
+    comps_used <- nrow(df_estimates_this_image)  # default; kept if all comps good.
+    comps_removed <- 0                           #   "
     # Reject this image's worst comp stars and recalculate, if:
     #   (at least 4 comp stars) AND (criterion1 >= 16  OR  criterion2 >= 20).
     if (nrow(df_estimates_this_image) >= 4) {
@@ -129,21 +130,21 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
         resid2 <- (cirrus_effect_per_comp - cirrus_effect_this_image)^2
         cirrus_sigma_this_image <- sqrt(v2*sum(normalized_weights * resid2))
         removed_serials <- df_estimates_this_image[to_remove,"Serial"]
-        n_used    <- length(score) - sum(to_remove)
-        n_removed <- sum(to_remove)
+        comps_used    <- length(score) - sum(to_remove)
+        comps_removed <- sum(to_remove)
         # Record these omitted comp stars in master comp data frame.
         df_estimates_comps[df_estimates_comps$Serial %in% removed_serials,"UseInEnsemble"] <- FALSE
       }
     }
     
     # Insert results into this image's row in df_cirrus_effect.
-    cirrus_row_this_image <- df_cirrus_effect$image==image
-    df_cirrus_effect[cirrus_row_this_image,"effect"]      <- cirrus_effect_this_image
-    df_cirrus_effect[cirrus_row_this_image,"sigma"]       <- cirrus_sigma_this_image
-    df_cirrus_effect[cirrus_row_this_image,"criterion1"]  <- criterion1
-    df_cirrus_effect[cirrus_row_this_image,"criterion2"]  <- criterion2
-    df_cirrus_effect[cirrus_row_this_image,"n_used"]      <- n_used
-    df_cirrus_effect[cirrus_row_this_image,"n_removed"]   <- n_removed
+    cirrus_row_this_image <- df_cirrus_effect$Image==image
+    df_cirrus_effect[cirrus_row_this_image,"CirrusEffect"]   <- cirrus_effect_this_image
+    df_cirrus_effect[cirrus_row_this_image,"CirrusSigma"]    <- cirrus_sigma_this_image
+    df_cirrus_effect[cirrus_row_this_image,"Criterion1"]     <- criterion1
+    df_cirrus_effect[cirrus_row_this_image,"Criterion2"]     <- criterion2
+    df_cirrus_effect[cirrus_row_this_image,"CompsUsed"]      <- comps_used
+    df_cirrus_effect[cirrus_row_this_image,"CompsRemoved"]   <- comps_removed
   }
   
   # TARGET and CHECK STARS: # Get best mag estimates for ALL such observations in all filters.
@@ -152,6 +153,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     filter(MaxADU_Ur<=saturatedADU) %>%
     filter(InstMagSigma<=maxInstMagSigma) %>%
     mutate(CI=0) %>%    # because they are presumed unknown; corrected later.
+    mutate(CatMagSaved=CatMag) %>%  # because we could want this after running predict().
     mutate(CatMag=0)    # estimated below by imputation from predicted mag.
   df_estimates_checks_targets <- data.frame(stringsAsFactors = FALSE)
   for (thisModelList in masterModelList) {
@@ -164,17 +166,22 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       predictOutput <- predictOutput + thisModelList$extinction * df_input_this_filter$Airmass
     }
     df_estimates_this_filter <- df_input_this_filter %>%  # TODO: THIS IS THE ERROR! --> use intersect() ?
-      select(one_of(columns_to_keep)) %>%
+      select(one_of(columns_post_predict)) %>%             # defined well above
       mutate(PredictedMag = InstMag - predictOutput)
     df_estimates_checks_targets <- rbind(df_estimates_checks_targets, df_estimates_this_filter)
   } 
+  df_estimates_checks_targets <- df_estimates_checks_targets %>%
+    mutate(CatMag=CatMagSaved) %>%  # restoring CatMag, now that predict() has been run
+    select(-CatMagSaved) %>%        # we no longer need this
+    mutate(UseInEnsemble=NA)
+  df_input_checks_targets <- NULL   # we no longer need this; raise an error if it's used again.
   # Here, df_estimates_checks_targets accounts for airmass(extinction), but not for color (transform),
   #    or for cirrus effect.
   
   # CIRRUS CORRRECTION: Apply per-image cirrus-effect to checks and targets (for all filters together).
   df_predictions_checks_targets <- left_join(df_estimates_checks_targets, df_cirrus_effect, 
-                                             by="FITSfile") %>%
-    mutate(PostCirrusMag = EstimatedMag - Cirrus_effect)
+                                             by=c("FITSfile" = "Image")) %>%
+    mutate(UntransformedMag = PredictedMag - CirrusEffect) # = after cirrus correction, before transform.
   
   # COLOR CORRECTION: 
   transforms <- c(masterModelList[[CI_filters[1]]]$transform, masterModelList[[CI_filters[2]]]$transform)
@@ -184,50 +191,53 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   df_xref_transform <- data.frame(stringsAsFactors=FALSE) 
   for (thisModelList in masterModelList) {
     df_xref_transform <- df_xref_transform %>%
-      rbind(data.frame(Filter=thisModelList$filter, Transform=thisModelList$transform))
+      rbind(data.frame(Filter=thisModelList$filter, Transform=thisModelList$transform, 
+                       stringsAsFactors=FALSE))
   }
   # Perform color transformations using the interpolated Color Index values.
-  df_transformed <- df_predictions %>%
+  df_transformed <- df_predictions_checks_targets %>%
     left_join(df_xref_transform, by="Filter") %>%
     mutate(TransformedMag = UntransformedMag - Transform * CI) %>% # minus is the correct sign: 20160206.
     filter(!is.na(TransformedMag))  # NA often from missing V or I mag, so CI=NA, so Transformed Mag=NA.
   
-  # Estimate TotalSigma for each target and check star in each image.
-  df_transformed$TotalSigma <- NA
+  # COMPUTE TotalSigma for each target and check star in each image.
+  # There will be 3 contributions to TotalSigma for each Target and Check observation:
+  #   (1) model_sigma: from mixed-model regression (same for all observations in this filter).
+  #   (2) cirrus_sigma: from variance in ensemble comp stars (same for all obs in this image).
+  #   (3) inst_mag_sigma: from shot noise etc in observation (unique to each observation).
+  df_transformed$TotalSigma <- NA  # new column.
   for (thisModelList in masterModelList) {
     this_filter <- thisModelList$filter
-    images_comps <- df_estimates_comps %>% 
-      filter(Filter==this_filter) %>%
-      select(FITSfile) %>%
+    images_comps <- (df_estimates_comps %>% 
+      filter(Filter==this_filter))$FITSfile %>%
       unique()
     for (image in images_comps) {
       rows <- (df_estimates_checks_targets$FITSfile == image)
       n <- max(1,sum(rows))
-      model_sigma <- thisModelList$sigma
-      cirrus_sigma <- df_cirrus_effect[df_cirrus_effect$image == image , ]$effect
+      model_sigma <- summary(thisModelList$model)$sigma
+      cirrus_sigma <- df_cirrus_effect[df_cirrus_effect$Image == image, "CirrusEffect"]
       df_targets_checks <- df_estimates_checks_targets %>% 
         filter(FITSfile==image) %>%
         select(Serial, InstMagSigma)
       for (serial in df_targets_checks$Serial) {
-        inst_mag_sigma <- df_targets_checks[df_targets_checks$Serial == serial,]$InstMagSigma
-        total_sigma <- sqrt((model_sigma^2)/n + cirrus_sigma^2 + inst_mag_sigma^2)
-        df_transformed[df_transformed$Serial==serial,]$TotalSigma <- total_sigma
+        inst_mag_sigma <- df_targets_checks[df_targets_checks$Serial == serial,"InstMagSigma"]
+        total_sigma <- sqrt((model_sigma^2)/n + cirrus_sigma^2 + inst_mag_sigma^2) # add in quadrature.
+        df_transformed[df_transformed$Serial==serial,"TotalSigma"] <- total_sigma
       }
     }
   }
 
-  # # Complete the output data frame.
-  # df_xref_modelSigma$Filter <- as.character(df_xref_modelSigma$Filter)
-  # df_transformed <- df_transformed %>%
-  #   left_join(df_xref_modelSigma, by="Filter") %>%
-  #   mutate(MagErr = pmax(ModelSigma, InstMagSigma)) %>% # pmax = "parallel" element-wise max of 2 vectors
-  #   left_join((df_filtered %>% select(Serial, FITSfile, Exposure, MaxADU_Ur, FWHM)), 
-  #             by="Serial") %>% # restore a few columns.
-  #   arrange(ModelStarID, JD_num)
+  # Clean up (sort only) of df_estimates_comps (all data for comp stars).
+  df_estimates_comps <- df_estimates_comps %>%
+    arrange(ModelStarID, JD_mid)
   
-  # [It would be good to rbind the 2 results dfs if possible.]
+  # Clean up df_transformed (all data for targets & checks).
+  df_transformed <- df_transformed %>%
+    select(-PredictedMag, -Criterion1, -Criterion2, -UntransformedMag, -JD_num, -Transform) %>%
+    left_join((df_master %>% select(Serial, AUID, FOV, MaxADU_Ur, FWHM, SkyADU, SkySigma)), by="Serial") %>%
+    arrange(ModelStarID, JD_mid)
   
-  # Save df_transformed as .Rdata file (but do not return it).
+  # Save df_transformed as .Rdata file (but do not return it; we will pack it in a list to return).
   path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
   save(df_transformed, file=path_transformed, precheck=FALSE)
   
@@ -247,6 +257,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     )
     writeLines(lines, con=path_report_map)
   }
+  
+  # Write some summary lines to R console.
   nTargetObs <- df_transformed %>% filter(StarType=="Target") %>% nrow()
   nTargets   <- df_transformed %>% filter(StarType=="Target") %>% select(ModelStarID) %>% 
     unique() %>% nrow()
@@ -256,7 +268,6 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   cat("PredictAll() yields", nTargetObs, "Target obs for", nTargets, "targets in filters:", 
       paste(Filters,collapse=" ","\n"))
   cat("   and ", nCheckObs, " Check observations.\n")
-
   cat("Transformed predictions saved to", path_transformed, "\n",
       "   and report_map.txt is ensured available in the same folder\n",
       "Now you are ready to:\n",
@@ -312,9 +323,9 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
   # First, make df_report.
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
-  df_report <- make_df_report(photometry_folder)
+  df_report <- make_df_report(photometry_folder)  # holds all the data required for AAVSO report.
   
-  # Construct report's header lines.
+  # REPORT HEADER lines: Construct.
   out <- "#TYPE=EXTENDED" %>%
     c("#OBSCODE=DERA") %>% #       DERA = Eric Dose's observer code @ AAVSO
     c("#SOFTWARE=custom R Scripts, github/edose") %>%
@@ -330,8 +341,8 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
   
     if (nrow(df_report) >= 1) {
-  # Final formatting of all observation report fields.
-    df_report <- df_report %>%
+  # FINAL FORMATTING of all observation report fields.
+    df_formatted <- df_report %>%
       mutate(TargetName = TargetName %>% trimws() %>% toupper()) %>%
       mutate(JD         = JD         %>% as.numeric() %>% round(5) %>% format(nsmall=5)) %>%
       mutate(Mag        = Mag        %>% round(3) %>% format()) %>%
@@ -347,21 +358,21 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
   
     # Append rows of df_report to character vector "out".
     obs_lines <- paste(
-      df_report$TargetName,
-      df_report$JD,
-      df_report$Mag,
-      df_report$MagErr,
-      df_report$Filter,
+      df_formatted$TargetName,
+      df_formatted$JD,
+      df_formatted$Mag,
+      df_formatted$MagErr,
+      df_formatted$Filter,
       "YES",                   # always Transformed for full model.
       "STD",                   # we use standard comp stars, not "differential" mode.
-      df_report$CompName,      # ="ENSEMBLE" when more than one comp star for this observation.
-      df_report$CompMag,       # "na" if Ensemble comp, else instrument comp mag (or maybe "na" even so).
-      df_report$CheckName,
-      df_report$CheckMag,
-      df_report$Airmass,
+      df_formatted$CompName,   # ="ENSEMBLE" when more than one comp star for this observation.
+      df_formatted$CompMag,    # "na" if Ensemble comp, else instrument comp mag (or maybe "na" even so).
+      df_formatted$CheckName,
+      df_formatted$CheckMag,
+      df_formatted$Airmass,
       "na",                   # GROUP, not used here.
-      df_report$Chart,
-      df_report$Notes,
+      df_formatted$Chart,
+      df_formatted$Notes,
       sep=",")
     out <- out %>% c(obs_lines)
   } else {
@@ -373,7 +384,7 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
   path_report   <- make_safe_path(photometry_folder, filename_report)
   write(out,file=path_report)
   cat(paste0("AAVSO report for AN ",AN_rel_folder," written to: ", path_report, "\n   = ",
-    nrow(df_report)," observations."))
+    nrow(df_formatted)," observations."))
 }
 
 
@@ -631,7 +642,7 @@ extractCI_points <- function (df, CI_filters, transforms) {
   maxDiffJD <- 15 / (24*60) # max time between paired obs, in (Julian) days, typically 15 minutes.
   df <- df %>% filter(Filter %in% CI_filters) %>% arrange(JD_num)
   
-  df_CI_point <- data.frame()
+  df_CI_point <- data.frame(stringsAsFactors = FALSE)
   if (nrow(df)>=2) {
     for (iStart in 1:(nrow(df)-1)) {
       if (df$Filter[iStart+1] != df$Filter[iStart]) {
@@ -642,7 +653,8 @@ extractCI_points <- function (df, CI_filters, transforms) {
                                  df$UntransformedMag[iStart]-df$UntransformedMag[iStart+1],
                                  df$UntransformedMag[iStart+1]-df$UntransformedMag[iStart])
           this_CI <- CI_predicted / (1 + transforms[1] - transforms[2]) # transforms -> catalog-basis CI.
-          df_CI_point <- df_CI_point %>% rbind(data.frame(JD_num=this_JD_num, CI=this_CI))
+          df_CI_point <- df_CI_point %>% rbind(data.frame(JD_num=this_JD_num, CI=this_CI, 
+                                                          stringsAsFactors = FALSE))
         } 
       }
     }
