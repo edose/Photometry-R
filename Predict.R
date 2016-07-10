@@ -65,7 +65,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     }
     columns_post_predict <- c("Serial", "ModelStarID", "FITSfile", "StarID", "Chart", 
                              "Xcentroid", "Ycentroid", "InstMag", "InstMagSigma", "StarType", 
-                             "CatMag", "CatMagSaved", "CatMagError",
+                             "CatMag", "CatMagSaved", "CatMagError", "Exposure",
                              "JD_mid", "Filter", "Airmass", "CI", "SkyBias", "Vignette")
     df_estimates_thisFilter <- df_predict_input %>% 
         select(one_of(columns_post_predict)) %>%
@@ -205,7 +205,9 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   #   (1) model_sigma: from mixed-model regression (same for all observations in this filter).
   #   (2) cirrus_sigma: from variance in ensemble comp stars (same for all obs in this image).
   #   (3) inst_mag_sigma: from shot noise etc in observation (unique to each observation).
-  df_transformed$TotalSigma <- NA  # new column.
+  df_transformed$ModelSigma  <- NA   # new column.
+  df_transformed$CirrusSigma <- NA  # new column.
+  df_transformed$TotalSigma  <- NA   # new column.
   for (thisModelList in masterModelList) {
     this_filter <- thisModelList$filter
     images_comps <- (df_estimates_comps %>% 
@@ -215,14 +217,17 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       rows <- (df_estimates_checks_targets$FITSfile == image)
       n <- max(1,sum(rows))
       model_sigma <- summary(thisModelList$model)$sigma
-      cirrus_sigma <- df_cirrus_effect[df_cirrus_effect$Image == image, "CirrusEffect"]
+      cirrus_sigma <- df_cirrus_effect[df_cirrus_effect$Image == image, "CirrusSigma"]
       df_targets_checks <- df_estimates_checks_targets %>% 
         filter(FITSfile==image) %>%
         select(Serial, InstMagSigma)
       for (serial in df_targets_checks$Serial) {
         inst_mag_sigma <- df_targets_checks[df_targets_checks$Serial == serial,"InstMagSigma"]
         total_sigma <- sqrt((model_sigma^2)/n + cirrus_sigma^2 + inst_mag_sigma^2) # add in quadrature.
-        df_transformed[df_transformed$Serial==serial,"TotalSigma"] <- total_sigma
+        thisRow <- df_transformed$Serial==serial
+        df_transformed[thisRow,"ModelSigma"]  <- model_sigma
+        df_transformed[thisRow,"CirrusSigma"] <- cirrus_sigma
+        df_transformed[thisRow,"TotalSigma"]  <- total_sigma
       }
     }
   }
@@ -233,13 +238,10 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   
   # Clean up df_transformed (all data for targets & checks).
   df_transformed <- df_transformed %>%
-    select(-PredictedMag, -Criterion1, -Criterion2, -UntransformedMag, -JD_num, -Transform) %>%
-    left_join((df_master %>% select(Serial, AUID, FOV, MaxADU_Ur, FWHM, SkyADU, SkySigma)), by="Serial") %>%
+    select(-PredictedMag, -Criterion1, -Criterion2, -UntransformedMag, -Transform) %>%
+    left_join((df_master %>% select(Serial, AUID, FOV, MaxADU_Ur, FWHM, SkyADU, SkySigma)), 
+              by="Serial") %>%
     arrange(ModelStarID, JD_mid)
-  
-  # Save df_transformed as .Rdata file (but do not return it; we will pack it in a list to return).
-  path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
-  save(df_transformed, file=path_transformed, precheck=FALSE)
   
   # Make a template-only report_map.txt file if report_map.txt doesn't already exist.
   path_report_map <- make_safe_path(photometry_folder, "report_map.txt")
@@ -258,6 +260,12 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     writeLines(lines, con=path_report_map)
   }
   
+  # Save df_estimates_comps and df_transformed as .Rdata files.
+  path_estimates_comps <- make_safe_path(photometry_folder, "df_estimates_comps.Rdata")
+  save(df_estimates_comps, file=path_estimates_comps, precheck=FALSE)
+  path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
+  save(df_transformed, file=path_transformed, precheck=FALSE)
+  
   # Write some summary lines to R console.
   nTargetObs <- df_transformed %>% filter(StarType=="Target") %>% nrow()
   nTargets   <- df_transformed %>% filter(StarType=="Target") %>% select(ModelStarID) %>% 
@@ -271,16 +279,23 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   cat("Transformed predictions saved to", path_transformed, "\n",
       "   and report_map.txt is ensured available in the same folder\n",
       "Now you are ready to:\n",
-      "   1. run targetPlots(),\n",
-      "   2. group/select target observations in report_map.txt, repeat 1 & 2 as needed\n",
-      "   3. run AAVSO() to make report, and\n",
-      "   4. submit report to AAVSO.")
-  # return(df_transformed)
-  results_list <- list(df_estimates_comps, df_transformed)
-  return (results_list)
+      "   1. run eclipserPlots(starID='???') if any eclipsers,\n",
+      "   2. run markup Report and group/select target observations in report_map.txt,\n",
+      "   3. repeat 1 & 2 as needed\n",
+      "   4. run AAVSO() to make report, and\n",
+      "   5. submit report to AAVSO.")
+
+  # Save df_estimates_comps and df_transformed as .Rdata files.
+  path_estimates_comps <- make_safe_path(photometry_folder, "df_estimates_comps.Rdata")
+  save(df_estimates_comps, file=path_estimates_comps, precheck=FALSE)
+  path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
+  save(df_transformed, file=path_transformed, precheck=FALSE)
+  return(df_transformed)
 }
 
 markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
+  # Usage: df_markupReport <- markupReport(AN_rel_folder="AN20151216")
+  #    then print df_markupReport (probably in Word).
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
                                     "e.g., AN_rel_folder='20151216'.")}
   source("C:/Dev/Photometry/$Utility.R")
@@ -299,11 +314,18 @@ markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL
     mutate(JD_fract=JD_fract) %>%
     filter(StarType=="Target") %>%
     select(Serial, FITSfile, Target=StarID, Filter, Exp=Exposure, Mag=TransformedMag, InstMagSigma, 
-           MagErr, MaxADU=MaxADU_Ur, FWHM, JD_fract) %>%
+           ModelSigma, CirrusSigma, TotalSigma, 
+           MaxADU=MaxADU_Ur, FWHM, JD_fract) %>%
     left_join(df_checkStars, by="FITSfile") %>%
-    mutate(Sigma=round(InstMagSigma*1000)) %>%
-    mutate(Err=round(MagErr*1000)) %>%
-    select(-InstMagSigma, -MagErr) %>%
+    mutate(FITSfile=strsplit(FITSfile,'.fts') %>% unlist()) %>%
+    mutate(Mag=round(Mag,3)) %>%
+    mutate(FWHM=round(FWHM,2)) %>%
+    mutate(CkMag=round(CkMag,3)) %>%
+    mutate(Inst=round(InstMagSigma*1000)) %>%
+    mutate(Model=round(ModelSigma*1000)) %>%
+    mutate(Cirr=round(CirrusSigma*1000)) %>%
+    mutate(Err=round(TotalSigma*1000)) %>%
+    select(-InstMagSigma, -ModelSigma, -CirrusSigma, -TotalSigma) %>%
     arrange(Target, FITSfile, Filter, Exp) %>%
     select(Serial, Target, FITSfile, Filter, Exp, Mag, MaxADU, FWHM, everything())
   return(df_markupReport)
