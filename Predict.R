@@ -165,7 +165,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     if (!thisModelList$fit_extinction) {
       predictOutput <- predictOutput + thisModelList$extinction * df_input_this_filter$Airmass
     }
-    df_estimates_this_filter <- df_input_this_filter %>%  # TODO: THIS IS THE ERROR! --> use intersect() ?
+    df_estimates_this_filter <- df_input_this_filter %>%
       select(one_of(columns_post_predict)) %>%             # defined well above
       mutate(PredictedMag = InstMag - predictOutput)
     df_estimates_checks_targets <- rbind(df_estimates_checks_targets, df_estimates_this_filter)
@@ -214,8 +214,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       filter(Filter==this_filter))$FITSfile %>%
       unique()
     for (image in images_comps) {
-      rows <- (df_estimates_checks_targets$FITSfile == image)
-      n <- max(1,sum(rows))
+      n <- df_estimates_comps %>% filter(FITSfile==image) %>% filter(UseInEnsemble==TRUE) %>%
+        nrow() %>% max(1)
       model_sigma <- summary(thisModelList$model)$sigma
       cirrus_sigma <- df_cirrus_effect[df_cirrus_effect$Image == image, "CirrusSigma"]
       df_targets_checks <- df_estimates_checks_targets %>% 
@@ -252,6 +252,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       paste0(";----- Example directive lines:"),
       paste0(";"),
       paste0(";#TARGET  GD Cyg ; to omit this target star altogether from AAVSO report."),
+      paste0(";#JD  0.233 0.311 ; to omit this JD (fractional) range from AAVSO report."),
       paste0(";#SERIAL  34 44,129  32  1202 ; to omit these 5 Serial numbers from AAVSO report."),
       paste0(";#COMBINE   80,128 ; to combine (average) these 2 Serial numbers within AAVSO report."),
       paste0(";----- Add your directive lines:"),
@@ -307,7 +308,7 @@ markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL
   
   df_checkStars <- df_predictions %>% 
     filter(StarType=="Check") %>% 
-    select(FITSfile, Check=StarID, CkMag=TransformedMag)
+    select(FITSfile, Check=StarID, CkMag=TransformedMag, CkCat=CatMag)
   JD_fract <- (df_predictions$JD_num - (df_predictions$JD_num %>% min() %>% floor())) %>% round(digits=4)
   
   df_markupReport <- df_predictions %>%
@@ -368,7 +369,7 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
       mutate(TargetName = TargetName %>% trimws() %>% toupper()) %>%
       mutate(JD         = JD         %>% as.numeric() %>% round(5) %>% format(nsmall=5)) %>%
       mutate(Mag        = Mag        %>% round(3) %>% format()) %>%
-      mutate(MagErr     = MagErr     %>% round(3) %>% format()) %>%
+      mutate(MagErr     = TotalSigma %>% round(3) %>% format()) %>%
       mutate(Filter     = Filter     %>% trimws() %>% toupper()) %>%
       mutate(CompName   = CompName   %>% trimws() %>% toupper()) %>%
       mutate(CompMag    = ifelse(CompMag=="na","na",CompMag      %>% round(3) %>% format())) %>%
@@ -421,12 +422,13 @@ make_df_report <- function(photometry_folder) {
   require(stringi, quietly=TRUE)
   
   path_df_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
-  load(path_df_transformed)
-  path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
-  load(path_masterModelList)
-  
+  load(path_df_transformed)  
+  path_df_estimates_comps <- make_safe_path(photometry_folder, "df_estimates_comps.Rdata")
+  load(path_df_estimates_comps)
+
   df_report <- df_transformed %>%
-    select(Serial, StarType, TargetName=StarID, JD=JD_mid, Mag=TransformedMag, MagErr, Filter) %>%
+    select(Serial, StarType, TargetName=StarID, JD=JD_mid, Mag=TransformedMag, 
+           TotalSigma, InstMagSigma, ModelSigma, CirrusSigma, Filter) %>%
     mutate(CompName=NA_character_, CompMag=NA_real_, nComps=NA_integer_, 
            CheckName=NA_character_, CheckMag=NA_real_) %>%
     mutate(Airmass=df_transformed$Airmass, Chart=df_transformed$Chart) %>%
@@ -499,14 +501,8 @@ make_df_report <- function(photometry_folder) {
   
   ##### Apply comp-star names and mags.
   # Make df_comps by rbind() all $obs from masterModelList
-  df_comps <- data.frame(stringsAsFactors=FALSE)
-  for (thisModelList in masterModelList) {
-    df_thisComp <- thisModelList$obs %>% filter(StarType=="Comp") %>% 
-      mutate(ObsMag=CatMag+Residual) %>%
-      select(Serial,JD_mid,StarID,ObsMag,Filter)
-    df_comps <- df_comps %>% rbind(df_thisComp)
-  }
-  # Now insert comp info.
+  df_comps <- df_estimates_comps %>%
+    select(Serial, JD_mid, StarID, ObsMag=EstimatedMag, Filter)
   reportJDs <- (df_report %>% arrange(JD))$JD %>% unique()
   for (thisJD in reportJDs) {
     df_compsThisJD <- df_comps %>% filter(JD_mid==thisJD)
@@ -584,7 +580,15 @@ make_df_report <- function(photometry_folder) {
     # Columns TargetName, Filter, CompName, CompMag, CheckStar, and Chart: uniform and inherited.
     df_new$JD       <- mean(as.numeric(df_combine$JD))
     df_new$Mag      <- mean(df_combine$Mag)
-    df_new$MagErr   <- max( min(df_combine$MagErr), max(df_combine$MagErr/sqrt(nrow(df_combine))))
+    # Error estimation got more sophisticated with v 1.0 (July 2016).
+    require(magrittr, quietly=TRUE)
+    instMagSigma <- df_combine$InstMagSigma %>% pmax(0.001) %>% raise_to_power(-2) %>% 
+      sum() %>% raise_to_power(-0.5)  # combined in quadrature
+    modelSigma   <- df_combine$ModelSigma[1] # not combined; same for all in this image (i.e., this filter).
+    nModelSigma  <- mean(df_combine$nComp)
+    cirrusSigma  <- df_combine$CirrusSigma %>% pmax(0.001) %>% raise_to_power(-2) %>% 
+      sum() %>% raise_to_power(-0.5)  # combined in quadrature
+    df_new$TotalSigma <- sqrt((modelSigma^2)/nModelSigma + cirrusSigma^2 + instMagSigma^2) # add in quadr.
     df_new$CheckMag <- mean(df_combine$CheckMag)
     df_new$Airmass  <- mean(df_combine$Airmass)
     df_new$Notes    <- paste0("obs#[", (paste0(df_combine$Serial,collapse=" ")), "]/",
