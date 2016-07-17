@@ -38,6 +38,8 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     # These improved values are from standards run of AN 20151218.
     transform <- list(V=-0.0199,R=+0.0398,I=+0.0432)[filter] %>% unlist()
     thisOffset <- thisOffset + transform * df_model$CI
+    cat(">>>>> Transform (Color Index) not fit: value fixed at ", transform, "\n", sep="")
+    
   }
   if (fit_extinction) { 
     extinction <- NA
@@ -45,6 +47,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   } else {
     extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # user-given (not fitted) value.
     thisOffset <- thisOffset + extinction * df_model$Airmass
+    cat(">>>>> Extinction (Airmass) not fit: value fixed at ", extinction, "\n", sep="")
   }
   if (fit_skyBias) {
     if (all(df_model$SkyBias==0)) {

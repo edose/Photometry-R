@@ -468,6 +468,11 @@ make_df_report <- function(photometry_folder) {
     words <- stri_extract_all_words(thisLine) %>% unlist() %>% strsplit(",") %>% unlist()
     serials <- words[-1] %>% as.numeric()
     serials <- serials[serials>=1]
+    badSerials <- serials[!(serials %in% df_report$Serial)]
+    if (length(badSerials) >= 1) {
+      cat(paste0(">>>>> Bad Serial numbers (", badSerials, ") to omit: '", thisLine, "'.\n"))
+      serials <- serials[!(serials %in% badSerials)]
+    }
     serialsToOmit <- c(serialsToOmit, serials)
   }
   df_report <- df_report %>% filter(!Serial %in% serialsToOmit)
@@ -539,7 +544,7 @@ make_df_report <- function(photometry_folder) {
     
     # Verify that user-selected combine rows are truly eligible to be combined.
     if (nrow(df_combine)<=1) {
-      cat(paste0(">>>>> No combines for line: '", thisLine, "'.\n"))
+      cat(paste0(">>>>> No combine possible for line: '", thisLine, "'.\n"))
       next
     }
     if (!allSame(df_combine$TargetName)){
