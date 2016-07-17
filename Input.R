@@ -370,7 +370,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
         mutate(RawADUMag=NA_real_, InstMagSigma=NA_real_, 
                SkyADU=NA_real_, SkySigma=NA_real_, 
                DiscRadius=Rdisc, SkyRadiusInner=Rinner, SkyRadiusOuter=Router,
-               FWHM=NA_real_)
+               FWHM=NA_real_, apertureOK=FALSE)  # all defaults, to be updated below.
       thisImage <- getImageMatrix(thisFITS_path) # matrix of numbers. 
       Xsize <- (dim(thisImage))[1] # In FITS, X is 1st dim, Y the 2nd.
       Ysize <- (dim(thisImage))[2]
@@ -392,74 +392,90 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           Xcenter <- df_apertures$Xcentroid[i_ap]
           Ycenter <- df_apertures$Ycentroid[i_ap]
           thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
-          
+
           # Do two cycles of centroid refinement (without annulus punch) before accepting centroids.
           # (If far off from center, it may take the first cycle just to get anywhere close.)
           nCycles <- 2
           for (iCycle in 1:nCycles) {
             ev <- evalAperture(thisAp, evalSkyFunction=evalSky005)
+            emptyAperture <- any(is.na(ev), na.rm=FALSE)
+            if (emptyAperture) {
+              df_apertures$apertureOK[i_ap] <- FALSE
+              break
+            } else {
+              df_apertures$apertureOK[i_ap] <- TRUE
+            }
             Xcenter <- ev$Xcentroid
             Ycenter <- ev$Ycentroid
             thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
           }
           
-          # Centroid position is refined once), so now prepare punch list for this star in this image.
-          this_df_punch <- FOV_list$punch %>%
-            filter(StarID==df_apertures$StarID[i_ap]) %>%
-            mutate(dX=NA_real_, dY=NA_real_) # in pixels
-          if (nrow(this_df_punch) >=1) {
-            hdr <- getFITSheaderValues(thisFITS_path, c("PA", "CDELT1", "CDELT2"))
-            pa_FITS <- as.numeric(hdr$PA)
-            cdelt1_FITS <- as.numeric(hdr$CDELT1)
-            cdelt2_FITS <- as.numeric(hdr$CDELT2)
-            # cat("punch:")
-            for (i_punch in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
-              skyAngle <- atan2(this_df_punch$DEast[i_punch], this_df_punch$DNorth[i_punch])
-              skyToPlateRotation <- (pi/180) * (360-pa_FITS)
-              plateAngle <- skyAngle + skyToPlateRotation
-              arcsecPerPixel <- 3600 * mean(abs(cdelt1_FITS), abs(cdelt2_FITS))
-              distArcsec <- sqrt(this_df_punch$DEast[i_punch]^2 + this_df_punch$DNorth[i_punch]^2)
-              distPixels <- distArcsec / arcsecPerPixel
-              this_df_punch$dX[i_punch] <- distPixels * sin(-plateAngle)
-              this_df_punch$dY[i_punch] <- -distPixels * cos(+plateAngle) # minus because +Y means *down*.
-              #cat(" ",this_df_punch$StarID[i_punch])
+          # Do punches and final aperture evaluation only if aperture is not empty (i.e., if it has signal).
+          ev <- evalAperture(thisAp, evalSkyFunction=evalSky005)
+          emptyAperture <- any(is.na(ev), na.rm=FALSE)
+          df_apertures$apertureOK[i_ap] <- !emptyAperture
+          if (df_apertures$apertureOK[i_ap] == TRUE) {
+            # Centroid position is refined once), so now prepare punch list for this star in this image.
+            this_df_punch <- FOV_list$punch %>%
+              filter(StarID==df_apertures$StarID[i_ap]) %>%
+              mutate(dX=NA_real_, dY=NA_real_) # in pixels
+            if (nrow(this_df_punch) >=1) {
+              hdr <- getFITSheaderValues(thisFITS_path, c("PA", "CDELT1", "CDELT2"))
+              pa_FITS <- as.numeric(hdr$PA)
+              cdelt1_FITS <- as.numeric(hdr$CDELT1)
+              cdelt2_FITS <- as.numeric(hdr$CDELT2)
+              # cat("punch:")
+              for (i_punch in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
+                skyAngle <- atan2(this_df_punch$DEast[i_punch], this_df_punch$DNorth[i_punch])
+                skyToPlateRotation <- (pi/180) * (360-pa_FITS)
+                plateAngle <- skyAngle + skyToPlateRotation
+                arcsecPerPixel <- 3600 * mean(abs(cdelt1_FITS), abs(cdelt2_FITS))
+                distArcsec <- sqrt(this_df_punch$DEast[i_punch]^2 + this_df_punch$DNorth[i_punch]^2)
+                distPixels <- distArcsec / arcsecPerPixel
+                this_df_punch$dX[i_punch] <- distPixels * sin(-plateAngle)
+                this_df_punch$dY[i_punch] <- -distPixels * cos(+plateAngle) # minus because +Y means *down*.
+                #cat(" ",this_df_punch$StarID[i_punch])
+              }
+              #cat("\n")
             }
-            #cat("\n")
+            # Apply punch list to raw aperture
+            thisApPunched <- punch(thisAp, this_df_punch) 
+            
+            if (nrow(this_df_punch)>=1) { 
+              # for PRESENTATION: plot the image & punched aperture:
+              # end_FITS_name = substring(df_apertures$FITSfile[i_ap],
+              #                           nchar(df_apertures$FITSfile[i_ap])-5, 
+              #                           nchar(df_apertures$FITSfile[i_ap]))
+              # if (end_FITS_name == "-V.fts") {
+              #   plotAperturePresentation(thisApPunched, 
+              #                            title = paste0(df_apertures$FITSfile[i_ap], 
+              #                                           ":    target ", df_apertures$StarID[i_ap]))
+              #   }
+              #cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
+              #  nrow(this_df_punch), " punches.\n")
+            }
+            
+            # For TESTING: plot image & punched aperture
+            #plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
+            #  df_apertures$StarID[i_ap]))
+            
+            # Get values from this aperture and image matrix.
+            ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
+            
+            # Replace values in this row of df_apertures.
+            df_apertures$Xcentroid[i_ap]      <- ev$Xcentroid # update centroid.
+            df_apertures$Ycentroid[i_ap]      <- ev$Ycentroid #   " "
+            df_apertures$RawADUMag[i_ap]      <- -2.5 * log10(ev$netFlux) # NB: ev$netFlux=NA for undet star.
+            df_apertures$InstMagSigma[i_ap]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
+            df_apertures$SkyADU[i_ap]         <- ev$skyADU
+            df_apertures$SkySigma[i_ap]       <- ev$skySigma
+            df_apertures$FWHM[i_ap]           <- ev$FWHM
           }
-          # Apply punch list to raw aperture
-          thisApPunched <- punch(thisAp, this_df_punch) 
-          
-          if (nrow(this_df_punch)>=1) { 
-            # for PRESENTATION: plot the image & punched aperture:
-            # end_FITS_name = substring(df_apertures$FITSfile[i_ap],
-            #                           nchar(df_apertures$FITSfile[i_ap])-5, 
-            #                           nchar(df_apertures$FITSfile[i_ap]))
-            # if (end_FITS_name == "-V.fts") {
-            #   plotAperturePresentation(thisApPunched, 
-            #                            title = paste0(df_apertures$FITSfile[i_ap], 
-            #                                           ":    target ", df_apertures$StarID[i_ap]))
-            #   }
-            #cat(paste0(df_apertures$FITSfile[i_ap], ":    target ", df_apertures$StarID[i_ap]), " --> ",
-            #  nrow(this_df_punch), " punches.\n")
-          }
-          
-          # For TESTING: plot image & punched aperture
-          #plotAperture(thisApPunched, title = paste0(df_apertures$FITSfile[i_ap], ":    target ",
-          #  df_apertures$StarID[i_ap]))
-          
-          # Get values from this aperture and image matrix.
-          ev <- evalAperture(thisApPunched, evalSkyFunction=evalSky005)
-          
-          # Replace values in this row of df_apertures.
-          df_apertures$Xcentroid[i_ap]      <- ev$Xcentroid # update centroid.
-          df_apertures$Ycentroid[i_ap]      <- ev$Ycentroid #   " "
-          df_apertures$RawADUMag[i_ap]      <- -2.5 * log10(ev$netFlux) # NB: ev$netFlux=NA for undet star.
-          df_apertures$InstMagSigma[i_ap]   <- (2.5/log(10)) * (ev$netFluxSigma / ev$netFlux)
-          df_apertures$SkyADU[i_ap]         <- ev$skyADU
-          df_apertures$SkySigma[i_ap]       <- ev$skySigma
-          df_apertures$FWHM[i_ap]           <- ev$FWHM
         }
-        df_apertures <- df_apertures %>% filter(!is.na(RawADUMag)) # remove rows for undetected stars.
+        df_apertures <- df_apertures %>%  # remove rows for undetected stars.
+          filter(!is.na(RawADUMag)) %>%
+          filter(apertureOK==TRUE) %>%
+          select(-apertureOK)
       
         # Combine different data sets to make one data frame for this image.
         df_FITSheader <- getFITSheaderInfo(thisFITS_path)
@@ -978,7 +994,7 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
                                      df$StarID[iRow], 
                                      df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
     # cat(paste0(df_chartStarData, collapse="   "), "\n")
-    if (is.na(df_chartStarData)) {  # i.e., if there is no matching star
+    if (is.na(df_chartStarData$Ichart[1])) {  # i.e., if there is no matching star
       df$CatMagError[iRow] <- NA
       df$AUID[iRow] <- NA
     } else {
@@ -1001,7 +1017,7 @@ get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
   matchingRows <- df_chart$label == StarID_before_underscore
   nMatching <- sum(matchingRows)
   if (nMatching <= 0) {
-    return (NA_real_)
+    return (data.frame(Ichart=NA_integer_))
   }
   if (nMatching == 1) {
     iMatch <- which(df_chart$label == StarID_before_underscore)
