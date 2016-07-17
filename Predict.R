@@ -559,9 +559,12 @@ make_df_report <- function(photometry_folder) {
       cat(paste0(">>>>> Unlike Comp Names for line: '", thisLine, "'...Combine is skipped.\n"))
       next
     }
-    if (!allSame(df_combine$CheckName)){
-      cat(paste0(">>>>> Unlike Check Stars for line: '", thisLine, "'...Combine is skipped.\n"))
-      next
+    realCheckNames <- df_combine$CheckName[!is.na(df_combine$CheckName)] # Check Stars could be absent.
+    if(length(realCheckNames) >= 2) {
+      if (!allSame(realCheckNames)){
+        cat(paste0(">>>>> Unlike Check Stars for line: '", thisLine, "'...Combine is skipped.\n"))
+        next
+      }
     }
     if (!allSame(df_combine$Chart)){
       cat(paste0(">>>>> Unlike Chart IDs for line: '", thisLine, "'...Combine is skipped.\n"))

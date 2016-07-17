@@ -689,6 +689,9 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     JD_start       <- get_header_value(header, "JD")
     airmass        <- get_header_value(header, "AIRMASS")
     errorThisFile <- FALSE
+    if (any(is.na(c(objectFromFilename, objectFromFITS)))) {
+      iiii <- 1
+    }
     if (objectFromFilename != objectFromFITS) {
       cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
       nErrors <- nErrors + 1
