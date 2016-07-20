@@ -87,9 +87,11 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
   
   # Parse STAR lines (embedded lines from VPhot sequence):
   starsDirectiveAt <- charmatch("#STARS", lines)
-  df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=starsDirectiveAt, fill=TRUE, strip.white=TRUE, 
-                        comment.char=";", stringsAsFactors = FALSE, 
-                        col.names=c("StarID", "degRA", "degDec", "Mags", "StarType",6:10))
+  # Read table below #STARS line; StarID must be character string (never integers, even if they seem to be).
+  df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=starsDirectiveAt, fill=TRUE, strip.white=TRUE,
+                        comment.char=";", stringsAsFactors = FALSE,
+                        col.names=c("StarID", "degRA", "degDec", "Mags", "StarType",6:10),
+                        colClasses=c("character", "numeric", "numeric", "character", "character"))
   df_star <- df_star[!stri_startswith_fixed(df_star[,1],";"),1:5] # remove comments, keep only 1st 5 cols
   if (nrow(df_star)<=0) {
     df_star <- NA  # no star data, prob if VPhot sequence has not yet been developed, e.g.,first-time FOV).

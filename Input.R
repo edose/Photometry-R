@@ -19,9 +19,9 @@
 #####                     check the 'Perform Calibration' box, click 'OK'.
 #####    finishFITS(AN_rel_folder="200151216")
 ##### Build data frame(s) for modeling.
-#####    Remove any FITS not intended for photometry, to a folder like "\Set Aside".
+#####    Remove any FITS not intended for photometry, to a folder like "\Excluded".
 #####    df_master <- make_df_master(AN_rel_folder="20151216")
-#####    df_image  <- images(AN_rel_folder="20151216")
+####    df_image  <- images(AN_rel_folder="20151216")
 #####    ...then start modeling with Model.R functions.
 
 precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
@@ -585,9 +585,9 @@ images <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     group_by(FITSfile) %>% 
     summarize(nComp=n()) %>% 
     as.data.frame() %>%
-    left_join(df_master %>% select(FOV, FITSfile, Filter, Exposure, Airmass)) %>% 
+    left_join(df_master %>% select(FOV, FITSfile, JD_mid, Filter, Exposure, Airmass)) %>% 
     unique() %>%
-    select(FOV, Filter, Exposure, Airmass, FITSfile, nComp) %>%
+    select(FOV, Filter, Exposure, Airmass, FITSfile, JD_mid, nComp) %>%
     arrange(FOV, Filter, desc(Exposure), FITSfile)
   return (df_image)
 }
@@ -689,9 +689,6 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
     JD_start       <- get_header_value(header, "JD")
     airmass        <- get_header_value(header, "AIRMASS")
     errorThisFile <- FALSE
-    if (any(is.na(c(objectFromFilename, objectFromFITS)))) {
-      iiii <- 1
-    }
     if (objectFromFilename != objectFromFITS) {
       cat(paste(fullPath,": Object mismatch, ", objectFromFilename, " vs ", objectFromFITS, sep=""))
       nErrors <- nErrors + 1

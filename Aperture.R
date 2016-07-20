@@ -56,8 +56,11 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
   # blank line between target groups are helpful but not strictly required.
   
   require(dplyr, quietly = TRUE)
+  # colClasses ensures that columns are read to correct data type (esp. Target as character, not integer).
   df_in <- read.table(textPath, header=TRUE, sep="\t", stringsAsFactors=FALSE, strip.white=TRUE,
-                      comment.char=";") %>%
+                      comment.char=";",
+                      colClasses=c("FOV"="character", "Target"="character", 
+                                   "RA"="character", "Dec"="character")) %>%
     select(FOV, Target, RA, Dec)  
   df_punches <- data.frame()
   targetRA  <- NA
@@ -67,8 +70,8 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
       next
     }
     lineFOV    <- df_in$FOV[i]
-    lineTarget <- as.character(df_in$Target[i])  
-    if (is.na(lineTarget)) {lineTarget <- ""}  # because R may have tried to read Target as an integer
+    # lineTarget <- as.character(df_in$Target[i])  
+    # if (is.na(lineTarget)) {lineTarget <- ""}  # because R may have tried to read Target as an integer
     lineRA     <- df_in$RA[i]
     lineDec    <- df_in$Dec[i]
     if (nchar(lineFOV) >= 1) {             # update target data on (new) target line
