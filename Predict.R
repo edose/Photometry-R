@@ -103,6 +103,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     comps_removed <- 0                           #   "
     # Reject this image's worst comp stars and recalculate, if:
     #   (at least 4 comp stars) AND (criterion1 >= 16  OR  criterion2 >= 20).
+    criterion1 <- NA  # default
+    criterion2 <- NA  # default
     if (nrow(df_estimates_this_image) >= 4) {
       # criterion 1 = how many times worse is the worst comp vs the average of the other comps.
       x <- normalized_weights * resid2

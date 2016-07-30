@@ -289,18 +289,18 @@ modelPlots <- function(modelList) {
   print(plotList$ResidualsInstMag)
   print(plotList$ResidualsExposure)
   
-  # Check for non-linearity of included model parameters.
-  print(plotList$ResidualsAirmass)
-  print(plotList$ResidualsX)
-  print(plotList$ResidualsY)
-  print(plotList$ResidualsVignette)
-  print(plotList$ResidualsCI)
-  
   # Find additional sources of problems.
   print(plotList$ResidualsSky)
   print(plotList$ResidualsJD)
   print(plotList$SkyJD)
 
+  # Check for non-linearity of included model parameters.
+  print(plotList$ResidualsX)
+  print(plotList$ResidualsY)
+  print(plotList$ResidualsVignette)
+  print(plotList$ResidualsCI)
+  print(plotList$ResidualsAirmass)
+  
   # Find outlier images.
   print(plotList$QQ)
   print(plotList$Cirrus)

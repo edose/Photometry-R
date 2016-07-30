@@ -396,18 +396,30 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
           # Do two cycles of centroid refinement (without annulus punch) before accepting centroids.
           # (If far off from center, it may take the first cycle just to get anywhere close.)
           nCycles <- 2
+          oldXcenter <- Xcenter
+          oldYcenter <- Ycenter
           for (iCycle in 1:nCycles) {
             ev <- evalAperture(thisAp, evalSkyFunction=evalSky005)
             emptyAperture <- any(is.na(ev), na.rm=FALSE)
-            if (emptyAperture) {
+            # If anything in evaluation is NA, mark this aperture not OK.
+            if (emptyAperture | ev$FWHM <= 1.0) {
               df_apertures$apertureOK[i_ap] <- FALSE
               break
             } else {
               df_apertures$apertureOK[i_ap] <- TRUE
             }
-            Xcenter <- ev$Xcentroid
-            Ycenter <- ev$Ycentroid
-            thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
+            # If centroid adjustment is reasonably small, make it; otherwise mark this aperture not OK.
+            newXcenter <- ev$Xcentroid
+            newYcenter <- ev$Ycentroid
+            adjustmentPixels <- sqrt( (newXcenter-oldXcenter)^2 + (newYcenter-oldYcenter)^2 )
+            if (adjustmentPixels <= 0.5 * Rinner) {
+              thisAp <- makeRawAperture(thisImage, newXcenter, newYcenter, Rdisc, Rinner, Router)
+              oldXcenter <- newXcenter
+              oldYcenter <- newYcenter
+            } else {
+              df_apertures$apertureOK[i_ap] <- FALSE
+              break
+            }
           }
           
           # Do punches and final aperture evaluation only if aperture is not empty (i.e., if it has signal).
