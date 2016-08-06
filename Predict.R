@@ -35,10 +35,9 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   path_df_master <- make_safe_path(photometry_folder, "df_master.Rdata")
   load(path_df_master)
   source("C:/Dev/Photometry/Model.R")
-  df_filtered <- omitObs(AN_rel_folder=AN_rel_folder)
+  df_filtered <- omitObs(AN_rel_folder=AN_rel_folder) %>% curateEclipserComps()
   path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
   load(path_masterModelList)
-
   
   # COMP STARS: Get raw, predicted mag estimates for ALL eligible Comp Star observations in all filters.
   df_input_comps <- df_filtered %>%
@@ -307,15 +306,16 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   return(df_transformed)
 }
 
-eclipserComps <- function (df_in=df_predictions, starID=NULL, this_filter=NULL) {
+eclipserComps <- function (df_in=df_predictions, fov=NULL, starID=NULL, this_filter=NULL) {
   require(dplyr, quietly=TRUE)
-  df <- df_in %>% filter(StarID==starID) %>% filter(Filter==this_filter) %>%
+  df <- df_in %>% 
+    filter(FOV==fov) %>% 
+    filter(StarID==starID) %>%
+    filter(Filter==this_filter) %>%
     select(Serial, FITSfile, CompIDsUsed)
   set <- df$CompIDsUsed %>% strsplit(",") %>% unlist() %>% unique()
   df_comps <- data.frame(CompID=set, Included=FALSE, stringsAsFactors = FALSE)
-  
-  cat(paste0("Star: ", starID, "   ", this_filter, " filter\n"))
-  
+
   for (numToTest in 1:nrow(df_comps)) {
     base <- df_comps$CompID[df_comps$Included]
     test <- df_comps$CompID[!df_comps$Included]
@@ -337,8 +337,8 @@ eclipserComps <- function (df_in=df_predictions, starID=NULL, this_filter=NULL) 
     }
     df_comps$Included[df_comps$CompID == bestTest] <- TRUE
     cat(paste("    ", sum(df_comps$Included), " comp -> ",
-              maxImagesQualifying," images qualifying,",
-              "#COMPS: ", starID, ",", this_filter, ",",
+              maxImagesQualifying," images qualify,",
+              "-->   #COMPS ", fov, ",", this_filter, ",",
               paste0(df_comps$CompID[df_comps$Included],collapse=","), "\n"))
   }
 }
@@ -656,6 +656,57 @@ make_df_report <- function(photometry_folder) {
   }
 
   return(df_report) # return without final formatting for AAVSO report (leave that to AAVSO() function).
+}
+
+curateEclipserComps <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
+                                df_filtered_master=NULL) {
+  require(dplyr, quietly=TRUE)
+  source('C:/Dev/Photometry/$Utility.R')
+  
+  AN_folder <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  
+  # Get pre-predict file for this AN folder, then parse directive lines.
+  pre_predict_file <- make_safe_path(photometry_folder, "pre-predict.txt")
+  if (!file.exists(pre_predict_file)) {
+    cat("\n>>>>> WARNING: Pre-predict file", omit_file, "does not exist.\n\n")
+    return (df_filtered_master)
+  } else {
+    lines <- readLines(pre_predict_file, warn=FALSE)   # read last line even without EOL character(s).
+    for (iLine in 1:length(lines)) {
+      lines[iLine] <- lines[iLine] %>% 
+        strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
+    }
+    # Detect and collect directive text lines.
+    directiveLines <- lines[stri_detect_regex(lines,'^#')]
+    directiveLines <- directiveLines[!is.na(directiveLines)]
+  }
+  
+  # Process directive lines to curate df_omitted (i.e., to omit observations etc as requested).
+  for (thisLine in directiveLines) {
+    directive <- thisLine %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% 
+      first() %>% trimws() %>% toupper()
+    value     <- thisLine %>% substring(nchar(directive)+1) %>% trimws()  # all but the directive
+    if (is.na(directive)) {directive <- ""}
+    if (directive=="#COMPS") {
+      parms <- value %>% strsplit(",",fixed=TRUE) %>% unlist() %>% trimws() # all parms in a vector
+      if (length(parms) >= 3) {
+        fov     <- parms[1]
+        filter  <- parms[2]
+        compIDs <- parms[-1:-2]  # comparison star to remove for this 
+        to_remove <- df_filtered_master %>%
+          filter(StarType=="Comp") %>%
+          filter(FOV==fov) %>%
+          filter(Filter==filter) %>%
+          filter(!StarID %in% compIDs) %>%
+          select(Serial) 
+        df_filtered_master <- df_filtered_master %>% filter(!Serial %in% to_remove$Serial)
+      } else {
+        cat(paste(">>>>> Can't parse line: ", thisLine))
+      } # if (length(parms)>=3)
+    } # if (directive==#COMPS)
+  } # for thisLine
+  return (df_filtered_master)
 }
 
 imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {

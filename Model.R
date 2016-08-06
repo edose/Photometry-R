@@ -186,7 +186,7 @@ make_df_model <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NU
 
 omitObs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Reads AN folder's df_master and omit.txt, returns df_filtered with requested observations omitted.
-  ##### Typically called by Model.R::modelOneFilter() and Predict.R::predictOneFilter().
+  ##### Typically called by Model.R::modelOneFilter() and Predict.R::predictAll().
   ##### Tested OK 20160117.
   ##### Typical usage: omitObs(AN_rel_folder="20151216")
   require(stringi, quietly=TRUE)
