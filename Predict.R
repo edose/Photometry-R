@@ -5,6 +5,7 @@
 ##### Typical workflow:
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
+#####    eclipserComps(df=df_predictions, fov="ST Tri", this_filter="V")
 #####    eclipserPlot(starID="ST Tri") 
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    -- examine markup report, esp for COMBINES and poor check star agreement.
@@ -80,10 +81,18 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   
   # Here, df_estimates_comps accounts for airmass(extinction) and color (transforms).
   # Now, we will derive per-image cirrus-effect values from them (for all filters together).
-  df_cirrus_effect <- data.frame(Image=images_with_targets, CirrusEffect=NA, CirrusSigma=NA, 
-                                 Criterion1=NA, Criterion2=NA, CompsUsed=NA, CompsRemoved=NA,
+  df_cirrus_effect <- data.frame(Image=images_with_targets, CirrusEffect=NA_real_, CirrusSigma=NA_real_, 
+                                 Criterion1=NA_real_, Criterion2=NA_real_, 
+                                 NumCompsUsed = NA_integer_, CompIDsUsed=NA_character_, 
+                                 NumCompsRemoved=NA_integer_,
                                  stringsAsFactors = FALSE)
   for (image in df_cirrus_effect$Image) {
+    # cat(image,"\n")
+    # if (image %in% c("ASAS_J162540_19123-0008-V.fts",
+    #                  "ASAS_J162540_19123-0009-V.fts",
+    #                  "ASAS_J162540_19123-0010-V.fts")) {   # debug code, temporary 20160731.
+    #   iiii <- 1
+    # }
     df_estimates_this_image <- df_estimates_comps %>% filter(FITSfile==image)
     # cat(paste0(image, "  n=", nrow(df_estimates_this_image), "\n"))
     cirrus_effect_per_comp <- df_estimates_this_image$EstimatedMag - df_estimates_this_image$CatMag
@@ -131,22 +140,24 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
         cirrus_effect_this_image <- weighted.mean(cirrus_effect_per_comp, normalized_weights)
         resid2 <- (cirrus_effect_per_comp - cirrus_effect_this_image)^2
         cirrus_sigma_this_image <- sqrt(v2*sum(normalized_weights * resid2))
-        removed_serials <- df_estimates_this_image[to_remove,"Serial"]
-        comps_used    <- length(score) - sum(to_remove)
-        comps_removed <- sum(to_remove)
+        compIDs_used <- df_estimates_this_image$StarID[!to_remove]
+        num_comps_used    <- length(compIDs_used)
+        num_comps_removed <- nrow(df_estimates_this_image) - num_comps_used
         # Record these omitted comp stars in master comp data frame.
+        removed_serials <- df_estimates_this_image[to_remove,"Serial"]
         df_estimates_comps[df_estimates_comps$Serial %in% removed_serials,"UseInEnsemble"] <- FALSE
       }
     }
     
     # Insert results into this image's row in df_cirrus_effect.
     cirrus_row_this_image <- df_cirrus_effect$Image==image
-    df_cirrus_effect[cirrus_row_this_image,"CirrusEffect"]   <- cirrus_effect_this_image
-    df_cirrus_effect[cirrus_row_this_image,"CirrusSigma"]    <- cirrus_sigma_this_image
-    df_cirrus_effect[cirrus_row_this_image,"Criterion1"]     <- criterion1
-    df_cirrus_effect[cirrus_row_this_image,"Criterion2"]     <- criterion2
-    df_cirrus_effect[cirrus_row_this_image,"CompsUsed"]      <- comps_used
-    df_cirrus_effect[cirrus_row_this_image,"CompsRemoved"]   <- comps_removed
+    df_cirrus_effect[cirrus_row_this_image,"CirrusEffect"]    <- cirrus_effect_this_image
+    df_cirrus_effect[cirrus_row_this_image,"CirrusSigma"]     <- cirrus_sigma_this_image
+    df_cirrus_effect[cirrus_row_this_image,"Criterion1"]      <- criterion1
+    df_cirrus_effect[cirrus_row_this_image,"Criterion2"]      <- criterion2
+    df_cirrus_effect[cirrus_row_this_image,"NumCompsUsed"]    <- num_comps_used
+    df_cirrus_effect[cirrus_row_this_image,"CompIDsUsed"]     <- compIDs_used %>% paste(collapse=",")
+    df_cirrus_effect[cirrus_row_this_image,"NumCompsRemoved"] <- num_comps_removed
   }
   
   # TARGET and CHECK STARS: # Get best mag estimates for ALL such observations in all filters.
@@ -294,6 +305,42 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   path_transformed <- make_safe_path(photometry_folder, "df_transformed.Rdata")
   save(df_transformed, file=path_transformed, precheck=FALSE)
   return(df_transformed)
+}
+
+eclipserComps <- function (df_in=df_predictions, starID=NULL, this_filter=NULL) {
+  require(dplyr, quietly=TRUE)
+  df <- df_in %>% filter(StarID==starID) %>% filter(Filter==this_filter) %>%
+    select(Serial, FITSfile, CompIDsUsed)
+  set <- df$CompIDsUsed %>% strsplit(",") %>% unlist() %>% unique()
+  df_comps <- data.frame(CompID=set, Included=FALSE, stringsAsFactors = FALSE)
+  
+  cat(paste0("Star: ", starID, "   ", this_filter, " filter\n"))
+  
+  for (numToTest in 1:nrow(df_comps)) {
+    base <- df_comps$CompID[df_comps$Included]
+    test <- df_comps$CompID[!df_comps$Included]
+    maxImagesQualifying <- 0
+    bestSet <- "(none)"
+    for (thisTest in test) {
+      numImagesQualifying <- 0
+      testComps <- c(base, thisTest)
+      for (thisRow in 1:nrow(df)) {
+        thisSet <- df$CompIDsUsed[thisRow] %>% strsplit(",") %>% unlist()
+        if (all(thisTest %in% thisSet)) {
+          numImagesQualifying <- numImagesQualifying + 1
+        }
+      }
+      if(numImagesQualifying > maxImagesQualifying) {
+        bestTest <- thisTest
+        maxImagesQualifying <- numImagesQualifying
+      }
+    }
+    df_comps$Included[df_comps$CompID == bestTest] <- TRUE
+    cat(paste("    ", sum(df_comps$Included), " comp -> ",
+              maxImagesQualifying," images qualifying,",
+              "#COMPS: ", starID, ",", this_filter, ",",
+              paste0(df_comps$CompID[df_comps$Included],collapse=","), "\n"))
+  }
 }
 
 markupReport <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {

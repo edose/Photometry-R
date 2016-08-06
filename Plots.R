@@ -3,8 +3,11 @@
 ##### Initiated Jan 17 2016.
 ##### Eric Dose, Bois d'Arc Observatory, Kansas
 
-eclipserPlot <- function(df=df_predictions, starID=NULL) {
+eclipserPlot <- function(df=df_predictions, starID=NULL, filter=NULL) {
   if (is.null(df) | is.null(starID)){ stop("Please give non-NULL parms.")}
+  if (!is.null(filter)) {
+    df <- df %>% filter(Filter==filter)
+  }
   df_eclipser <- (df %>% filter(StarID==starID) %>% arrange(JD_num))
   x <- df_eclipser$JD_num
   y <- df_eclipser$TransformedMag
