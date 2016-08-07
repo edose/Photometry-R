@@ -5,7 +5,8 @@
 ##### Typical workflow:
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
-#####    eclipserComps(df=df_predictions, fov="ST Tri", this_filter="V")
+#####    -- if eclipsers: eclipserComps(df=df_predictions, fov="ST Tri", this_filter="V")
+#####    -- if curating eclipser comps, re-run predictAll() (no change in call signature)
 #####    eclipserPlot(starID="ST Tri") 
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    -- examine markup report, esp for COMBINES and poor check star agreement.
@@ -35,7 +36,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   path_df_master <- make_safe_path(photometry_folder, "df_master.Rdata")
   load(path_df_master)
   source("C:/Dev/Photometry/Model.R")
-  df_filtered <- omitObs(AN_rel_folder=AN_rel_folder) %>% curateEclipserComps()
+  df_filtered <- omitObs(AN_rel_folder=AN_rel_folder)
+  df_filtered <- curateEclipserComps(AN_rel_folder = AN_rel_folder, df_filtered_master = df_filtered)
   path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
   load(path_masterModelList)
   

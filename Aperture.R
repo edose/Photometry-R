@@ -183,20 +183,21 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
 ##### Support-only functions not normally called by user. ######################
 
 makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=10, Rinner=15, Router=20) {
+  # 20160806 (v1.0.2): Recast everything to ZERO-BASED pixel locations within images and subimages.
   require(dplyr, quietly=TRUE)
-  Xsize <- dim(image)[1]
-  Ysize <- dim(image)[2]
+  Xsize <- dim(image)[2]
+  Ysize <- dim(image)[1]
   testRadius  <- Router + 1.5
-  Xlow  <- max(1, floor(Xcenter-testRadius))
-  Xhigh <- min(Xsize, ceiling(Xcenter+testRadius))
-  Ylow  <- max(1, floor(Ycenter-testRadius))
-  Yhigh <- min(Ysize, ceiling(Ycenter+testRadius))
+  Xlow  <- max(0, floor(Xcenter-testRadius))         # in zero-based pixels
+  Xhigh <- min(Xsize-1, ceiling(Xcenter+testRadius)) #  "
+  Ylow  <- max(0, floor(Ycenter-testRadius))         #  "
+  Yhigh <- min(Ysize-1, ceiling(Ycenter+testRadius)) #  "
   R2disc <- Rdisc^2
   R2inner <- Rinner^2
   R2outer <- Router^2
-  # cat(paste("XYsize=", Xsize, Ysize, "\n"))
-  # cat(paste("   X,Y=", Xcenter, Ycenter, "Xlims=", Xlow, Xhigh, "Ylims=", Ylow, Yhigh, "\n"))
-  subImage <- image[Xlow:Xhigh, Ylow:Yhigh] # FITS image matrices: X is *FIRST* index, Y is SECOND index.
+  #cat(paste("XYsize=", Xsize, Ysize, "\n"))
+  #cat(paste("   X,Y=", Xcenter, Ycenter, "Xlims=", Xlow, Xhigh, "Ylims=", Ylow, Yhigh, "\n"))
+  subImage <- image[(Ylow+1):(Yhigh+1), (Xlow+1):(Xhigh+1)] # FITS images: X is *FIRST* index, Y is SECOND index.
   X <- matrix((0:(ncol(subImage)-1))+Xlow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=TRUE)
   Y <- matrix((0:(nrow(subImage)-1))+Ylow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=FALSE)
   dX <- X - Xcenter
@@ -370,7 +371,7 @@ plotImage <- function (image, Xlow, Ylow, title="") {
   require(ggplot2, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   df <- expand.grid(X=Xlow:(Xlow+ncol(image)-1), Y=Ylow:(Ylow+nrow(image)-1)) %>%
-    mutate(Z=as.vector(image))
+    mutate(Z=as.vector(t(image)))
   p <- ggplot(df, aes(X,Y)) + geom_raster(aes(fill=Z)) + 
     scale_fill_gradientn(colours=c("#111111", "#EEEEEE")) +
     scale_y_reverse() + ggtitle(title)
@@ -528,30 +529,27 @@ evalSky008 <- function (aperture) {
   return (skyADU) 
 }
 
-testEvalAperture <- function(evalSkyFunction=NULL, Rdisc=8, Rinner=11, Router=16) {
-  require(dplyr)
-  image     <- getImageMatrix("J:/Astro/Images/C14/20151016/Calibrated/V1804 Cyg-0007-V.fts")
-  df_aptest <- read.table("C:/Dev/Photometry/df_aptest.txt", header=TRUE) %>% select(-N)
-  df_punch  <- df_aptest %>% select(X=Xpunch, Y=Ypunch)
-  df_output <- matrix(0, nrow=nrow(df_aptest), ncol=3) %>% as.data.frame()
-  colnames(df_output) <- c("netFluxClear","netFluxInterf","netFluxInterfPunched")
-  
-  for (i in 1:nrow(df_aptest)) {
-    df_output$netFluxClear[i] <- 
-      (makeRawAperture(image, df_aptest$Xclear[i], df_aptest$Yclear[i], Rdisc=8, Rinner=11, Router=16) %>% 
-         evalAperture(evalSkyFunction))$netFlux
-    df_output$netFluxInterf[i] <- 
-      (makeRawAperture(image, df_aptest$Xinterf[i], df_aptest$Yinterf[i], Rdisc=8, Rinner=11, Router=16) %>% 
-         evalAperture(evalSkyFunction))$netFlux
-    df_output$netFluxInterfPunched[i] <- 
-      (makeRawAperture(image, df_aptest$Xinterf[i], df_aptest$Yinterf[i], Rdisc=8, Rinner=11, Router=16) %>% 
-         punch(df_punch) %>%
-         evalAperture(evalSkyFunction))$netFlux
+testEvalAperture <- function(Xstart=15, Ystart=15, Rdisc=4, Rinner=6, Router=8) {
+  image <- matrix(data=0, nrow=32, ncol=30)
+  Xlow <- 0
+  Ylow <- 0
+  Xcenter <- 14 # the actual gaussian X centroid
+  Ycenter <- 17 #      ""             Y     "
+  maxADU  <- 1000
+  baseSigma <- 2.5
+  X <- Xlow + (0:(ncol(image)-1))
+  Y <- Ylow + (0:(nrow(image)-1))
+  X2 <- (X - Xcenter) ^ 2 # vector
+  set.seed(321)
+  for (iRow in 1:nrow(image)) {
+    Y2 <- (Y[iRow] - Ycenter) ^ 2  # scalar
+    image[iRow,1:ncol(image)] <- maxADU * exp(-(X2^2 + Y2^2)/(baseSigma^2)) + rnorm(n=ncol(image),sd=10)
   }
-  cat("mean: ", paste0(df_output %>% select(netFluxClear, netFluxInterf, netFluxInterfPunched) %>% 
-                         apply(2,mean) %>% round(digits=0), collapse="   "),"\n")
-  cat("  sd: ", paste0(df_output %>% select(netFluxClear, netFluxInterf, netFluxInterfPunched) %>% 
-                         apply(2,sd) %>% round(digits=0), collapse="   "),"\n")
-  return (cbind(df_aptest, df_output))
+  thisAp <- makeRawAperture(image, Xstart, Ystart, Rdisc, Rinner, Router)
+  ev <- evalAperture(thisAp)
+  plotImage(thisAp$subImage, thisAp$Xlow, thisAp$Ylow, title="testEvalAperture()")
+  return(ev)
+  
 }
+
 
