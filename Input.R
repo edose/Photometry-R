@@ -366,13 +366,6 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
         # For each FITS file derived from this FOV, run APT to make APT output file.
     for (thisFITS_path in FOV_FITS_paths) {
       require(stringi, quietly = TRUE)
-      cat(thisFITS_path,"\n")
-      if (any(stri_endswith_fixed(thisFITS_path, 
-                                  c("HAT_P_3-0002-V.fts", 
-                                    "HAT_P_3-0003-V.fts", 
-                                    "HAT_P_3-0004-V.fts")))) {   # debug code, temporary 20160806.
-        iiii <- 1
-      }
       df_apertures <- getXYfromWCS(df_RADec, thisFITS_path)
       df_apertures <- df_apertures %>%
         mutate(RawADUMag=NA_real_, InstMagSigma=NA_real_, 
@@ -396,18 +389,9 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
         df_apertures$MaxADU_Ur <- getMaxADU_Ur(thisFITS_path, df_apertures, Rdisc)
         source("C:/Dev/Photometry/Aperture.R")
         for (i_ap in 1:nrow(df_apertures)) {
-          # Make "aperture" object from this image and this aperture center (X,Y).
-          
-          if (i_ap == nrow(df_apertures)) {
-            iiii <- 1
-          }
-          
           Xcenter <- df_apertures$Xcentroid[i_ap]
           Ycenter <- df_apertures$Ycentroid[i_ap]
           thisAp <- makeRawAperture(thisImage, Xcenter, Ycenter, Rdisc, Rinner, Router)
-          # if (i_ap == nrow(df_apertures)) {
-          #   plotImage(thisAp$subImage, thisAp$Xlow, thisAp$Ylow, title="Initial")
-          # }
 
           # Do two cycles of centroid refinement (without annulus punch) before accepting centroids.
           # (If far off from center, it may take the first cycle just to get anywhere close.)
@@ -430,9 +414,6 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
             adjustmentPixels <- sqrt( (newXcenter-oldXcenter)^2 + (newYcenter-oldYcenter)^2 )
             if (adjustmentPixels <= 0.5 * Rinner) {
               thisAp <- makeRawAperture(thisImage, newXcenter, newYcenter, Rdisc, Rinner, Router)
-              # if (i_ap == nrow(df_apertures)) {
-              #   plotImage(thisAp$subImage, thisAp$Xlow, thisAp$Ylow, title=paste0("Iteration ", iCycle))
-              # }
               oldXcenter <- newXcenter
               oldYcenter <- newYcenter
             } else {
@@ -546,10 +527,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   
   # Add SkyBias column.
   df_master <- addBiasTerm(df_master, biasType="sigma")
-  
-  # Write out entire APT text log (all runs).
-  # write(allAPTstdout, APTstdout_path)
-  
+
   # Add column for old (Ur) filenames.
   df_rename <- read.table(make_safe_path(AN_folder, "Photometry/File-renaming.txt"), 
                           header=TRUE, sep=";", stringsAsFactors=FALSE, strip.white=TRUE) %>%

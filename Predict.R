@@ -109,8 +109,9 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     cirrus_sigma_this_image <- ifelse(nrow(df_estimates_this_image)==1, 
                                       df_estimates_this_image[1,"CatMagError"], 
                                       sqrt(v2*sum(normalized_weights * resid2)))
-    comps_used <- nrow(df_estimates_this_image)  # default; kept if all comps good.
-    comps_removed <- 0                           #   "
+    compIDs_used <- df_estimates_this_image$StarID   # default; kept if all comps good.
+    num_comps_used <- nrow(df_estimates_this_image)  #   "
+    num_comps_removed <- 0                           #   "
     # Reject this image's worst comp stars and recalculate, if:
     #   (at least 4 comp stars) AND (criterion1 >= 16  OR  criterion2 >= 20).
     criterion1 <- NA  # default
@@ -702,12 +703,22 @@ curateEclipserComps <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fold
           filter(Filter==filter) %>%
           filter(!StarID %in% compIDs) %>%
           select(Serial) 
+        # Remove unwanted comp star observations.
         df_filtered_master <- df_filtered_master %>% filter(!Serial %in% to_remove$Serial)
+        # TODO: Remove images with too few remaining comp star observations.
+        
+        
+        
+        
+        
       } else {
         cat(paste(">>>>> Can't parse line: ", thisLine))
       } # if (length(parms)>=3)
     } # if (directive==#COMPS)
   } # for thisLine
+  
+  # Now, (optionally) remove observations with too few 
+  
   return (df_filtered_master)
 }
 

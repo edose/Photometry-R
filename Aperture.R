@@ -185,8 +185,8 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
 makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=10, Rinner=15, Router=20) {
   # 20160806 (v1.0.2): Recast everything to ZERO-BASED pixel locations within images and subimages.
   require(dplyr, quietly=TRUE)
-  Xsize <- dim(image)[2]
-  Ysize <- dim(image)[1]
+  Xsize <- dim(image)[1]
+  Ysize <- dim(image)[2]
   testRadius  <- Router + 1.5
   Xlow  <- max(0, floor(Xcenter-testRadius))         # in zero-based pixels
   Xhigh <- min(Xsize-1, ceiling(Xcenter+testRadius)) #  "
@@ -197,9 +197,11 @@ makeRawAperture <- function (image, Xcenter, Ycenter, Rdisc=10, Rinner=15, Route
   R2outer <- Router^2
   #cat(paste("XYsize=", Xsize, Ysize, "\n"))
   #cat(paste("   X,Y=", Xcenter, Ycenter, "Xlims=", Xlow, Xhigh, "Ylims=", Ylow, Yhigh, "\n"))
-  subImage <- image[(Ylow+1):(Yhigh+1), (Xlow+1):(Xhigh+1)] # FITS images: X is *FIRST* index, Y is SECOND index.
-  X <- matrix((0:(ncol(subImage)-1))+Xlow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=TRUE)
-  Y <- matrix((0:(nrow(subImage)-1))+Ylow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=FALSE)
+  
+  ##### NB: In FITS image *matrices*, X is *FIRST* index (vertical), Y is SECOND index (horizontal).
+  subImage <- image[(Xlow+1):(Xhigh+1), (Ylow+1):(Yhigh+1)]
+  X <- matrix((0:(nrow(subImage)-1))+Xlow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=FALSE)
+  Y <- matrix((0:(ncol(subImage)-1))+Ylow, nrow=nrow(subImage), ncol=ncol(subImage), byrow=TRUE)
   dX <- X - Xcenter
   dY <- Y - Ycenter
   dist2 <- ((dX*dX) + (dY*dY))
@@ -261,12 +263,12 @@ evalAperture <- function (aperture, evalSkyFunction=evalSky005) {
     (aperture$discPixels*(skySigma^2)) + 
     ( (1) * ((aperture$discPixels*skySigma)^2) /aperture$skyPixels ) # the 1 here was pi/2 in paper.
   )
-  nCol <- ncol(aperture$subImage)
   nRow <- nrow(aperture$subImage)
+  nCol <- ncol(aperture$subImage)
   Xlow     <- aperture$Xlow
   Ylow     <- aperture$Ylow
-  X <- matrix((0:(nCol-1))+Xlow, nrow=nRow, ncol=nCol, byrow=TRUE)
-  Y <- matrix((0:(nRow-1))+Ylow, nrow=nRow, ncol=nCol, byrow=FALSE)
+  X <- matrix((0:(nRow-1))+Xlow, nrow=nRow, ncol=nCol, byrow=FALSE)
+  Y <- matrix((0:(nCol-1))+Ylow, nrow=nRow, ncol=nCol, byrow=TRUE)
   Xcentroid <- sum(X*netADU, na.rm=TRUE) / netFlux
   Ycentroid <- sum(Y*netADU, na.rm=TRUE) / netFlux
   dX <- X - Xcentroid
@@ -371,7 +373,7 @@ plotImage <- function (image, Xlow, Ylow, title="") {
   require(ggplot2, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   df <- expand.grid(X=Xlow:(Xlow+ncol(image)-1), Y=Ylow:(Ylow+nrow(image)-1)) %>%
-    mutate(Z=as.vector(t(image)))
+    mutate(Z=as.vector(image))
   p <- ggplot(df, aes(X,Y)) + geom_raster(aes(fill=Z)) + 
     scale_fill_gradientn(colours=c("#111111", "#EEEEEE")) +
     scale_y_reverse() + ggtitle(title)
