@@ -4,6 +4,8 @@
 ##### Eric Dose, Bois d'Arc Observatory, Kansas
 
 eclipserPlot <- function(df=df_predictions, starID=NULL, filter=NULL) {
+  # Reversed mag scale to put minima at bottom as customary 20160813.
+  require(dplyr, quietly=TRUE)
   if (is.null(df) | is.null(starID)){ stop("Please give non-NULL parms.")}
   if (!is.null(filter)) {
     df <- df %>% filter(Filter==filter)
@@ -12,8 +14,11 @@ eclipserPlot <- function(df=df_predictions, starID=NULL, filter=NULL) {
   x <- df_eclipser$JD_num
   y <- df_eclipser$TransformedMag
   JD_mid_floor <-df_eclipser$JD_mid %>% as.numeric() %>% min() %>% floor()
-  plot(x,y,main=starID,
-       xlab=paste0("JD(mid) - ", JD_mid_floor), 
+  y_top <- min(y) - 0.08 * (max(y)-min(y))
+  y_base <- max(y) + 0.08 * (max(y)-min(y))
+  plot(x,y, ylim=c(y_base, y_top),
+       main=starID,
+       xlab=paste0("JD(mid) - ", JD_mid_floor),
        ylab="best Mag")
 }
 

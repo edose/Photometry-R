@@ -151,8 +151,23 @@ make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fol
   photometry_folder <- make_safe_path(AN_folder, "Photometry")
   masterModelList_path <- make_safe_path(photometry_folder, "masterModelList.Rdata")
   save(masterModelList, file=masterModelList_path, precheck=FALSE)
+  
+  # Make a template-only pre-predict.txt file if one doesn't already exist.
+  pre_predictPath <- make_safe_path(photometry_folder, "pre-predict.txt")
+  if (!file.exists(pre_predictPath)) {
+    lines <- c(
+      paste0(";----- This is pre-predict.txt for AN folder ", AN_rel_folder),
+      paste0(";----- Omit comp stars (by FOV, filter, & StarID) from input to predictAll()."),
+      paste0(";----- Example directive lines:\n;"),
+      paste0(";#COMPS  Obj, V, 132, 133 144    ; to omit from FOV 'Obj': ",
+             "comp stars '132' '133' and '144' in filter 'V'"),
+      paste0(";\n;----- Add your directive lines:\n;\n\n")
+    )
+    writeLines(lines, con=pre_predictPath)
+  }
   cat("saveAllModels() has saved this AN's masterModelList to:\n   ", masterModelList_path, 
-      "\n   Now ready for predictAll().\n")
+      "   and has written a 'pre-predict.txt' template file.",
+      "\n   This AN is now ready for predictAll().\n")
 }
 
 

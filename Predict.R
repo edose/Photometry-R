@@ -5,7 +5,7 @@
 ##### Typical workflow:
 #####    Ensure masterModelList is ready to go from ListV, etc via Model.R::make_masterModelList().
 #####    df_predictions <- predictAll(AN_rel_folder="20151216")
-#####    -- if eclipsers: eclipserComps(df=df_predictions, fov="ST Tri", this_filter="V")
+#####    -- if eclipsers: eclipserComps(df=df_predictions, fov="ST Tri", starID="ST Tri", this_filter="V")
 #####    -- if curating eclipser comps, re-run predictAll() (no change in call signature)
 #####    eclipserPlot(starID="ST Tri") 
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
@@ -295,7 +295,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   cat("Transformed predictions saved to", path_transformed, "\n",
       "   and report_map.txt is ensured available in the same folder\n",
       "Now you are ready to:\n",
-      "   1. run eclipserPlots(starID='???') if any eclipsers,\n",
+      "   1. run eclipserPlot(starID='???') if any eclipsers,\n",
       "   2. run markup Report and group/select target observations in report_map.txt,\n",
       "   3. repeat 1 & 2 as needed\n",
       "   4. run AAVSO() to make report, and\n",
@@ -685,7 +685,7 @@ curateEclipserComps <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fold
     directiveLines <- directiveLines[!is.na(directiveLines)]
   }
   
-  # Process directive lines to curate df_omitted (i.e., to omit observations etc as requested).
+  # Process directive lines to curate df_omitted (i.e., to keep only the comp stars that user wants).
   for (thisLine in directiveLines) {
     directive <- thisLine %>% strsplit("[ \t]",fixed=FALSE) %>% unlist() %>% 
       first() %>% trimws() %>% toupper()
@@ -696,19 +696,18 @@ curateEclipserComps <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fold
       if (length(parms) >= 3) {
         fov     <- parms[1]
         filter  <- parms[2]
-        compIDs <- parms[-1:-2]  # comparison star to remove for this 
+        # compIDs is a vector of the comp star StarID values TO KEEP.
+        compIDs <- parms[-1:-2] %>% strsplit(" ", fixed=TRUE) %>% unlist() %>% trimws()
+        # comparison star(s) to remove for this FOV and filter (comp stars user did not specify to keep)
         to_remove <- df_filtered_master %>%
           filter(StarType=="Comp") %>%
           filter(FOV==fov) %>%
           filter(Filter==filter) %>%
-          filter(!StarID %in% compIDs) %>%
+          filter(!StarID %in% compIDs) %>%  # note the ! (not) operator, here
           select(Serial) 
-        # Remove unwanted comp star observations.
+        # Remove unwanted comp star observations (i.e., to_remove$Serial)
         df_filtered_master <- df_filtered_master %>% filter(!Serial %in% to_remove$Serial)
-        # TODO: Remove images with too few remaining comp star observations.
-        
-        
-        
+        # TODO: Remove images with too few remaining comp star observations (maybe later).
         
         
       } else {
