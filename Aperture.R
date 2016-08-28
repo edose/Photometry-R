@@ -70,7 +70,7 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
       next
     }
     lineFOV    <- df_in$FOV[i]
-    # lineTarget <- as.character(df_in$Target[i])  
+    lineTarget <- as.character(df_in$Target[i])  
     # if (is.na(lineTarget)) {lineTarget <- ""}  # because R may have tried to read Target as an integer
     lineRA     <- df_in$RA[i]
     lineDec    <- df_in$Dec[i]

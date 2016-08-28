@@ -8,8 +8,8 @@ make_safe_path <- function (folder, filename, extension="") {
   gsub("/+","/",paste(trimws(folder),"/",trimws(filename),trimws(extension),sep=""),fixed=FALSE)
 }
 
-read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_version="1.1") {
-  # Updated May 2016 for FOV schema version 1.1 (still intended only for R)
+read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_version="1.2") {
+  # Updated August 27 2016 for FOV schema version 1.2 (for both R and Python:photrix)
   require(stringi, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
@@ -22,7 +22,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
     lines[iLine] <- lines[iLine] %>% 
       strsplit(";",fixed=TRUE) %>% unlist() %>% first() %>% trimws()  # remove comments
   }
-
+  
   # Parse DIRECTIVE LINES -> FOV_data (a list)
   directiveLines <- lines[stri_detect_regex(lines,'^#')] # detect and collect directive text lines.
   # Nested function:
@@ -40,23 +40,64 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
   }
   
   # Parse directives (other than PUNCH and Star lines).
+  #---------- Header section.
   FOV_data$FOV_name <- directive_value("#FOV_NAME")
-  center <- directive_value("#CENTER") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
-  FOV_data$RA_center  <- get_RA_deg(center[1])
-  FOV_data$Dec_center <- get_Dec_deg(center[2])
+  center_words <- directive_value("#CENTER") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  FOV_data$RA_center  <- get_RA_deg(center_words[1])
+  FOV_data$Dec_center <- get_Dec_deg(center_words[2])
   FOV_data$Chart <- directive_value("#CHART")
   FOV_data$Date <- directive_value("#DATE")
+  #---------- Main-Target section
   FOV_data$Main_target <- directive_value("#MAIN_TARGET")
-  FOV_data$Target_type <- directive_value("#TARGET_TYPE")
+  main_target_value <- directive_value("#TARGET_TYPE")
+  FOV_data$Target_class <- main_target_value %>% 
+    strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws() %>% first()
+  FOV_data$Target_type  <- main_target_value %>% substring(nchar(FOV_data$Target_class)+1) %>% trimws()
   FOV_data$Period <- directive_value("#PERIOD") %>% as.double()
-  FOV_data$JD_min <- directive_value("#JD_MIN") %>% as.double()
-  vmags <- directive_value("#VMAG") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
-  FOV_data$VMag_bright <- vmags[1] %>% as.double()
-  FOV_data$VMag_faint  <- vmags[2] %>% as.double()
-  colors <- directive_value("#COLOR_VI") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
-  FOV_data$ColorVI_bright <- colors[1] %>% as.double()
-  FOV_data$ColorVI_faint  <- colors[2] %>% as.double()
-  FOV_data$Stare <- directive_value("#STARE") %>% as.double()
+  JD_words <- directive_value("#JD") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  FOV_data$JD_bright <- JD_words[1] %>% as.double()
+  if (length(JD_words) >= 2) {
+    FOV_data$JD_faint <- JD_words[2] %>% as.double()
+  } else {
+    FOV_data$JD_faint <- FOV_data$JD_bright - FOV_data$Period / 2.0
+    cat(">>>>> FOV", FOV_name, " --> JD_faint missing, set to JD_bright - 1/2 Period.\n")
+  }
+  mag_v_words <- directive_value("#MAG_V") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  FOV_data$Mag_V_bright <- mag_v_words[1] %>% as.double()
+  if (length(mag_v_words) >= 2) {
+    FOV_data$Mag_V_faint <- mag_v_words[2] %>% as.double()
+  } else {
+    FOV_data$Mag_V_faint <- FOV_data$Mag_V_bright
+    cat(">>>>> FOV", FOV_name, " --> Mag_V_faint missing, set to Mag_V_bright.\n")
+  }
+  color_vi_words <- directive_value("#COLOR_VI") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  FOV_data$Color_VI_bright <- color_vi_words[1] %>% as.double()
+  if (length(color_vi_words) >= 2) {
+    FOV_data$Color_VI_faint <- color_vi_words[2] %>% as.double()
+  } else {
+    FOV_data$Color_VI_faint <- FOV_data$Color_VI_bright
+    cat(">>>>> FOV", FOV_name, " --> Color_VI_faint missing, set to Color_VI_bright.\n")
+  }
+  #---------- Observing section.
+  FOV_data$Priority <- directive_value("#PRIORITY") %>% as.double()
+  gap_score_words <- directive_value("#GAP_SCORE_DAYS") %>% 
+    strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  if (length(gap_score_words) >= 3) {  # normal case.
+    FOV_data$Gap_score_days <- gap_score_words[1:3] %>% as.double()
+  } else {
+    FOV_data$Gap_score_days <- FOV_data_Period * c(0.01, 0.02, 0.05)
+  }
+  stare_words <- directive_value("#STARE") %>% strsplit("[ \t]+",fixed=FALSE) %>% unlist() %>% trimws()
+  if (length(stare_words) >= 3) {  # normal case.
+    FOV_data$Stare_reference <- stare_words[1]
+    FOV_data$Stare_start <- stare_words[2] %>% as.double()
+    FOV_data$Stare_stop <- stare_words[3] %>% as.double()
+  } else {
+    FOV_data$Stare_reference <- NA
+    FOV_data$Stare_start <- 0
+    FOV_data$Stare_stop <- 0
+  }
+  FOV_data$SPV_obs_per_period <- directive_value("#SPV_OBS_PER_PERIOD") %>% as.double()
   ACP_directive_lines <- directive_value("#ACP_DIRECTIVES") %>% strsplit("|",fixed=TRUE) %>% unlist() %>% trimws()
   if (length(ACP_directive_lines) >= 3) {
     FOV_data$ACP_directives <- ACP_directive_lines
@@ -64,7 +105,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
     FOV_data$ACP_directives <- NA
   }
   FOV_data$ACP_comments <- directive_value("#ACP_COMMENTS")
-  
+  #---------- AAVSO Sequence section.
   # Parse #PUNCH lines (for later removing pixels from sky annulus in make_df_master()).
   df_punch <- data.frame(StarID=NA_character_, DNorth=NA_real_, DEast=NA_real_,
                          stringsAsFactors = FALSE)[FALSE,]
@@ -78,9 +119,9 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
       dNorth <- as.numeric(terms[1])
       dEast  <- as.numeric(terms[2])
       df_thisLine <- data.frame(StarID=starID,  # should match one star name from the Star lines below.
-                            DNorth=dNorth,      # in degrees; 0=360=North, 90=East
-                            DEast=dEast,        # in arcseconds from center of named star
-                            stringsAsFactors = FALSE)
+                                DNorth=dNorth,      # in degrees; 0=360=North, 90=East
+                                DEast=dEast,        # in arcseconds from center of named star
+                                stringsAsFactors = FALSE)
       df_punch <- rbind(df_punch, df_thisLine)
     }
   }
@@ -101,11 +142,11 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
     df_star$MagV <- NA
     df_star$MagR <- NA
     df_star$MagI <- NA
-
+    
     # temporary lookup/cross-reference data frame
     mag_xref <- data.frame(passband=c("MagU","MagB","MagV","MagR","MagI"), stringsAsFactors = FALSE)
     rownames(mag_xref) <- c("1024","1","2","4","8") 
-  
+    
     # Make CH_rows (a row for each check and comp star) & Target (unknown) rows.
     CH_rows <- df_star[df_star$StarType %in% c("C","H"),]
     for (irow in 1:nrow(CH_rows)) {
@@ -119,7 +160,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
         }
       }
     }
-  
+    
     # Add target (unknown) rows to make new df_star data frame.
     df_star <- rbind(CH_rows, df_star[df_star$StarType=="T",])  # Add rows for Target (unknown) stars.
     df_star$StarType[df_star$StarType=="C"] <- "Comp"           # Rename types...inelegant of course
@@ -127,7 +168,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
     df_star$StarType[df_star$StarType=="T"] <- "Target"         #  "
     df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
     df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
-  
+    
     # Diagnostic checks & messages before returning results.
     if (substr(FOV_name,1,4)!="Std_") {
       if (sum(df_star$StarType=="Check")<=0) {
