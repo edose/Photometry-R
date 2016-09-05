@@ -319,6 +319,7 @@ eclipserComps <- function (df_in=df_predictions, fov=NULL, starID=NULL, this_fil
   set <- df$CompIDsUsed %>% strsplit(",") %>% unlist() %>% unique()
   df_comps <- data.frame(CompID=set, Included=FALSE, stringsAsFactors = FALSE)
 
+  cat("EDIT file 'pre-predict.txt' with one of the following lines:\n")
   for (numToTest in 1:nrow(df_comps)) {
     base <- df_comps$CompID[df_comps$Included]
     test <- df_comps$CompID[!df_comps$Included]
@@ -626,9 +627,10 @@ make_df_report <- function(photometry_folder) {
       cat(paste0(">>>>> Range of JD times is too large for line: '", thisLine, "'...Combine is skipped.\n"))
       next
     }
-    if (abs(diff(range(df_combine$Airmass))) > 0.100){
-      cat(paste0(">>>>> Range of Airmasses is too large for line: '", thisLine, 
-                 "'...Combine is skipped.\n"))
+    if (abs(diff(range(df_combine$Airmass))) > 0.400){
+      cat(paste0(">>>>> Range of Airmasses (", 
+                 diff(range(df_combine$Airmass)), 
+                 ") is too large for line: '", thisLine, "'...Combine is skipped.\n"))
       next
     }
     
