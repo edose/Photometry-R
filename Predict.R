@@ -786,8 +786,9 @@ imputeTargetCIs <- function (df_predictions, CI_filters, transforms) {
 
 extractCI_points <- function (df, CI_filters, transforms) {
   ##### df must be a data frame from df_predictions, subset holding one ModelStarID.
+  
   require(dplyr, quietly=TRUE)
-  maxDiffJD <- 15 / (24*60) # max time between paired obs, in (Julian) days, typically 15 minutes.
+  maxDiffJD <- 60 / (24*60) # max time between paired obs, in (Julian) days, (60 minutes as of 20160926).
   df <- df %>% filter(Filter %in% CI_filters) %>% arrange(JD_num)
   
   df_CI_point <- data.frame(stringsAsFactors = FALSE)
