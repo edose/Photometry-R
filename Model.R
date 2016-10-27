@@ -3,7 +3,7 @@
 #####    in which case the models use only standards and high-quality comps.
 #####  
 ##### Typical usages:
-#####   listV <- modelOneFilter(AN_rel_folder="20151216", filter="V", maxCatMagError=0.02)
+#####   listV <- modelOneFilter(AN_rel_folder="20151216", filter="V", maxCatMagError=0.01)
 #####   [or to get star effect:] modelOneFilter(AN_rel_folder="20151216", filter="V", fit_starID=TRUE)$star 
 #####        %>% arrange(desc(abs(CatalogEffect)))
 #####   For each model, curate its input points by editing the omit.txt.
