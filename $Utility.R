@@ -374,7 +374,7 @@ getFITSheaderValues <- function (FITS_path=NULL, keys=NULL) {
 }
 
 get_VSP_json_list <- function (chartID=NULL, chart_folder="C:/Dev/Photometry/FOV/Chart", 
-                               make_file_if_absent=TRUE) {
+                               make_file_if_absent=TRUE, verbose=FALSE) {
   if (is.null(chartID)) {stop(">>>>> You must provide an existing AAVSO chartID to get_VSP_json_list",
                                     "e.g., chartID='X15603BRV'.")}
   # get from chart_input_folder; if not available, import from AAVSO website and write JSON for later use.
@@ -383,13 +383,30 @@ get_VSP_json_list <- function (chartID=NULL, chart_folder="C:/Dev/Photometry/FOV
     json_text <- readLines(con=fullpath)
   } else {
     URL <- paste0("https://www.aavso.org/apps/vsp/api/chart/", trimws(chartID), "/?format=json")
-    json_text <- readLines(con=URL, warn=FALSE)
-    if (make_file_if_absent == TRUE) { writeLines(json_text, con=fullpath) }
+    json_text <- tryCatch ( readLines(con=URL, warn=FALSE),
+                            error = function(cond) { 
+                              if (verbose==TRUE) {message(paste("Cannot open ", URL))}
+                              return(NA)},
+                            warning = function(cond) { 
+                              if (verbose==TRUE) {message(paste("Cannot open: ", URL))}
+                              return(NA)},
+                            finally = function() {}
+    )
+    if (make_file_if_absent == TRUE) { 
+      if (!is.na(json_text)) {
+          writeLines(json_text, con=fullpath) 
+      }
+    }
   }
-  require(jsonlite, quietly=TRUE)
-  json_list <- fromJSON(json_text)
+  if (!is.na(json_text)) {
+    require(jsonlite, quietly=TRUE)
+    json_list <- fromJSON(json_text)
+  } else {
+    json_list <- NA_character_
+  }
   return (json_list)
 }
+
 
 #####  LOCAL UTILITIES mostly for plots  #######################################################
 

@@ -82,11 +82,26 @@ precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     } else {
       anyError <- TRUE
     }
+    
+    # Check that FOV file exists.
     this_FOV_list <- read_FOV_file(objectFromFITS)
     FOV_file_absent <- (this_FOV_list %>% is.na() %>% first())
     if (FOV_file_absent) {
       cat(paste0("\n>>>>> No FOV file >", objectFromFITS, "< for FITS file >", relPath, "<\n"))
       anyError <- TRUE
+    }
+    
+    if (iRow==10) {this_FOV_list$FOV_data$Chart<- "XXX"}  # for testing only.
+    
+    # Check that VSP JSON Chart file (for catalog errors) exists.
+    if (!FOV_file_absent) {
+      if (all(is.na(get_VSP_json_list(this_FOV_list$FOV_data$Chart, 
+                                  chart_folder="C:/Dev/Photometry/FOV/Chart", 
+                                  make_file_if_absent=FALSE )))) {
+        cat(paste0("\n>>>>> No JSON Chart file >", 
+                   this_FOV_list$FOV_data$Chart, "< for FOV >", objectFromFITS, "<\n"))
+        anyError <- TRUE
+      }
     }
     
     # Check that plate solution is present.
@@ -1061,7 +1076,7 @@ get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
     catMagError <- NA_real_  
     } else {
       if (!is.na(catMagError)) {
-        if (catMagError <= 0) { catMagError <- NA_real_ }  # VSP-JSON records missing errors as zero.
+        if (catMagError <= 0) { catMagError <- NA_real_ }  # VSP-JSON recordS missing errors as zero or NA.
       }
     }
   auid <- df_chart$auid[iMatch]
