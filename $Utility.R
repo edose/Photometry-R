@@ -1,6 +1,8 @@
 ##### $Utility.R, Support for VS Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun September 18 2015.
 
+CURRENT_FORMAT_VERSION = "1.4"  # version defined Jan 8 2017.
+
 ##### SUPPORT FILES ONLY in this file. ##########################################
 
 make_safe_path <- function (folder, filename, extension="") {
@@ -9,7 +11,8 @@ make_safe_path <- function (folder, filename, extension="") {
 }
 
 doFOVs <- function(func=NULL) {
-  # Call external function 'func' on all current FOVs (objects).
+  # Call external READ-ONLY function 'func' on all current FOVs (objects): for info, not to modify FOVs.
+  # Tested with FOV v 1.4 Jan 9 2017.
   FOV_input_folder = "C:/Dev/Photometry/FOV"
   require(dplyr)
   require(stringi)
@@ -27,9 +30,16 @@ doFOVs <- function(func=NULL) {
   # cat(unique(target_types))
 }
 
+# Example function 'func' for above doFOVs().
+fff <- function(fov) {
+  if (substring(fov$FOV_data$FOV_name, 1, 1) %in% c("A", "Z")) {
+    cat(paste0(fov$FOV_data$FOV_name, " :: ", fov$FOV_data$Main_target, "\n"))
+  }
+}
 
-read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_version="1.3") {
-  # Updated Sept 5 2016 for FOV schema version 1.3 (for both R and Python:photrix)
+read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", 
+                           format_version=CURRENT_FORMAT_VERSION) {
+  # Updated Jan 8 2017 for FOV schema version 1.4 (for both R and Python:photrix)
   require(stringi, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
@@ -61,7 +71,6 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
     }
     words
   }
-  
   FOV_data <- list()
 
   #---------- Header section.
@@ -81,17 +90,34 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", format_
   #---------- Main-Target section
   FOV_data$Main_target <- directive_value("#MAIN_TARGET")
   FOV_data$Target_type  <- directive_value("#TARGET_TYPE")
+  FOV_data$Motive <- directive_value("#MOTIVE")
   FOV_data$Period <- directive_value("#PERIOD") %>% as.double()
-  # as of 1.3, require both values for: JD, Mag_V, Color_VI.
+  # as of 1.4, require bright & faint values for: JD, Mag_V, Color_VI, 
+  #    optional second (minimum) values (for eclipsers).
   JD_words <- directive_words("#JD")
   FOV_data$JD_bright <- JD_words[1] %>% as.double()
   FOV_data$JD_faint  <- JD_words[2] %>% as.double()
+  if (length(JD_words) >= 3) {
+    FOV_data$JD_second <- JD_words[3] %>% as.double()
+  } else {
+    FOV_data$JD_second <- NA_real_
+  }
   mag_v_words <- directive_words("#MAG_V")
   FOV_data$Mag_V_bright <- mag_v_words[1] %>% as.double()
   FOV_data$Mag_V_faint  <- mag_v_words[2] %>% as.double()
+  if (length(mag_v_words) >= 3) {
+    FOV_data$Mag_V_second <- mag_v_words[3] %>% as.double()
+  } else {
+    FOV_data$Mag_V_second <- NA_real_
+  }
   color_vi_words <- directive_words("#COLOR_VI")
   FOV_data$Color_VI_bright <- color_vi_words[1] %>% as.double()
   FOV_data$Color_VI_faint <- color_vi_words[2] %>% as.double()
+  if (length(color_vi_words) >= 3) {
+    FOV_data$Color_VI_second <- color_vi_words[3] %>% as.double()
+  } else {
+    FOV_data$Color_VI_second <- NA_real_
+  }
 
   #---------- Observing section.
   obs_style_words <- directive_words("#OBSERVING_STYLE")
