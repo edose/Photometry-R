@@ -1,7 +1,7 @@
 ##### $Utility.R, Support for VS Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun September 18 2015.
 
-CURRENT_FORMAT_VERSION = "1.4"  # version defined Jan 8 2017.
+CURRENT_FORMAT_VERSION = "1.5"  # version defined April 2017.
 
 ##### SUPPORT FILES ONLY in this file. ##########################################
 
@@ -22,24 +22,28 @@ doFOVs <- function(func=NULL) {
     filter(!stri_startswith_fixed(FOV_files,"$"))
   target_types <- NULL
   for (i in 1:nrow(df)) {
-    # cat(i, ": ", df$FOV_files[i], "\n")
     fov <- read_FOV_file(df$FOV_files[i] %>% strsplit(".txt") %>% unlist())
-    # target_types <- target_types %>% c(fov$FOV_data$Target_type)
     func(fov)
   }
   # cat(unique(target_types))
 }
 
 # Example function 'func' for above doFOVs().
-fff <- function(fov) {
-  if (substring(fov$FOV_data$FOV_name, 1, 1) %in% c("A", "Z")) {
-    cat(paste0(fov$FOV_data$FOV_name, " :: ", fov$FOV_data$Main_target, "\n"))
+print_all_jds <- function(fov) {
+  if (fov$FOV_data$Target_type == "Eclipser"){
+    d = fov$FOV_data
+    cat(paste0(d$FOV_name, " ; ", d$Period, " ; 1'min ; ", d$JD_faint, "\n"))
+    if (!is.null(d$JD_second)) {
+      cat(paste0(d$FOV_name, " ; ", d$Period, " ; 2'min ; ", d$JD_second, "\n"))
+    }
   }
+  #  if (substring(fov$FOV_data$FOV_name, 1, 1) %in% c("A", "Z")) {
+  #    cat(paste0(fov$FOV_data$FOV_name, " :: ", fov$FOV_data$Main_target, "\n"))
 }
 
 read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV", 
                            format_version=CURRENT_FORMAT_VERSION) {
-  # Updated Jan 8 2017 for FOV schema version 1.4 (for both R and Python:photrix)
+  # Updated April 2017 for FOV schema version 1.5 (for both R and Python:photrix)
   require(stringi, quietly=TRUE)
   require(dplyr, quietly=TRUE)
   FOV_path   <- make_safe_path(FOV_folder,trimws(FOV_name),".txt")
@@ -91,9 +95,9 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV",
   FOV_data$Main_target <- directive_value("#MAIN_TARGET")
   FOV_data$Target_type  <- directive_value("#TARGET_TYPE")
   FOV_data$Motive <- directive_value("#MOTIVE")
+  FOV_data$ACP_comments <- directive_value("#ACP_COMMENTS")
   FOV_data$Period <- directive_value("#PERIOD") %>% as.double()
-  # as of 1.4, require bright & faint values for: JD, Mag_V, Color_VI, 
-  #    optional second (minimum) values (for eclipsers).
+  # Required bright & faint values for: JD, Mag_V, Color_VI; optional second (min) values (for eclipsers).
   JD_words <- directive_words("#JD")
   FOV_data$JD_bright <- JD_words[1] %>% as.double()
   FOV_data$JD_faint  <- JD_words[2] %>% as.double()
@@ -161,25 +165,6 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV",
   }
   FOV_data$Observing_table <- df_observing
   
-  stare_hours_words <- directive_words("#STARE_HOURS")
-  FOV_data$Stare_reference <- NA   # defaults for absence of this directive.
-  FOV_data$Stare_start     <- 0.0  #  "
-  FOV_data$Stare_stop      <- 0.0  #  "
-  if (!is.na(stare_hours_words[1])){
-    if (length(stare_hours_words) >= 2) {
-      if (stare_hours_words[1]=="ANY" & length(stare_hours_words) >= 2) {
-        FOV_data$Stare_reference <- stare_hours_words[1]
-        FOV_data$Stare_start     <- 0.0
-        FOV_data$Stare_stop      <- stare_hours_words[2] %>% as.double()
-      }
-      if (stare_hours_words[1] %in% c("MIN","MAX") & length(stare_hours_words) >= 3) {
-        FOV_data$Stare_reference <- stare_hours_words[1]
-        FOV_data$Stare_start     <- stare_hours_words[2] %>% as.double()
-        FOV_data$Stare_stop      <- stare_hours_words[3] %>% as.double()
-      }
-    }
-  }
-
   FOV_data$Max_exposure <- directive_value("#MAX_EXPOSURE") %>% as.double()
   FOV_data$Priority <- directive_value("#PRIORITY") %>% as.double()
   gap_score_words <- directive_words("#GAP_SCORE_DAYS")
@@ -188,16 +173,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV",
   } else {
     FOV_data$Gap_score_days <- FOV_data$Period * c(0.01, 0.02, 0.05)
   }
-  
-  ACP_directive_lines <- directive_value("#ACP_DIRECTIVES") %>% strsplit("|",fixed=TRUE) %>% 
-    unlist() %>% trimws()
-  if (length(ACP_directive_lines) >= 3) {
-    FOV_data$ACP_directives <- ACP_directive_lines
-  } else {
-    FOV_data$ACP_directives <- NA
-  }
-  FOV_data$ACP_comments <- directive_value("#ACP_COMMENTS")
-  
+
   #---------- AAVSO Sequence section.
   # Parse #PUNCH lines (for later removing pixels from sky annulus in make_df_master()).
   df_punch <- data.frame(StarID=NA_character_, DNorth=NA_real_, DEast=NA_real_,
@@ -220,47 +196,69 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV",
   }
   
   # Parse STAR lines (embedded lines from VPhot sequence):
+  #    As of FOV version 1.5, each line contains mags *and* errors; JSON chart files no longer used at all.
   starsDirectiveAt <- charmatch("#STARS", lines)
   # Read table below #STARS line; StarID must be character string (never integers, even if they seem to be).
   df_star <- read.table(FOV_path,header=FALSE, sep="\t", skip=starsDirectiveAt, fill=TRUE, strip.white=TRUE,
                         comment.char=";", stringsAsFactors = FALSE,
-                        col.names=c("StarID", "degRA", "degDec", "Mags", "StarType",6:10),
+                        col.names=c("StarID", "degRA", "degDec", "StarType", "MagString"),
                         colClasses=c("character", "numeric", "numeric", "character", "character"))
-  df_star <- df_star[!stri_startswith_fixed(df_star[,1],";"),1:5] # remove comments, keep only 1st 5 cols
+  df_star <- df_star[!stri_startswith_fixed(df_star[,1],";"),] # remove comments
   if (nrow(df_star)<=0) {
-    df_star <- NA  # no star data, prob if VPhot sequence has not yet been developed, e.g.,first-time FOV).
+    df_star <- NA  # no star data is not allowed.
   } else {         # normal case where star data was read properly.
-    df_star$MagU <- NA
+    df_star$MagU <- NA  # add column with default NA, many of which are to be overwritten
+    df_star$ErrU <- NA
     df_star$MagB <- NA
+    df_star$ErrB <- NA
     df_star$MagV <- NA
+    df_star$ErrV <- NA
     df_star$MagR <- NA
+    df_star$ErrR <- NA
     df_star$MagI <- NA
+    df_star$ErrI <- NA
     
-    # temporary lookup/cross-reference data frame
-    mag_xref <- data.frame(passband=c("MagU","MagB","MagV","MagR","MagI"), stringsAsFactors = FALSE)
-    rownames(mag_xref) <- c("1024","1","2","4","8") 
-    
-    # Make CH_rows (a row for each check and comp star) & Target (unknown) rows.
-    CH_rows <- df_star[df_star$StarType %in% c("C","H"),]
-    for (irow in 1:nrow(CH_rows)) {
-      mag_entries <- trimws(unlist(strsplit(CH_rows$Mags[irow],  "|", fixed=TRUE)))
-      for (mag in mag_entries) {
-        mag_key_value <- trimws(unlist(strsplit(mag,"_",fixed=TRUE)))
-        column_name   <- mag_xref[mag_key_value[1],]
-        if (!is.na(column_name)) {
-          mag_value <- as.numeric(mag_key_value[2])
-          CH_rows[irow,column_name] <- ifelse(mag_value==0, NA, mag_value) # VPhot writes zero to mean NA.
+    # Extract all magnitude and error data into df_star.
+    for (irow in 1:nrow(df_star)){
+      # next line because R code expects, e.g., "Comp" not "comp"
+      df_star$StarType[irow] = stri_trans_totitle(df_star$StarType[irow]) 
+      if (df_star$StarType[irow] %in% c("Comp", "Check")){
+        words = trimws(unlist(strsplit(df_star$MagString[irow],  " ", fixed=TRUE)))
+        for (iword in 1:length(words)){
+          subword = trimws(unlist(strsplit(words[iword], "=", fixed=TRUE)))
+          filter = subword[1]
+          subword2 = trimws(unlist(strsplit(subword[2],  "(", fixed=TRUE)))
+          mag = as.double(subword2[1])
+          if (mag == 0)  mag = NA_real_
+          error = as.double(stri_replace_all_fixed(subword2[2], ")", "")) / 1000.0
+          if (error == 0)  error = NA_real_
+          
+          if (filter=="U") {
+            df_star$MagU[irow] = mag
+            df_star$ErrU[irow] = error
+          }
+          if (filter=="B") {
+            df_star$MagB[irow] = mag
+            df_star$ErrB[irow] = error
+          }
+          if (filter=="V") {
+            df_star$MagV[irow] = mag
+            df_star$ErrV[irow] = error
+          }
+          if (filter=="R") {
+            df_star$MagR[irow] = mag
+            df_star$ErrR[irow] = error
+          }
+          if (filter=="I") {
+            df_star$MagI[irow] = mag
+            df_star$ErrI[irow] = error
+          }
         }
       }
     }
-    
-    # Add target (unknown) rows to make new df_star data frame.
-    df_star <- rbind(CH_rows, df_star[df_star$StarType=="T",])  # Add rows for Target (unknown) stars.
-    df_star$StarType[df_star$StarType=="C"] <- "Comp"           # Rename types...inelegant of course
-    df_star$StarType[df_star$StarType=="H"] <- "Check"          #  "
-    df_star$StarType[df_star$StarType=="T"] <- "Target"         #  "
-    df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
-    df_star$Mags <- NULL                                        # Remove no-longer-needed Mags column.
+
+    # df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
+    df_star$MagString <- NULL                                  # Remove no-longer-needed Mags column.
     
     # Diagnostic checks & messages before returning results.
     if (substr(FOV_name,1,4)!="Std_") {

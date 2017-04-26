@@ -45,7 +45,7 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     extinction <- NA
     formula_string <- paste0(formula_string, " + Airmass")
   } else {
-    extinction <- list(V=0.2,R=0.1,I=0.08)[filter] %>% unlist() # user-given (not fitted) value.
+    extinction <- list(V=0.167,R=0.128,I=0.103)[filter] %>% unlist() # user-given (fit values for DSW site)
     thisOffset <- thisOffset + extinction * df_model$Airmass
     cat(">>>>> Extinction (Airmass) not fit: value fixed at ", extinction, "\n", sep="")
   }
@@ -157,9 +157,9 @@ make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fol
   if (!file.exists(pre_predictPath)) {
     lines <- c(
       paste0(";----- This is pre-predict.txt for AN folder ", AN_rel_folder),
-      paste0(";----- Omit comp stars (by FOV, filter, & StarID) from input to predictAll()."),
+      paste0(";----- Select comp stars (by FOV, filter, & StarID) from input to predictAll()."),
       paste0(";----- Example directive lines:\n;"),
-      paste0(";#COMPS  Obj, V, 132, 133 144    ; to omit from FOV 'Obj': ",
+      paste0(";#COMPS  Obj, V, 132, 133 144    ; to KEEP from FOV 'Obj': ",
              "comp stars '132' '133' and '144' in filter 'V'"),
       paste0(";\n;----- Add your directive lines:\n;\n\n")
     )

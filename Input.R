@@ -14,10 +14,11 @@
 #####    precheck(AN_rel_folder="20151216")
 #####    beforeCal(AN_rel_folder="20151216")
 #####    (get any missing Masters from prev ANs),
-#####    In MaxIm: (1) 'Set Calibration' to this /CalibrationMasters, 'Replace w/Masters'
+#####    In MaxIm: (1) 'Set Calibration' to this AN's /CalibrationMasters, 'AutoGenerate (Clear Old)', 
+#####                  'Replace w/Masters'
 #####              (2) Edit/File Batch and Convert, Select All /Uncalibrated, Destination Path=/Calibrated, 
 #####                     check the 'Perform Calibration' box, click 'OK'.
-#####    finishFITS(AN_rel_folder="200151216")
+#####    finishFITS(AN_rel_folder="20151216")
 ##### Build data frame(s) for modeling.
 #####    Remove any FITS not intended for photometry, to a folder like "\Excluded".
 #####    df_master <- make_df_master(AN_rel_folder="20151216")
@@ -91,16 +92,16 @@ precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
       anyError <- TRUE
     }
 
-    # Check that FOV's VSP-JSON Chart file (to get catalog errors) exists for this FITS.
-    if (!FOV_file_absent) {
-      if (all(is.na(get_VSP_json_list(this_FOV_list$FOV_data$Chart, 
-                                  chart_folder="C:/Dev/Photometry/FOV/Chart", 
-                                  make_file_if_absent=FALSE, verbose=FALSE )))) {
-        cat(paste0("\n>>>>> No JSON Chart file >", 
-                   this_FOV_list$FOV_data$Chart, "< for FOV >", objectFromFITS, "<\n"))
-        anyError <- TRUE
-      }
-    }
+    # # Check that FOV's VSP-JSON Chart file (to get catalog errors) exists for this FITS.
+    # if (!FOV_file_absent) {
+    #   if (all(is.na(get_VSP_json_list(this_FOV_list$FOV_data$Chart, 
+    #                               chart_folder="C:/Dev/Photometry/FOV/Chart", 
+    #                               make_file_if_absent=FALSE, verbose=FALSE )))) {
+    #     cat(paste0("\n>>>>> No JSON Chart file >", 
+    #                this_FOV_list$FOV_data$Chart, "< for FOV >", objectFromFITS, "<\n"))
+    #     anyError <- TRUE
+    #   }
+    # }
     
     # Check that plate solution exists within header of this FITS.
     plateSolvedValue <- toupper(trimws(get_header_value(header, platesolvedHeaderKey)))
@@ -115,6 +116,7 @@ precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   
   # Summarize results.
   cat("\n\n")
+  cat(paste0("----- ", nrow(df), " FITS files.\n"))
   if (length(FITS_missing_platesolve) >= 1) {
     anyError <- TRUE
     for (i in 1:length(FITS_missing_platesolve)) {
@@ -560,9 +562,9 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   save(df_master, file=df_master_path, precheck=FALSE) # recover via: load_df_master(AN_rel_folder="201..").
   cat("make_df_master() has saved df_master to", df_master_path, "\n   now returning df_master.\n")
   
-  # Copy relevant FOV files and Chart files into folders inside AN folder.
+  # Copy relevant FOV files files into folders inside AN folder as part of AN processing documentation.
   copyFOVs(AN_rel_folder=AN_rel_folder, FOV_names=FOVs)
-  copyCharts(AN_rel_folder=AN_rel_folder, chart_names=(df_master$Chart %>% unique()))
+  # copyCharts(AN_rel_folder=AN_rel_folder, chart_names=(df_master$Chart %>% unique())) # no longer used.
   
   # Make a template-only omit.txt file if omit.txt doesn't already exist.
   PhotometryFolder <- make_safe_path(AN_folder, "Photometry")
@@ -658,9 +660,13 @@ copyToUr <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL){
     df$RelDir[iRow] <- substring(df$RelPath[iRow],1,nchar(df$RelPath[iRow])-nchar(filename)-1)
   }
   subDirs <- df %>% filter(RelDir!="") %>% select(RelDir) %>% unique() %>% unlist()
-  if (length(subDirs>=1)) {
-      dir.create(make_safe_path(UrFolder,subDirs))
+  # if (length(subDirs>=1)) {
+  for (iDir in 1:length(subDirs)) {
+      dir.create(make_safe_path(UrFolder,subDirs[iDir]), recursive=TRUE)
   }
+  
+  
+  
   CopiedOK <- file.copy(df$OldFullPath, df$NewFullPath)
   cat("CopyToUr() has copied",sum(CopiedOK),"of",length(CopiedOK),"files to",UrFolder,"\n")
 }
@@ -759,9 +765,16 @@ renameACP <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
                          substring(dirsToRemove,1,nchar(dirsToRemove)-1),
                          dirsToRemove) # remove any trailing "/"
   if (length(dirsToRemove>=1)) {
-    cat("Deleting", length(dirsToRemove), "directories:\n")
-    write.table(dirsToRemove, file="", row.names=FALSE, col.names=FALSE) 
-    unlink(make_safe_path(AN_folder,dirsToRemove), recursive=TRUE, force=TRUE)
+    cat("NOTE:", length(dirsToRemove), 
+        "directories (& their subdirs) marked for deletion, please confirm each:\n")
+    for (iDir in 1:length(dirsToRemove)){
+      answerYES <- "Y" == (cat(paste("   Delete directory ", dirsToRemove[iDir], "? (y/n)")) %>%
+                             readline() %>% trimws() %>% toupper())
+      if (answerYES) {
+        unlink(make_safe_path(AN_folder,dirsToRemove[iDir]), recursive=TRUE, force=TRUE)
+      }
+    }
+    # write.table(dirsToRemove, file="", row.names=FALSE, col.names=FALSE) 
   }
   
   # write data frame as text file and as R object, return data frame.
@@ -986,9 +999,9 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
   #   df_star_data_numbered = FOV star data.
   #   df_FITSheader = data from FITS file header (Filter used, JD of exposure, etc; uniform for all rows)
   #   FOV_data = data about the FOV (uniform across all rows of output df)
-
-  # Join APT, FOV star, and APT data  to give master data frame.
-  #   CI is color index V-I; RawADUMag is ADU-based Instrument Mag not yet corrected for exposure time.
+  # Join these to give master data frame for one FITS file.
+  
+  # CI is color index V-I; RawADUMag is ADU-based Instrument Mag not yet corrected for exposure time.
   
   df_star_data_numbered <- df_star_data_numbered %>%
     mutate(ModelStarID=paste0(FOV_data$FOV_name,"_",df_star_data_numbered$StarID))  # as "ST Tri_137"
@@ -1004,84 +1017,91 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
     mutate(InstMag = RawADUMag + 2.5 * log10(Exposure)) %>%
     select(-Object,-RawADUMag)
   
-  # Populate column "CatMag" from MagX column where X is FILTER (from FITS header).
-  magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
-  columnIndex <- match(magColumnName, colnames(df))
-  df$CatMag <- df[,columnIndex]  # populate CatMag column
-  df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
-
-  # Populate column "CatMagError" and "AUID" from JSON chart file (cached from VSP download).
-  json_list <- get_VSP_json_list(FOV_data$Chart)
-  for (iRow in 1:nrow(df)) {
-    df_chartStarData <- get_chartStarData(json_list$photometry, 
-                                     df$StarID[iRow], 
-                                     df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
-    # cat(paste0(df_chartStarData, collapse="   "), "\n")
-    if (is.na(df_chartStarData$Ichart[1])) {  # i.e., if there is no matching star
-      df$CatMagError[iRow] <- NA
-      df$AUID[iRow] <- NA
-    } else {
-      df$CatMagError[iRow] <- df_chartStarData$CatMagError[1]
-      df$AUID[iRow] <- df_chartStarData$AUID[1]
-    }
-  }
+  # In this joined df, populate columns CatMag and CatMagError.
+  df_catMagData <- get_catMagData()
+  
+  ##### charts & the next block not necessary as CatMag and CatMagError data are directly in FOV files 1.5+.
+  # # Populate column "CatMag" from MagX column where X is FILTER (from FITS header).
+  # magColumnName <- paste("Mag",df_FITSheader$Filter[1],sep="")
+  # columnIndex <- match(magColumnName, colnames(df))
+  # df$CatMag <- df[,columnIndex]  # populate CatMag column
+  # df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove columns.
+  # 
+  # # Populate column "CatMagError" from JSON chart file (cached from VSP download). [AUID removed 4/2017]
+  # json_list <- get_VSP_json_list(FOV_data$Chart)
+  # for (iRow in 1:nrow(df)) {
+  #   df_chartStarData <- get_chartStarData(json_list$photometry, 
+  #                                    df$StarID[iRow], 
+  #                                    df$degRA[iRow], df$degDec[iRow], df$Filter[iRow])
+  #   # cat(paste0(df_chartStarData, collapse="   "), "\n")
+  #   if (is.na(df_chartStarData$Ichart[1])) {  # i.e., if there is no matching star
+  #     df$CatMagError[iRow] <- NA
+  #   } else {
+  #     df$CatMagError[iRow] <- df_chartStarData$CatMagError[1]
+  #   }
+  # }
+  
   return(df)
 }
 
-get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
-  # Returns v small df of data for one star, extracted from AAVSO/VSP chart's photometry table.
-  # TESTS OK May 15 2016.
-  # df_chart is the photometry table.
-  # StarID is from a AAVSO/VPhot sequence (as embedded in FOV file).
-  # RA, Dec are included to choose correct star (if ambiguous) from chart photometry table.
-  # filter is required to get correct data point. (R & I correspond to table's Rc and Ic.)
-  require(dplyr, quietly=TRUE)
-  StarID_before_underscore <- strsplit(StarID, "_") %>% unlist() %>% first()
-  matchingRows <- df_chart$label == StarID_before_underscore
-  nMatching <- sum(matchingRows)
-  if (nMatching <= 0) {
-    return (data.frame(Ichart=NA_integer_))
-  }
-  if (nMatching == 1) {
-    iMatch <- which(df_chart$label == StarID_before_underscore)
-  } else {
-    iMatch <- NA
-    # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"),
-    for (iRow in 1:nrow(df_chart)) {
-      if (matchingRows[iRow]) {
-        dist_arcsec <- 3600 * distanceRADec(RA, Dec,
-                                            get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
-        if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
-          iMatch <- iRow
-          break
-        }
-      }
-    }
-  }
-  df_star <- df_chart$bands[[iMatch]]  # small df for this star in the chart.
-  
-  # Now correct for VSP charts' filter names.
-  xref_filter <- data.frame(name_FOV=c("R","I"), name_chart=c("Rc", "Ic"), stringsAsFactors = FALSE)
-  lookup_filter <- filter
-  if (filter %in% xref_filter$name_FOV) {
-    lookup_filter <- xref_filter$name_chart[which(xref_filter$name_FOV==filter)]
-  }
+get_CatMagData <- function() {}
 
-  # Construct small data frame of results to return.
-  catMagError <- df_star$error[match(lookup_filter, df_star$band)]
-  # cat(paste(df_chart$auid[iMatch], lookup_filter, catMagError))
-  if (! lookup_filter %in% df_star$band) {  # if this filter is absent.
-    catMagError <- NA_real_  
-  } else {
-    if (!is.na(catMagError)) {
-      if (catMagError <= 0) { catMagError <- NA_real_ }  # VSP-JSON recordS missing errors as zero or NA.
-    }
-  }
-  auid <- df_chart$auid[iMatch]
-  return (data.frame(Ichart=iMatch, CatMagError=catMagError, AUID=auid, stringsAsFactors=FALSE))
-}
+
+##### get_chartStarData() no longer relevant, as data previously extracted from JSON chart files 
+#####    are directly gotten from FOV files as of FOV version 1.5.
+# get_chartStarData <- function(df_chart, StarID="", RA, Dec, filter) {
+#   # Returns v small df of data for one star, extracted from AAVSO/VSP chart's photometry table.
+#   # TESTS OK May 15 2016.
+#   # df_chart is the photometry table.
+#   # StarID is from a AAVSO/VPhot sequence (as embedded in FOV file).
+#   # RA, Dec are included to choose correct star (if ambiguous) from chart photometry table.
+#   # filter is required to get correct data point. (R & I correspond to table's Rc and Ic.)
+#   require(dplyr, quietly=TRUE)
+#   StarID_before_underscore <- strsplit(StarID, "_") %>% unlist() %>% first()
+#   matchingRows <- df_chart$label == StarID_before_underscore
+#   nMatching <- sum(matchingRows)
+#   if (nMatching <= 0) {
+#     return (data.frame(Ichart=NA_integer_))
+#   }
+#   if (nMatching == 1) {
+#     iMatch <- which(df_chart$label == StarID_before_underscore)
+#   } else {
+#     iMatch <- NA
+#     # This block if there are multiple matches (e.g., FOV file has stars "104" and "104_1"),
+#     for (iRow in 1:nrow(df_chart)) {
+#       if (matchingRows[iRow]) {
+#         dist_arcsec <- 3600 * distanceRADec(RA, Dec,
+#                                             get_RA_deg(df_chart$ra[iRow]), get_Dec_deg(df_chart$dec[iRow]))
+#         if (dist_arcsec < 20) {  # if close enough, this is the star ID, so use this row number.
+#           iMatch <- iRow
+#           break
+#         }
+#       }
+#     }
+#   }
+#   df_star <- df_chart$bands[[iMatch]]  # small df for this star in the chart.
+#   
+#   # Now correct for VSP charts' filter names.
+#   xref_filter <- data.frame(name_FOV=c("R","I"), name_chart=c("Rc", "Ic"), stringsAsFactors = FALSE)
+#   lookup_filter <- filter
+#   if (filter %in% xref_filter$name_FOV) {
+#     lookup_filter <- xref_filter$name_chart[which(xref_filter$name_FOV==filter)]
+#   }
+# 
+#   # Construct small data frame of results to return.
+#   catMagError <- df_star$error[match(lookup_filter, df_star$band)]
+#   if (! lookup_filter %in% df_star$band) {  # if this filter is absent.
+#     catMagError <- NA_real_  
+#   } else {
+#     if (!is.na(catMagError)) {
+#       if (catMagError <= 0) { catMagError <- NA_real_ }  # VSP-JSON recordS missing errors as zero or NA.
+#     }
+#   }
+#   return (data.frame(Ichart=iMatch, CatMagError=catMagError, stringsAsFactors=FALSE))
+# }
 
 copyFOVs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, FOV_names=NULL) {
+  # Used by make_df_master() to document the exact FOV files used in processing this AN data set.
   require(dplyr, quietly=TRUE)
   folder_from <- "C:/Dev/Photometry/FOV"
   folder_to   <- make_safe_path(AN_top_folder, AN_rel_folder) %>% make_safe_path("FOV")
@@ -1095,16 +1115,18 @@ copyFOVs <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, F
   }
 }
 
-copyCharts <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, chart_names=NULL) {
-  require(dplyr, quietly=TRUE)
-  folder_from <- "C:/Dev/Photometry/FOV/Chart"
-  folder_to   <- make_safe_path(AN_top_folder, AN_rel_folder) %>% make_safe_path("Chart")
-  if (! dir.exists(folder_to)) {
-    dir.create(folder_to)
-  }
-  for (name in chart_names) {
-    path_from <- make_safe_path(folder_from, name, ".txt")
-    path_to   <- make_safe_path(folder_to,   name, ".txt")
-    file.copy(path_from, path_to, overwrite=TRUE, copy.mode=TRUE, copy.date=TRUE)
-  }
-}
+##### copyCharts() is no longer used to document AN processing.
+# copyCharts <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, chart_names=NULL) {
+#   # Used to copy charts used in 
+#   require(dplyr, quietly=TRUE)
+#   folder_from <- "C:/Dev/Photometry/FOV/Chart"
+#   folder_to   <- make_safe_path(AN_top_folder, AN_rel_folder) %>% make_safe_path("Chart")
+#   if (! dir.exists(folder_to)) {
+#     dir.create(folder_to)
+#   }
+#   for (name in chart_names) {
+#     path_from <- make_safe_path(folder_from, name, ".txt")
+#     path_to   <- make_safe_path(folder_to,   name, ".txt")
+#     file.copy(path_from, path_to, overwrite=TRUE, copy.mode=TRUE, copy.date=TRUE)
+#   }
+# }

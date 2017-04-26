@@ -1,4 +1,4 @@
-listEclipsers2 <- function(JD=2457633.75, hours_tol=4, secondaries='integrated') {
+listEclipsers2 <- function(JD=2457633.75, hours_tol=4, secondaries='integrated', min_priority=0.5) {
   # secondaries expected to be one of 'integrated', 'separate', or 'none'.
   require(dplyr, quietly=TRUE)
   require(stringi)
@@ -58,12 +58,12 @@ listEclipsers2 <- function(JD=2457633.75, hours_tol=4, secondaries='integrated')
     type <- fov$FOV_data$Target_type
     if (type == "Eclipser") {
       if (fov$FOV_data$Period > 0) {
-        if (fov$FOV_data$Priority > 0) {
+        if (fov$FOV_data$Priority >= min_priority) {
           
-          # Treat PRIMARY minimum ("_faint"):
+          # Treat PRIMARY minimum ("JD_faint"):
           df <- add_all_rows_this_min(df, JD, days_tol, fov, fov$FOV_data$JD_faint, 1)
           
-          #Treat SECONDARY minimum ("_second") IF they are requested.
+          #Treat SECONDARY minimum ("JD_second") IF available in FOV and requested by user.
           if (secondaries %in% c('integrated', 'separate')) {
             if (!is.na(fov$FOV_data$JD_second)) {
               df <- add_all_rows_this_min(df, JD, days_tol, fov, fov$FOV_data$JD_second, 2)
@@ -191,4 +191,24 @@ extract_FOV_data <- function () {
   for (type in unique(types)) {
     cat("  ", type,"\n")
   }
+}
+
+compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filename) {
+  if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
+                                    "e.g., AN_rel_folder='20151216'.")}
+  require(dplyr, quietly=TRUE)
+  require(stringi, quietly=TRUE)
+  AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
+  photometry_folder <- make_safe_path(AN_folder, "Photometry")
+  path_df_master <- make_safe_path(photometry_folder, "df_master.Rdata")
+  load(path_df_master)
+  df <- df_master %>%
+    filter(stri_startswith_fixed(FITSfile, filename)) %>%
+    filter(StarType=='Comp') %>%
+    filter(MaxADU_Ur < 57000) %>%
+    select(FITSfile, FOV, Filter, Exposure, StarID, CatMag, InstMag, Sigma=InstMagSigma, FWHM, MaxADU_Ur) %>%
+    arrange(StarID) %>%
+    mutate(diff = InstMag - CatMag)
+  print(df)
+  cat('--- Std Dev ', 1000*sd(df$diff,na.rm=TRUE), ' mMag.\n\n')
 }

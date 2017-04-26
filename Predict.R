@@ -88,12 +88,6 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
                                  NumCompsRemoved=NA_integer_,
                                  stringsAsFactors = FALSE)
   for (image in df_cirrus_effect$Image) {
-    # cat(image,"\n")
-    # if (image %in% c("ASAS_J162540_19123-0008-V.fts",
-    #                  "ASAS_J162540_19123-0009-V.fts",
-    #                  "ASAS_J162540_19123-0010-V.fts")) {   # debug code, temporary 20160731.
-    #   iiii <- 1
-    # }
     df_estimates_this_image <- df_estimates_comps %>% filter(FITSfile==image)
     # cat(paste0(image, "  n=", nrow(df_estimates_this_image), "\n"))
     cirrus_effect_per_comp <- df_estimates_this_image$EstimatedMag - df_estimates_this_image$CatMag
@@ -194,6 +188,9 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   #    or for cirrus effect.
   
   # CIRRUS CORRRECTION: Apply per-image cirrus-effect to checks and targets (for all filters together).
+  #if (thisStarID_targets_checks == 'GH Cep_GH Cep') {
+    iii <- 1
+  #}
   df_predictions_checks_targets <- left_join(df_estimates_checks_targets, df_cirrus_effect, 
                                              by=c("FITSfile" = "Image")) %>%
     mutate(UntransformedMag = PredictedMag - CirrusEffect) # = after cirrus correction, before transform.
@@ -254,7 +251,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   # Clean up df_transformed (all data for targets & checks).
   df_transformed <- df_transformed %>%
     select(-PredictedMag, -Criterion1, -Criterion2, -UntransformedMag, -Transform) %>%
-    left_join((df_master %>% select(Serial, AUID, FOV, MaxADU_Ur, FWHM, SkyADU, SkySigma)), 
+    left_join((df_master %>% select(Serial, FOV, MaxADU_Ur, FWHM, SkyADU, SkySigma)), 
               by="Serial") %>%
     arrange(ModelStarID, JD_mid)
   
@@ -412,7 +409,7 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
              format(Sys.time(), tz = "GMT"), " UTC", 
              " from raw data in folder ",AN_rel_folder,".")) %>%
     c(paste0("#Software version for all computation yielding this report = ", software_version)) %>%
-    c("#Eric Dose, Bois d'Arc Observatory, Kansas") %>%
+    c("#Eric Dose, New Mexico Mira Project, ABQ, NM") %>%
     c("#") %>%
     c("#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES")
   
@@ -653,8 +650,9 @@ make_df_report <- function(photometry_folder) {
     df_new$TotalSigma <- sqrt((modelSigma^2)/nModelSigma + cirrusSigma^2 + instMagSigma^2) # add in quadr.
     df_new$CheckMag <- mean(df_combine$CheckMag)
     df_new$Airmass  <- mean(df_combine$Airmass)
-    df_new$Notes    <- paste0("obs#[", (paste0(df_combine$Serial,collapse=" ")), "]/",
-                              min(df_combine$nComps), "+ comps")
+    # df_new$Notes    <- paste0("obs#[", (paste0(df_combine$Serial,collapse=" ")), "]/",
+    #                           min(df_combine$nComps), "+ comps")    
+    df_new$Notes    <- paste0(len(df_combine$Serial), " obs, >=", min(df_combine$nComps), " comps")
     df_report[df_report$Serial==serialToReplace,] <- df_new[1,]
     df_report <- df_report %>% filter(!Serial %in% serialsToDelete)
     cat(paste0("Combination of Serials ", paste0(df_combine$Serial, collapse=" "), " done.\n"))
