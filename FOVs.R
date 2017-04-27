@@ -1,3 +1,5 @@
+# Thoroughly tested with FOV 1.5 on April 27 2017.
+
 listEclipsers2 <- function(JD=2457633.75, hours_tol=4, secondaries='integrated', min_priority=0.5) {
   # secondaries expected to be one of 'integrated', 'separate', or 'none'.
   require(dplyr, quietly=TRUE)
@@ -211,4 +213,37 @@ compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filenam
     mutate(diff = InstMag - CatMag)
   print(df)
   cat('--- Std Dev ', 1000*sd(df$diff,na.rm=TRUE), ' mMag.\n\n')
+}
+
+diag_1_5 <- function(df_new=df_master, df_old=df_master_old) {
+  cols_to_test <- colnames(df_master_new)
+  for (this_col in cols_to_test) {
+    new_col_data <- unlist(df_new[this_col])
+    old_col_data <- unlist(df_old[this_col])
+    # df_new[2, colname] <- NA   # for testing only; remove for production use
+    # df_new[3, colname] <- 999  # for testing only; remove for production use
+    # df_new[4, colname] <- NA   # for testing only; remove for production use
+    # df_old[4, colname] <- NA   # for testing only; remove for production use
+    same_value <- new_col_data == old_col_data  # but yields NA if either is NA or both are NA
+    bothNA <- is.na(new_col_data) & is.na(old_col_data)
+    cols_identical = all((same_value | bothNA) & (!(xor(is.na(new_col_data), is.na(old_col_data)))))
+    # cols_identical <- all(length(new_col_data)==length(old_col_data)) && all(new_col_data==old_col_data)
+    cat(paste0(this_col, " --> ", cols_identical, "\n"))
+  }  
+}
+
+view_1_5 <- function(df_new=df_master, df_old=df_master_old, colname) {
+  require(dplyr, quietly=TRUE)
+  # df_new[2, colname] <- NA   # for testing only; remove for production use
+  # df_new[3, colname] <- 999  # for testing only; remove for production use
+  # df_new[4, colname] <- NA   # for testing only; remove for production use
+  # df_old[4, colname] <- NA   # for testing only; remove for production use
+  df <- data.frame(new=unlist(df_new[colname]), old=unlist(df_old[colname]), stringsAsFactors=FALSE)
+  df$same_value <- df$new == df$old  # but yields NA if either is NA or both are NA
+  df$bothNA <- is.na(df$new) & is.na(df$old)
+  df$identical <- (df$same_value | df$bothNA) & (!(xor(is.na(df$new), is.na(df$old))))
+  df$ModelStarID <- df_new$ModelStarID
+  df$Filter <- df_new$Filter
+  cat(all(unlist(df$identical)), " ", sum(unlist(!df$identical)))
+  View(df)
 }

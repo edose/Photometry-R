@@ -25,6 +25,8 @@
 ####    df_image  <- images(AN_rel_folder="20151216")
 #####    ...then start modeling with Model.R functions.
 
+#####  Thoroughly tested with FOV 1.5 April 27 2017.
+
 precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   require(dplyr, quietly=TRUE)
   require(stringi, quietly=TRUE)
@@ -1017,8 +1019,17 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
     mutate(InstMag = RawADUMag + 2.5 * log10(Exposure)) %>%
     select(-Object,-RawADUMag)
   
-  # In this joined df, populate columns CatMag and CatMagError.
-  df_catMagData <- get_catMagData()
+  # In this joined df, populate columns CatMag and CatMagError for the filter in FITS header.
+  filterName = df_FITSheader$Filter[1]
+  magColumnName <- paste("Mag", filterName, sep="")
+  errColumnName <- paste("Err", filterName, sep="")
+  magColumnIndex <- match(magColumnName, colnames(df))
+  errColumnIndex <- match(errColumnName, colnames(df))
+  df$CatMag <- df[,magColumnIndex]  # populate CatMag column
+  df$CatMagError <- df[,errColumnIndex]  # populate CatMagError column
+  
+  df <- df[,-which(colnames(df) %in% c("MagU", "MagB", "MagV", "MagR", "MagI"))] # remove mag columns.
+  df <- df[,-which(colnames(df) %in% c("ErrU", "ErrB", "ErrV", "ErrR", "ErrI"))] # remove err columns.
   
   ##### charts & the next block not necessary as CatMag and CatMagError data are directly in FOV files 1.5+.
   # # Populate column "CatMag" from MagX column where X is FILTER (from FITS header).
@@ -1043,9 +1054,6 @@ make_df_master_thisFITS <- function (df_apertures, df_star_data_numbered, df_FIT
   
   return(df)
 }
-
-get_CatMagData <- function() {}
-
 
 ##### get_chartStarData() no longer relevant, as data previously extracted from JSON chart files 
 #####    are directly gotten from FOV files as of FOV version 1.5.

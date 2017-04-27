@@ -1,7 +1,7 @@
 ##### $Utility.R, Support for VS Photometry
 ##### Eric Dose, Bois d'Arc Observatory, Kansas, USA -- begun September 18 2015.
 
-CURRENT_FORMAT_VERSION = "1.5"  # version defined April 2017.
+CURRENT_FORMAT_VERSION = "1.5"  # version defined April 2017. Thoroughly tested April 27 2017.
 
 ##### SUPPORT FILES ONLY in this file. ##########################################
 
@@ -257,7 +257,7 @@ read_FOV_file <- function (FOV_name, FOV_folder="C:/Dev/Photometry/FOV",
       }
     }
 
-    # df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
+    df_star <- df_star[order(df_star$StarType),]                # Sort rows by star type.
     df_star$MagString <- NULL                                  # Remove no-longer-needed Mags column.
     
     # Diagnostic checks & messages before returning results.
