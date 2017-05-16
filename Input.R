@@ -562,7 +562,11 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
     select(-Number)
   df_master_path <- make_safe_path(photometry_folder, "df_master.Rdata")
   save(df_master, file=df_master_path, precheck=FALSE) # recover via: load_df_master(AN_rel_folder="201..").
-  cat("make_df_master() has saved df_master to", df_master_path, "\n   now returning df_master.\n")
+  cat("make_df_master() has saved df_master to", df_master_path, ".\n")
+  df_master_csv_path <- make_safe_path(photometry_folder, "df_master.csv")
+  write.table(df_master, df_master_csv_path, sep=";", row.names=FALSE)  # mostly for use in python.
+  cat("make_df_master() has also written df_master as CSV(;) to", df_master_csv_path, ".\n")
+  cat("Now make_df_master() is returning df_master.\n")
   
   # Copy relevant FOV files files into folders inside AN folder as part of AN processing documentation.
   copyFOVs(AN_rel_folder=AN_rel_folder, FOV_names=FOVs)

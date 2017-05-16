@@ -1,21 +1,30 @@
-# Photometry
-Eric Dose's R scripts etc for telescope photometry, especially for processing FITS image files and field-of-view data all the way to AAVSO reports for submission.
+Photometry-R
+Eric Dose's R scripts etc for telescope photometry, especially for processing FITS image files and field-of-view data, all the way to AAVSO reports for submission.
+
+## Status of this repository
+The code in this repo still serves for my photometric data reduction and reporting to the AAVSO. But all code is being ported to python. I expect to use python only and to mothball all R code by about July 2017.
+
+Why? Especially when R (with dplyr extensions) is clearly superior to python as a language*per se*, and when the RStudio IDE is superb. Well, python has 3 advantages for complex code, which this repo is becoming:
+
+ 1. **Unit testing.** Python has it, R doesn't--simple as that. I thought my photometry workflow might stay simple enough to do without this. Ha. And now I can have real
+ 2. **Object-orientation / real classes**: Python does have some real stupidities in its design--lack of private variables being first among them. You might as well build your home in the middle of a freeway and let everyone drive through at full speed. But if one must live with python's baby-talk mentality, at least classes lend some separation and focus of attention.
+ 3. **Execution speed**: Not the most important, but nice to have. R is blindingly fast for what it's designed for, but sometimes pretty slow for general programming.
+
+That out of the way...I'll be opening up an early draft of the python code, repo 'photrix', June 2017. 
 
 ## My workflow
-Wow, has this changed since I last updated this README. For an overview, you might want to look at the poster PDF in this repository (but please download the PDF file--github's viewer corrupts embedded images). 
+Wow, could it be a year since I last updated this README? Yes, almost to the day. For an overview, you might want to look at the poster PDF in this repository. 
 
 While the first, basic end-to-end workflow was complete Feb 7 2016, and tagged v 0.1, I found in April-May that I needed to rewrite the modeling data prep to accommodate the poor quality of very many comp stars in VPhot sequences (as evaluated both by large regression residuals and by widely ranging mag errors listed in the matching VSP charts). 
 
-The workflow as committed today (May 15 2016) is between numbered versions and is NOT READY for use. Some code rewriting is done, but I still need to write and test much of the data prep and ALL of the modeling and ALL of the subsequent reporting (especially new error estimation and reporting check stars as AUIDs to resolve ambiguity).
+Current working version is **V 1.1.4** (May 2017), and it works. Bug and typo fixes aside, this code is frozen. 
 
-Current working version is **V 0.51** (March 26 2016), and it works as well as it can without being more selective of comp stars to build the model. Manual comp-star selection works fairly well, but future versions will use magnitude errors reported in the corresponding AAVSO/VSP chart, both to screen comp stars in/out of the model, and to compute more realistic errors on the reported target-star magnitudes.
-
-The V 0.51 workflow is:
+The V 1.1.4 workflow is:
 
 **Input.R (pre-calibration)_______________________________________________**
 
- 1. **renameObject()** --- Optional, rarely used any more. Renames FITS files *and* FITS headers' "OBJECT" value from old to new Object name, across all FITS files (and subdirectories) within AN top folder. For example, renames all "Landolt_001" to "Std_001". This was needed whenever object name and file name in images (probably due to inclusion in ACP nightly observing plan) had been poorly chosen. renameObject() must be run first if it is used at all.
- 2. **checkFOVs()** --- Run next, on every data set without exception. Checks that a field-of-view FOV file exists for every FITS file. A FOV file is required for every FITS file included in the model and AAVSO reporting. FOV files are obviously not required for FITS files acquired for other uses, notably those acquired as "Burn" images to prepare new FOV files for use in future photometric runs.
+ 1. **renameObject()** --- Rarely used. Renames FITS files *and* FITS headers' "OBJECT" value from old to new Object name, across all FITS files (and subdirectories) within AN top folder. For example, renames all "Landolt_001" to "Std_001". This was needed whenever object name and file name in images (probably due to inclusion in ACP nightly observing plan) had been poorly chosen. renameObject() must be run first if it is used at all.
+ 2. **precheck()** --- Run on every data set without exception, iteratively until all errors fixed. Checks that a field-of-view FOV file exists for every FITS file. A FOV file is required for every FITS file included in the model and AAVSO reporting. FOV files are obviously not required for FITS files acquired for other uses, notably those acquired as "Burn" images to prepare new FOV files for use in future photometric runs.
  1. **beforeCal()** --- Calls all 3 functions in correct order: copyToUr(), renameACP(), and prepareForCal(), which takes renames and arranges FITS files (light, flat, bias, and darks) for the next step, which is calibration (I use MaxIm DL). Its steps in order are: [copyToUr()]: Copies (backs up) all (possibly renamed) target FITS files to a new /Ur directory, for safe keeping. [renameACP()]: Renames all _target_ FITS files (not calibration files) from ACP-format names (like TargetName-S001-R001-C003-V-dupe1.fts) to my own strictly sequential file naming system(like TargetName-0003-V.fts). Each new sequence number is based on time (JD) from the FITS header, and it is validated and sorted by time across all files of the same TargetName. Renaming is not fooled by dupe or duplicate naming across subdirectories. TargetNames and Filter IDs are verified for equality between the original file name and the FITS header. All target FITS files are then collected in the top AN folder. A table of old vs new file names is written to a text file, and the data frame is stored as a .RData file for immediate reload into R. [prepareForCal()]: Sets up folders /Calibration (all flat, dark, bias images for the AN), /CalibrationMasters (calibration images duplicated here & ultimate home of MaxIm generated calibration master frames), /Ur (backup of all renamed target FITS files; may move this forward to renameACP() (or similar fn) so that the Ur files are really Ur), and /Photometry (catchall for metadata about this AN folder).
 
 **Calibration of all target images in MaxIm DL (not in R)______________________**
@@ -43,9 +52,9 @@ our AAVSO reports.]**
 
 **Predict.R ______________________________________________________________**
 
- 1. **predictAll()**  ---  Takes the final masterModelList and (1) makes predictions of target and check-star
- 1. **writeAAVSO()**  ---  [in development. will need to draw on a LOT of metadata, but this should be available from outputs of the above, previously executed functions].
+ 1. **predictAll()**  ---  Takes the final masterModelList and (1) makes predictions of target and check-star. Applies color-index / transform corrections. Reads user control file pre-predict.txt to ensure that a single set of comp stars is applied to all points in a one-night ("Stare") light curve, particularly for eclipser light curves. Does a lot of bookkeeping. This is the final part of the true photometric computation chain--later steps merely aid user curation and report generation (essentially: bookkeeping).
+ 2. **markupReport()** -- Prints a table of target observations, along with: magnitude errors of various types, Julian date (time), check-star magnitudes, and a lot more. Aids in the user's last chance to curate target data before final report generation. Most changes coming out of this report are of two types: Omitting unsuitable target observations, and combining target observations, which requires careful handling of observation time and reported magnitude errors. The user uses this report to edit omit.txt, which is input to the next and last processing step.
+ 1. **writeAAVSO()**  ---  Takes user control file 'omit.txt' and target magnitude etc data from predictAll(), and generates a format-perfect AAVSO report, ready for upload. (In some cases, the user will want to annotate the report, most often to make comments in the report header about consequences of the data, e.g., recapture of a lost lightcurve phase, or detected outburst of an observed star.
 
 **[end of README] ______________________________________________________________**
-
 

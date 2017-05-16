@@ -11,7 +11,7 @@
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    -- examine markup report, esp for COMBINES and poor check star agreement.
 #####    -- edit report_map.txt as needed for #SERIAL & #COMBINE directives.
-#####    AAVSO(AN_rel_folder="", software_version="0.0.0")
+#####    AAVSO(AN_rel_folder="", software_version="1.1.4")
 #####    -- examine AAVSO report, re-edit report_map.txt if needed, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
@@ -652,7 +652,7 @@ make_df_report <- function(photometry_folder) {
     df_new$Airmass  <- mean(df_combine$Airmass)
     # df_new$Notes    <- paste0("obs#[", (paste0(df_combine$Serial,collapse=" ")), "]/",
     #                           min(df_combine$nComps), "+ comps")    
-    df_new$Notes    <- paste0(len(df_combine$Serial), " obs, >=", min(df_combine$nComps), " comps")
+    df_new$Notes    <- paste0(length(df_combine$Serial), " obs  >=", min(df_combine$nComps), " comps")
     df_report[df_report$Serial==serialToReplace,] <- df_new[1,]
     df_report <- df_report %>% filter(!Serial %in% serialsToDelete)
     cat(paste0("Combination of Serials ", paste0(df_combine$Serial, collapse=" "), " done.\n"))

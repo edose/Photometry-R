@@ -196,6 +196,7 @@ extract_FOV_data <- function () {
 }
 
 compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filename) {
+  # Usage, e.g.: I
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
                                     "e.g., AN_rel_folder='20151216'.")}
   require(dplyr, quietly=TRUE)
@@ -211,8 +212,11 @@ compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filenam
     select(FITSfile, FOV, Filter, Exposure, StarID, CatMag, InstMag, Sigma=InstMagSigma, FWHM, MaxADU_Ur) %>%
     arrange(StarID) %>%
     mutate(diff = InstMag - CatMag)
+  avg = mean(df$diff,na.rm=TRUE)
+  stdev = sd(df$diff,na.rm=TRUE)
+  df <- df %>% mutate(Z_value=round((diff-avg)/stdev,2)) %>% select(-FITSfile)
   print(df)
-  cat('--- Std Dev ', 1000*sd(df$diff,na.rm=TRUE), ' mMag.\n\n')
+  cat('--- Std Dev ', 1000*stdev, ' mMag.\n\n')
 }
 
 diag_1_5 <- function(df_new=df_master, df_old=df_master_old) {

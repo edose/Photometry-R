@@ -86,6 +86,17 @@ eveningEclipsers <- function (localStdTime=23, maxHoursEW=2, decLimitS=30, decLi
     filter(Period > 0)
 }
 
+RVTauris <- function (localStdTime=22, maxHoursEW=4, decLimitS=-10, decLimitN=89, selectBest=1000,
+                      brightestVMax=10, brightestVMin=10.25) {
+  require(dplyr, quietly=TRUE)
+  obsPlanner(VStype="RV%", localStdTime=localStdTime, maxHoursEW=maxHoursEW, 
+             decLimitS=decLimitS, decLimitN=decLimitN, selectBest=selectBest) %>%
+    select(-RA_deg, -Dec_deg) %>%
+    filter(Max > brightestVMax) %>%
+    filter(Min > brightestVMin) %>%
+    filter(Period > 0)
+}
+
 ACP <- function (FOVs) {
   ##### Test OK 20160103.
   ##### Typical usage: ACP(c("SU Lac","IK Peg")) or ACP(df_miras$Name)
