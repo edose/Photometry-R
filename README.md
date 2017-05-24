@@ -1,6 +1,10 @@
 # Photometry-R
 Eric Dose's R scripts etc for telescope photometry, especially for processing FITS image files and field-of-view data, all the way to AAVSO reports for submission.
 
+Wow, could it be a year since I last updated this README? Yes, almost to the day. For an overview, you might want to look at the poster PDF in this repository. 
+
+While the first, basic end-to-end workflow was complete Feb 7 2016, and tagged v 0.1, I found in April-May that I needed to rewrite the modeling data prep to accommodate the poor quality of very many comp stars in VPhot sequences (as evaluated both by large regression residuals and by widely ranging mag errors listed in the matching VSP charts). 
+
 ## Status of this repository
 The code in this repo still serves for my photometric data reduction and reporting to the AAVSO. But all code is being ported to python. I expect to use python only and to mothball all R code by about July 2017.
 
@@ -13,13 +17,10 @@ Why? Especially when R (with dplyr extensions) is clearly superior to python as 
 That out of the way...June 2017. I'll make public (here) an early draft of the python code, repo 'photrix'. 
 
 ## My workflow
-Wow, could it be a year since I last updated this README? Yes, almost to the day. For an overview, you might want to look at the poster PDF in this repository. 
 
-While the first, basic end-to-end workflow was complete Feb 7 2016, and tagged v 0.1, I found in April-May that I needed to rewrite the modeling data prep to accommodate the poor quality of very many comp stars in VPhot sequences (as evaluated both by large regression residuals and by widely ranging mag errors listed in the matching VSP charts). 
+Current working version is **V 1.2.0** (May 2017), and it works. Bug and typo fixes aside, this code is frozen. 
 
-Current working version is **V 1.1.4** (May 2017), and it works. Bug and typo fixes aside, this code is frozen. 
-
-The V 1.1.4 workflow is:
+The current workflow is:
 
 **Input.R (pre-calibration)_______________________________________________**
 
