@@ -11,7 +11,7 @@
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    -- examine markup report, esp for COMBINES and poor check star agreement.
 #####    -- edit report_map.txt as needed for #SERIAL & #COMBINE directives.
-#####    AAVSO(AN_rel_folder="", software_version="1.1.4")
+#####    AAVSO(AN_rel_folder="", software_version="1.2.0")
 #####    -- examine AAVSO report, re-edit report_map.txt if needed, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
@@ -65,6 +65,11 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     if (!thisModelList$fit_extinction) {
       predictOutput <- predictOutput + thisModelList$extinction * df_predict_input$Airmass
     }
+    ######################################
+    if (!thisModelList$fit_transform) {
+      predictOutput <- predictOutput + thisModelList$transform * df_predict_input$CI
+    }
+    #####################################
     columns_post_predict <- c("Serial", "ModelStarID", "FITSfile", "StarID", "Chart", 
                              "Xcentroid", "Ycentroid", "InstMag", "InstMagSigma", "StarType", 
                              "CatMag", "CatMagSaved", "CatMagError", "Exposure",
@@ -174,6 +179,11 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     if (!thisModelList$fit_extinction) {
       predictOutput <- predictOutput + thisModelList$extinction * df_input_this_filter$Airmass
     }
+    ######################################
+    if (!thisModelList$fit_transform) {
+      predictOutput <- predictOutput + thisModelList$transform * df_predict_input$CI
+    }
+    #####################################
     df_estimates_this_filter <- df_input_this_filter %>%
       select(one_of(columns_post_predict)) %>%             # defined well above
       mutate(PredictedMag = InstMag - predictOutput)

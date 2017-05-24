@@ -1,4 +1,4 @@
-Photometry-R
+# Photometry-R
 Eric Dose's R scripts etc for telescope photometry, especially for processing FITS image files and field-of-view data, all the way to AAVSO reports for submission.
 
 ## Status of this repository
@@ -6,11 +6,11 @@ The code in this repo still serves for my photometric data reduction and reporti
 
 Why? Especially when R (with dplyr extensions) is clearly superior to python as a language*per se*, and when the RStudio IDE is superb. Well, python has 3 advantages for complex code, which this repo is becoming:
 
- 1. **Unit testing.** Python has it, R doesn't--simple as that. I thought my photometry workflow might stay simple enough to do without this. Ha. And now I can have real
+ 1. **Unit testing.** Python has it, R doesn't--simple as that. I thought my photometry workflow might stay simple enough to do without this. Ha. Now I can have real confidence in at least the low-level methods and functions.
  2. **Object-orientation / real classes**: Python does have some real stupidities in its design--lack of private variables being first among them. You might as well build your home in the middle of a freeway and let everyone drive through at full speed. But if one must live with python's baby-talk mentality, at least classes lend some separation and focus of attention.
  3. **Execution speed**: Not the most important, but nice to have. R is blindingly fast for what it's designed for, but sometimes pretty slow for general programming.
 
-That out of the way...I'll be opening up an early draft of the python code, repo 'photrix', June 2017. 
+That out of the way...June 2017. I'll make public (here) an early draft of the python code, repo 'photrix'. 
 
 ## My workflow
 Wow, could it be a year since I last updated this README? Yes, almost to the day. For an overview, you might want to look at the poster PDF in this repository. 
@@ -57,4 +57,5 @@ our AAVSO reports.]**
  1. **writeAAVSO()**  ---  Takes user control file 'omit.txt' and target magnitude etc data from predictAll(), and generates a format-perfect AAVSO report, ready for upload. (In some cases, the user will want to annotate the report, most often to make comments in the report header about consequences of the data, e.g., recapture of a lost lightcurve phase, or detected outburst of an observed star.
 
 **[end of README] ______________________________________________________________**
+
 
