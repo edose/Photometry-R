@@ -11,7 +11,7 @@
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    -- examine markup report, esp for COMBINES and poor check star agreement.
 #####    -- edit report_map.txt as needed for #SERIAL & #COMBINE directives.
-#####    AAVSO(AN_rel_folder="", software_version="1.2.0")
+#####    AAVSO(AN_rel_folder="", software_version="1.2.1")
 #####    -- examine AAVSO report, re-edit report_map.txt if needed, rerun AAVSO().
 #####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
@@ -73,7 +73,7 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     columns_post_predict <- c("Serial", "ModelStarID", "FITSfile", "StarID", "Chart", 
                              "Xcentroid", "Ycentroid", "InstMag", "InstMagSigma", "StarType", 
                              "CatMag", "CatMagSaved", "CatMagError", "Exposure",
-                             "JD_mid", "Filter", "Airmass", "CI", "SkyBias", "Vignette")
+                             "JD_mid", "Filter", "Airmass", "CI", "SkyBias", "Vignette", "LogADU")
     df_estimates_thisFilter <- df_predict_input %>% 
         select(one_of(columns_post_predict)) %>%
         mutate(EstimatedMag = InstMag - predictOutput)
@@ -175,15 +175,14 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
       filter(Filter==thisModelList$filter) %>%
       filter(FITSfile %in% images_with_targets)
     predictOutput <- predict(thisModelList$model, newdata=df_input_this_filter, re.form= ~0) # a vector
-    # Add extinction*airmass term if not included in model (as formula term "Airmass").
+    # Add extinction*airmass term if not included in model (as formula term "Airmass"):
     if (!thisModelList$fit_extinction) {
       predictOutput <- predictOutput + thisModelList$extinction * df_input_this_filter$Airmass
     }
-    ######################################
+    # Add transform*[Color Index] term if not included in model (as formula term "CI"):
     if (!thisModelList$fit_transform) {
-      predictOutput <- predictOutput + thisModelList$transform * df_predict_input$CI
+      predictOutput <- predictOutput + thisModelList$transform * df_input_this_filter$CI
     }
-    #####################################
     df_estimates_this_filter <- df_input_this_filter %>%
       select(one_of(columns_post_predict)) %>%             # defined well above
       mutate(PredictedMag = InstMag - predictOutput)
@@ -198,9 +197,6 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   #    or for cirrus effect.
   
   # CIRRUS CORRRECTION: Apply per-image cirrus-effect to checks and targets (for all filters together).
-  #if (thisStarID_targets_checks == 'GH Cep_GH Cep') {
-    iii <- 1
-  #}
   df_predictions_checks_targets <- left_join(df_estimates_checks_targets, df_cirrus_effect, 
                                              by=c("FITSfile" = "Image")) %>%
     mutate(UntransformedMag = PredictedMag - CirrusEffect) # = after cirrus correction, before transform.

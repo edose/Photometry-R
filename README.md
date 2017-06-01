@@ -8,10 +8,10 @@ While the first, basic end-to-end workflow was complete Feb 7 2016, and tagged v
 ## Status of this repository
 The code in this repo still serves for my photometric data reduction and reporting to the AAVSO. But all code is being ported to python. I expect to use python only and to mothball all R code by about July 2017.
 
-Why? Especially when R (with dplyr extensions) is clearly superior to python as a language*per se*, and when the RStudio IDE is superb. Well, python has 3 advantages for complex code, which this repo is becoming:
+Why? Especially when R (with dplyr extensions) is clearly superior to python as a language *per se*, and when the RStudio IDE is superb. Well, python has 3 advantages for complex code, which this repo is becoming:
 
  1. **Unit testing.** Python has it, R doesn't--simple as that. I thought my photometry workflow might stay simple enough to do without this. Ha. Now I can have real confidence in at least the low-level methods and functions.
- 2. **Object-orientation / real classes**: Python does have some real stupidities in its design--lack of private variables being first among them. You might as well build your home in the middle of a freeway and let everyone drive through at full speed. But if one must live with python's baby-talk mentality, at least classes lend some separation and focus of attention.
+ 2. **Object-orientation / real classes**: Python does have some real stupidities in its design--lack of private variables being first among them. You might as well build your home in the middle of a freeway and let everyone drive through at full speed. But R doesn't even have that. So, I'll (have to) take python's crippled and voyeuristic half-classed structuring over R's quick-and-dirty function orientation for this code which is becoming more complex by the month.
  3. **Execution speed**: Not the most important, but nice to have. R is blindingly fast for what it's designed for, but sometimes pretty slow for general programming.
 
 That out of the way...June 2017. I'll make public (here) an early draft of the python code, repo 'photrix'. 

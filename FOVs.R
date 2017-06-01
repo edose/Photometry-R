@@ -209,7 +209,8 @@ compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filenam
     filter(stri_startswith_fixed(FITSfile, filename)) %>%
     filter(StarType=='Comp') %>%
     filter(MaxADU_Ur < 57000) %>%
-    select(FITSfile, FOV, Filter, Exposure, StarID, CatMag, InstMag, Sigma=InstMagSigma, FWHM, MaxADU_Ur) %>%
+    select(FITSfile, FOV, Filter, Exposure, StarID, CatMag, InstMag, Sigma=InstMagSigma, 
+           FWHM, MaxADU_Ur, Serial) %>%
     arrange(StarID) %>%
     mutate(diff = InstMag - CatMag)
   avg = mean(df$diff,na.rm=TRUE)

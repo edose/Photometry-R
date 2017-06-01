@@ -13,7 +13,8 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
                             filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
                             maxCatMagError=NULL,  # NULL means "don't use to filter observations"
                             fit_skyBias=TRUE, fit_vignette=TRUE, fit_XY=FALSE,
-                            fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE) {
+                            fit_transform=FALSE, fit_extinction=TRUE, fit_starID=FALSE,
+                            fit_logADU=TRUE) {
   # Inputs are: (1) the Astronight's master data frame (as stored in /Photometry), and
   #             (2) the omit.txt file of observations to omit (also stored in /Photometry).
   # Returns model list, including: lmer model, df_obs, df_image, scalar results.
@@ -66,17 +67,22 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
   if (fit_starID) {
     formula_string <- paste0(formula_string, " + (1|ModelStarID)")
   }
+  if (fit_logADU) {
+    formula_string <- paste0(formula_string, " + LogADU")
+  }
   
   # Run model.
   thisFormula <- as.formula(formula_string)
+  # Make factors for lmer() random effects:
   df_model <- df_model %>%
     mutate(JD_mid=as.factor(JD_mid)) %>%
-    mutate(ModelStarID=as.factor(ModelStarID))  # need factors for lmer() random effects.
+    mutate(ModelStarID=as.factor(ModelStarID))  
   require(lme4)  
   thisModel <- lmer (thisFormula, data=df_model, REML=FALSE, offset=thisOffset)
+  # Undo the factoring done just before running model:
   df_model <- df_model %>%
     mutate(JD_mid=as.character(JD_mid)) %>%
-    mutate(ModelStarID=as.character(ModelStarID))  # undo the factoring done just before running model.
+    mutate(ModelStarID=as.character(ModelStarID))  
   
   # Construct output data frame "obs" (one row per observation included in model).
   obs <- df_model %>%
@@ -188,7 +194,8 @@ make_df_model <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NU
     filter(!is.na(Airmass)) %>%
     filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(CI<=maxColorIndex) %>%
-    filter(MaxADU_Ur<=saturatedADU)
+    filter(MaxADU_Ur<=saturatedADU) %>%
+    mutate(LogADU=log10(MaxADU_Ur))
   eligibleCatMagErrors <- df_model$CatMagError[!is.na(df_model$CatMagError)]
   if (is.null(maxCatMagError)) {
     hist(eligibleCatMagErrors, breaks=16, 

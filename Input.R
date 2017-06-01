@@ -538,15 +538,17 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   }
   
   # Construct Vignette variable (stars' squared distance in pixels from image center)
-  #    and X1024 & Y1024 (well-scaled pixel distances from CCD center), for all stars incl check and target.
+  #    and X1024 & Y1024 (well-scaled pixel distances from CCD center), 
+  #    for all stars incl check and target:
   df_master <- df_master %>%
     mutate(X1024=(Xcentroid-CCDcenterX)/1024, Y1024=(Ycentroid-CCDcenterY)/1024) %>%
     mutate(Vignette =(X1024^2 + Y1024^2))
   
-  # Add SkyBias column.
+  # Construct SkyBias and LogADU variables as new columns:
   df_master <- addBiasTerm(df_master, biasType="sigma")
-
-  # Add column for old (Ur) filenames.
+  df_master <- df_master %>% mutate(LogADU=log10(MaxADU_Ur))
+  
+  # Add column for old (Ur) filenames:
   df_rename <- read.table(make_safe_path(AN_folder, "Photometry/File-renaming.txt"), 
                           header=TRUE, sep=";", stringsAsFactors=FALSE, strip.white=TRUE) %>%
     select(NewFilename, RelPath) %>%
