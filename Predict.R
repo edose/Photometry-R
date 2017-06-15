@@ -36,8 +36,9 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
   path_df_master <- make_safe_path(photometry_folder, "df_master.Rdata")
   load(path_df_master)
   source("C:/Dev/Photometry/Model.R")
-  df_filtered <- omitObs(AN_rel_folder=AN_rel_folder)
-  df_filtered <- curateEclipserComps(AN_rel_folder = AN_rel_folder, df_filtered_master = df_filtered)
+  df_filtered <- omitObs(AN_top_folder=AN_top_folder, AN_rel_folder=AN_rel_folder)
+  df_filtered <- curateEclipserComps(AN_top_folder=AN_top_folder, AN_rel_folder = AN_rel_folder, 
+                                     df_filtered_master = df_filtered)
   path_masterModelList <- make_safe_path(photometry_folder, "masterModelList.Rdata")
   load(path_masterModelList)
   

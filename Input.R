@@ -65,7 +65,7 @@ precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     pattern<- "^(.+)-[[:digit:]S][[:digit:]]{3}-" # gets both old and new formats of FITS filenames.
     objectFromFilename <- regmatches(filename,regexec(pattern,filename)) %>% unlist() %>% nth(2)
     fileHandle <- file(description=fullPath, open="rb")
-    header <- parseHdr(readFITSheader(fileHandle))
+    header <- parseHdr(readFITSheader(fileHandle, fixHdr='remove'))
     close(fileHandle)
 
     objectFromFITS <- get_header_value(header, "OBJECT")
@@ -204,9 +204,9 @@ renameObject <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL
 beforeCal <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
   ##### Calls everything (except renameObject()) that's needed before image calibration.
   ##### Typical usage: beforeCal(AN_rel_folder="20151216")
-  copyToUr(AN_rel_folder=AN_rel_folder)
-  renameACP(AN_rel_folder=AN_rel_folder)
-  prepareForCal(AN_rel_folder=AN_rel_folder)
+  copyToUr(AN_top_folder=AN_top_folder, AN_rel_folder=AN_rel_folder)
+  renameACP(AN_top_folder=AN_top_folder, AN_rel_folder=AN_rel_folder)
+  prepareForCal(AN_top_folder=AN_top_folder, AN_rel_folder=AN_rel_folder)
 }
 
 finishFITS <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder) {
@@ -571,7 +571,7 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
   cat("Now make_df_master() is returning df_master.\n")
   
   # Copy relevant FOV files files into folders inside AN folder as part of AN processing documentation.
-  copyFOVs(AN_rel_folder=AN_rel_folder, FOV_names=FOVs)
+  copyFOVs(AN_top_folder=AN_top_folder, AN_rel_folder=AN_rel_folder, FOV_names=FOVs)
   # copyCharts(AN_rel_folder=AN_rel_folder, chart_names=(df_master$Chart %>% unique())) # no longer used.
   
   # Make a template-only omit.txt file if omit.txt doesn't already exist.

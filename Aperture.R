@@ -154,6 +154,7 @@ addPunchesFromText <- function(textPath="C:/Dev/Photometry/Punches.txt", delim="
       select(FOV, Target, Distance) %>% 
       print()
   }
+  cat(paste(nrow(df_punches)), " punches read in.\n")
   cat(paste("Largest distance (Target-Punch) = ", max(df_punches$Distance),"arcsec\n"))
   recommendYes <- (areAllOK) & (numTooClose == 0) & (max(df_punches$Distance) <= 20)
   
