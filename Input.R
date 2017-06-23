@@ -32,8 +32,8 @@ precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
   require(stringi, quietly=TRUE)
   source("C:/Dev/Photometry/$Utility.R")
   require(FITSio, quietly=TRUE)
-  platesolvedHeaderKey <- "PLTSOLVD"
-  platesolvedHeaderValue <- "T"
+  # platesolvedHeaderKey <- "PLTSOLVD"
+  # platesolvedHeaderValue <- "T"
   get_header_value <- function(header, key) {  # nested function.
     value <- header[which(header==key)+1]
     if (length(value)==0) value <- NA
@@ -106,14 +106,24 @@ precheck <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL) {
     # }
     
     # Check that plate solution exists within header of this FITS.
-    plateSolvedValue <- toupper(trimws(get_header_value(header, platesolvedHeaderKey)))
-    if (is.na(plateSolvedValue)) { 
-      FITS_missing_platesolve <- FITS_missing_platesolve %>% c(relPath)
-    } else {
-      if (plateSolvedValue != "T") {
+    # ----- June 2017: allows plate solutions by TheSkyX/ImageLink (backup) as well as PinPoint (default):
+    platesolution_keys <- c('CD1_1', 'CD1_2', 'CD2_1', 'CD2_2', 'CRVAL1', 'CRVAL2', 'CRPIX1', 'CRPIX2')
+    for (key in platesolution_keys) {
+      if (is.na(get_header_value(header, key))){
         FITS_missing_platesolve <- FITS_missing_platesolve %>% c(relPath)
+        break
       }
     }
+
+    # ----- Pre-June 2017 code that required plate solutions from PinPoint (only).
+    # plateSolvedValue <- toupper(trimws(get_header_value(header, platesolvedHeaderKey)))
+    # if (is.na(plateSolvedValue)) { 
+    #   FITS_missing_platesolve <- FITS_missing_platesolve %>% c(relPath)
+    # } else {
+    #   if (plateSolvedValue != "T") {
+    #     FITS_missing_platesolve <- FITS_missing_platesolve %>% c(relPath)
+    #   }
+    # }
   }  
   
   # Summarize results.
@@ -515,7 +525,10 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
         df_master <- rbind(df_master, df_master_thisFITS)
         
         cat(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
-                    " --> df_master now has", nrow(df_master), "rows\n"))
+                  " =", nrow(df_master_thisFITS), "rows",
+                  "  --> df_master now has", nrow(df_master), "rows\n"))
+        # cat(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
+        #           " --> df_master now has", nrow(df_master), "rows\n"))
       } else {
         cat(paste(thisFITS_path %>% strsplit("/",fixed=TRUE) %>% unlist() %>% last(), 
                     " --> NO ROWS from this file ... df_master now has", nrow(df_master), "rows\n"))

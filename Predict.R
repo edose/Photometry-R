@@ -710,7 +710,7 @@ curateEclipserComps <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fold
           filter(FOV==fov) %>%
           filter(Filter==filter) %>%
           filter(!StarID %in% compIDs) %>%  # note the ! (not) operator, here
-          select(Serial) 
+          select(Serial, ModelStarID, Filter) 
         # Remove unwanted comp star observations (i.e., to_remove$Serial)
         df_filtered_master <- df_filtered_master %>% filter(!Serial %in% to_remove$Serial)
         # TODO: Remove images with too few remaining comp star observations (maybe later).

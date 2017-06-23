@@ -11,15 +11,19 @@ eclipserPlot <- function(df=df_predictions, starID=NULL, filter=NULL) {
     df <- df %>% filter(Filter==filter)
   }
   df_eclipser <- (df %>% filter(StarID==starID) %>% arrange(JD_num))
-  x <- df_eclipser$JD_num
-  y <- df_eclipser$TransformedMag
-  JD_mid_floor <-df_eclipser$JD_mid %>% as.numeric() %>% min() %>% floor()
-  y_top <- min(y) - 0.08 * (max(y)-min(y))
-  y_base <- max(y) + 0.08 * (max(y)-min(y))
-  plot(x,y, ylim=c(y_base, y_top),
-       main=starID,
-       xlab=paste0("JD(mid) - ", JD_mid_floor),
-       ylab="best Mag")
+  if (nrow(df_eclipser) <= 0) {
+    cat("No data to plot.")
+  } else {
+    x <- df_eclipser$JD_num
+    y <- df_eclipser$TransformedMag
+    JD_mid_floor <-df_eclipser$JD_mid %>% as.numeric() %>% min() %>% floor()
+    y_top <- min(y) - 0.08 * (max(y)-min(y))
+    y_base <- max(y) + 0.08 * (max(y)-min(y))
+    plot(x,y, ylim=c(y_base, y_top),
+         main=starID,
+         xlab=paste0("JD(mid) - ", JD_mid_floor),
+         ylab="best Mag")
+  }
 }
 
 modelPlots <- function(modelList) {
