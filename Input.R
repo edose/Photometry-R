@@ -460,11 +460,22 @@ make_df_master <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder,
               filter(StarID==df_apertures$StarID[i_ap]) %>%
               mutate(dX=NA_real_, dY=NA_real_) # in pixels
             if (nrow(this_df_punch) >=1) {
-              hdr <- getFITSheaderValues(thisFITS_path, c("PA", "CDELT1", "CDELT2"))
-              pa_FITS <- as.numeric(hdr$PA)
-              cdelt1_FITS <- as.numeric(hdr$CDELT1)
-              cdelt2_FITS <- as.numeric(hdr$CDELT2)
-              # cat("punch:")
+              ##### PinPoint-only code (obsolete 6/2017):
+              # hdr <- getFITSheaderValues(thisFITS_path, c("PA", "CDELT1", "CDELT2"))
+              # pa_FITS_PinPoint <- as.numeric(hdr$PA)
+              # cdelt1_FITS_PinPoint <- as.numeric(hdr$CDELT1)
+              # cdelt2_FITS_PinPoint <- as.numeric(hdr$CDELT2)
+              ##### New code 6/2017, compatible w PinPoint AND TheSkyX/ImageLink:
+              #####    *Derives* non-standard PA, CDELT1, CDELT2 from standard FITS plate-solution values:
+              hdr2 <- getFITSheaderValues(thisFITS_path, c("CD1_1", "CD1_2", "CD2_1", "CD2_2"))
+              cd11 <- as.numeric(hdr2$CD1_1)
+              cd12 <- as.numeric(hdr2$CD1_2)
+              cd21 <- as.numeric(hdr2$CD2_1)
+              cd22 <- as.numeric(hdr2$CD2_2)
+              pa_FITS <- (atan2(-cd12, -cd11) * 180.0/pi) %% 360.0
+              cdelt1_FITS <- sqrt(cd11^2 + cd21^2)
+              cdelt2_FITS <- sqrt(cd21^2 + cd22^2)
+              ##### End New code (6/2017).
               for (i_punch in 1:nrow(this_df_punch)) {  # might be able to do this as vectors rather than loop.
                 skyAngle <- atan2(this_df_punch$DEast[i_punch], this_df_punch$DNorth[i_punch])
                 skyToPlateRotation <- (pi/180) * (360-pa_FITS)

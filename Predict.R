@@ -17,7 +17,8 @@
 #####    Set all /Photometry files to read only (in Windows).
 
 predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
-                        saturatedADU=54000, maxInstMagSigma=0.05, CI_filters=c("V","I")) {
+                        saturatedADU=54000, maxInstMagSigma=0.05, CI_filters=c("V","I"),
+                        minFWHM=1) {
   ##### Performs ALL steps to get transformed magnitudes for Check and Target observations in df_master.
   ##### Returns big data frame df_predict (which is transformed).
   ##### Requires that AN folder contain R files df_master.Rdata (from Input.R::make_df_master()) and 
@@ -48,7 +49,8 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     filter(MaxADU_Ur<=saturatedADU) %>%
     filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(!is.na(CatMag)) %>%
-    filter(!is.na(CI)) %>%  
+    filter(!is.na(CI)) %>%
+    filter(FWHM >= minFWHM) %>%
     mutate(CatMagSaved=CatMag) %>%  # because we'll need this after running predict().
     mutate(CatMag=0)                # zero is required in predict(), which predicts instrum mags.
   images_input_comps <- df_input_comps$FITSfile %>% 

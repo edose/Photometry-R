@@ -182,7 +182,7 @@ make_masterModelList <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_fol
 
 make_df_model <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
                            filter=NULL, maxInstMagSigma=0.03, maxColorIndex=2.5, saturatedADU=54000,
-                           maxCatMagError=NULL) {
+                           maxCatMagError=NULL, minFWHM=1) {
   
   df_omitted <- omitObs(AN_top_folder, AN_rel_folder) # returns df w/user-requested obs removed.
   if (is.na(df_omitted[[1]][[1]]))  {stop(">>>>> omit.txt file does not exist.")}
@@ -195,6 +195,7 @@ make_df_model <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NU
     filter(InstMagSigma<=maxInstMagSigma) %>%
     filter(CI<=maxColorIndex) %>%
     filter(MaxADU_Ur<=saturatedADU) %>%
+    filter(FWHM >= minFWHM) %>%
     mutate(LogADU=log10(MaxADU_Ur))
   eligibleCatMagErrors <- df_model$CatMagError[!is.na(df_model$CatMagError)]
   if (is.null(maxCatMagError)) {
