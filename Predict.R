@@ -11,9 +11,9 @@
 #####    df_markupReport <- markupReport(AN_rel_folder="20151216")
 #####    -- examine markup report, esp for COMBINES and poor check star agreement.
 #####    -- edit report_map.txt as needed for #SERIAL & #COMBINE directives.
-#####    AAVSO(AN_rel_folder="", software_version="1.2.1")
+#####    AAVSO(AN_rel_folder="", software_version="1.2.2")
 #####    -- examine AAVSO report, re-edit report_map.txt if needed, rerun AAVSO().
-#####    Submit/upload AAVSOreport-nnnnnnnn.txt to AAVSO; check for proper upload.
+#####    Submit/upload AAVSOreport-yyyymmdd.txt to AAVSO; check for proper upload.
 #####    Set all /Photometry files to read only (in Windows).
 
 predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, 
@@ -237,14 +237,14 @@ predictAll <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL,
     for (image in images_comps) {
       n <- df_estimates_comps %>% filter(FITSfile==image) %>% filter(UseInEnsemble==TRUE) %>%
         nrow() %>% max(1)
-      model_sigma <- summary(thisModelList$model)$sigma
+      model_sigma <- summary(thisModelList$model)$sigma / sqrt(n)
       cirrus_sigma <- df_cirrus_effect[df_cirrus_effect$Image == image, "CirrusSigma"]
       df_targets_checks <- df_estimates_checks_targets %>% 
         filter(FITSfile==image) %>%
         select(Serial, InstMagSigma)
       for (serial in df_targets_checks$Serial) {
         inst_mag_sigma <- df_targets_checks[df_targets_checks$Serial == serial,"InstMagSigma"]
-        total_sigma <- sqrt((model_sigma^2)/n + cirrus_sigma^2 + inst_mag_sigma^2) # add in quadrature.
+        total_sigma <- sqrt((model_sigma^2) + cirrus_sigma^2 + inst_mag_sigma^2) # add in quadrature.
         thisRow <- df_transformed$Serial==serial
         df_transformed[thisRow,"ModelSigma"]  <- model_sigma
         df_transformed[thisRow,"CirrusSigma"] <- cirrus_sigma
@@ -400,7 +400,7 @@ AAVSO <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=NULL, soft
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder parm, ",
                                   "e.g., AN_rel_folder='20151216'.")}
   if (is.null(software_version)) {stop(">>>>> You must provide a software_version parm, ",
-                                    "e.g., software_version='0.12'.")}
+                                    "e.g., software_version='1.2.2' as of 20170716.")}
   
   # First, make df_report.
   AN_folder   <- make_safe_path(AN_top_folder, AN_rel_folder)
@@ -650,17 +650,15 @@ make_df_report <- function(photometry_folder) {
     df_new$Mag      <- mean(df_combine$Mag)
     # Error estimation got more sophisticated with v 1.0 (July 2016).
     require(magrittr, quietly=TRUE)
-    instMagSigma <- df_combine$InstMagSigma %>% pmax(0.001) %>% raise_to_power(-2) %>% 
-      sum() %>% raise_to_power(-0.5)  # combined in quadrature
-    modelSigma   <- df_combine$ModelSigma[1] # not combined; same for all in this image (i.e., this filter).
-    nModelSigma  <- mean(df_combine$nComp)
-    cirrusSigma  <- df_combine$CirrusSigma %>% pmax(0.001) %>% raise_to_power(-2) %>% 
-      sum() %>% raise_to_power(-0.5)  # combined in quadrature
-    df_new$TotalSigma <- sqrt((modelSigma^2)/nModelSigma + cirrusSigma^2 + instMagSigma^2) # add in quadr.
+    n_combine = nrow(df_combine)
+    instMagSigma <- df_combine$InstMagSigma %>% pmax(0.001) %>% raise_to_power(2) %>% 
+      mean() %>% divide_by(n_combine) %>% sqrt()  # 7/15/2017.
+    modelSigma   <- df_combine$ModelSigma[1] / sqrt(n_combine) # same for all in this image
+    cirrusSigma  <- df_combine$CirrusSigma %>% pmax(0.001) %>% raise_to_power(2) %>% mean() %>% 
+      divide_by(n_combine) %>% sqrt()  # 7/15/2017
+    df_new$TotalSigma <- sqrt(modelSigma^2 + cirrusSigma^2 + instMagSigma^2) # corrected 7/15/2017
     df_new$CheckMag <- mean(df_combine$CheckMag)
     df_new$Airmass  <- mean(df_combine$Airmass)
-    # df_new$Notes    <- paste0("obs#[", (paste0(df_combine$Serial,collapse=" ")), "]/",
-    #                           min(df_combine$nComps), "+ comps")    
     df_new$Notes    <- paste0(length(df_combine$Serial), " obs  >=", min(df_combine$nComps), " comps")
     df_report[df_report$Serial==serialToReplace,] <- df_new[1,]
     df_report <- df_report %>% filter(!Serial %in% serialsToDelete)

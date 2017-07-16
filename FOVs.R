@@ -195,7 +195,7 @@ extract_FOV_data <- function () {
   }
 }
 
-compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filename) {
+compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filename, minFWHM=1) {
   # Usage, e.g.: I
   if (is.null(AN_rel_folder)) {stop(">>>>> You must provide a AN_rel_folder, ",
                                     "e.g., AN_rel_folder='20151216'.")}
@@ -209,6 +209,7 @@ compDiag <- function(AN_top_folder="J:/Astro/Images/C14", AN_rel_folder, filenam
     filter(stri_startswith_fixed(FITSfile, filename)) %>%
     filter(StarType=='Comp') %>%
     filter(MaxADU_Ur < 57000) %>%
+    filter(FWHM >= minFWHM) %>%
     select(FITSfile, FOV, Filter, Exposure, StarID, CatMag, InstMag, Sigma=InstMagSigma, 
            FWHM, MaxADU_Ur, Serial) %>%
     arrange(StarID) %>%

@@ -36,8 +36,8 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     formula_string <- paste0(formula_string, " + CI")
   } else {
     # Case of user-given (not fitted) transform value.
-    # These improved values are from standards run of AN 20151218.
-    transform <- list(V=-0.0199,R=+0.0398,I=+0.0432)[filter] %>% unlist()
+    # These improved values are from data taken 20170630-20170706:
+    transform <- list(V=-0.0149,R=+0.0513,I=+0.0494)[filter] %>% unlist()
     thisOffset <- thisOffset + transform * df_model$CI
     cat(">>>>> Transform (Color Index) not fit: value fixed at ", transform, "\n", sep="")
     
@@ -46,7 +46,10 @@ modelOneFilter <- function (AN_top_folder="J:/Astro/Images/C14", AN_rel_folder=N
     extinction <- NA
     formula_string <- paste0(formula_string, " + Airmass")
   } else {
-    extinction <- list(V=0.167,R=0.128,I=0.103)[filter] %>% unlist() # user-given (fit values for DSW site)
+    ##### Adjust extinction to the season when images acquired:
+    summer_extinction <- list(V=0.210,R=0.163,I=0.115)[filter] %>% unlist() # user-given (for DSW site)
+    winter_extinction <- list(V=0.167,R=0.128,I=0.103)[filter] %>% unlist() # user-given (for DSW site)
+    extinction <- summer_extinction  # set on 20170706
     thisOffset <- thisOffset + extinction * df_model$Airmass
     cat(">>>>> Extinction (Airmass) not fit: value fixed at ", extinction, "\n", sep="")
   }
